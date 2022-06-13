@@ -66,6 +66,7 @@ ENV_DIR="${__dir}"
 
 ENV_FS="freqstart"
 ENV_FS_VERSION='v0.0.1'
+ENV_FS_SYMLINK="/user/local/bin/${ENV_FS}"
 ENV_FS_CONFIG="${ENV_DIR}/${ENV_FS}.config.json"
 ENV_FS_STRATEGIES="${ENV_DIR}/${ENV_FS}.strategies.json"
 
@@ -168,14 +169,18 @@ function _fsIntro_() {
 	local _serverUrl="$(_fsJsonGet_ "${_fsConfig}" 'server_url')"    
 
     info '###'
-    info '# FSdocker: '"${_fsVersion}"
-    info '#   server ip: '"${_serverIp}"
-    info '#   server url: '"${_serverUrl}"
-    # credit: https://stackoverflow.com/a/51688023
-    if [ "${_inodeSum}" == '2' ]; then
-        info '#   docker: not inside a container'
+    info '# FREQSTART: '"${_fsVersion}"
+    info '# Server ip: '"${_serverIp}"
+    if [[ ! -z "${_serverUrl}" ]]; then
+        info "# Server url: ${_serverUrl}"
     else
-        warning '#   docker: inside a container'
+        info "# Server url: not set"
+    fi
+    # credit: https://stackoverflow.com/a/51688023
+    if [[ "${_inodeSum}" = '2' ]]; then
+        info '# Docker: not inside a container'
+    else
+        warning '# Docker: inside a container'
     fi
     info '###'
 
@@ -1008,7 +1013,7 @@ function _fsStart_ {
 	local _dockerYml="${1:-}"
 	local _dockerCompose="${ENV_DIR}/$(basename "${_dockerYml}")"
 		
-	if [[ "$(_fsSymlink_ "/user/local/bin/${ENV_FS}")" = "false" ]]; then
+	if [[ "$(_fsSymlink_ "${ENV_FS_SYMLINK}")" = "false" ]]; then
 		error 'Start setup first with: ./'"${ENV_FS}"'.sh --setup' && exit 1
 	else
         _fsDockerCompose_ "${_dockerCompose}"
@@ -1026,17 +1031,17 @@ function _fsSetup_() {
     _fsSetupFrequi_
     _fsSetupExampleBot_
     
-    
-	if [[ "$(_fsSymlink_ "/user/local/bin/${ENV_FS}")" = "false" ]]; then
-		ln -s "${ENV_DIR}/${ENV_FS}.sh" "/usr/local/bin/${ENV_FS}"
+	if [[ "$(_fsSymlink_ "${ENV_FS_SYMLINK}")" = "false" ]]; then
+		sudo ln -sf "${ENV_DIR}/${ENV_FS}.sh" "${ENV_FS_SYMLINK}"
 	fi
 	
-	if [[ "$(_fsSymlink_ "/user/local/bin/${ENV_FS}")" = "true" ]]; then
+	if [[ "$(_fsSymlink_ "${ENV_FS_SYMLINK}")" = "true" ]]; then
+        echo
 		notice 'Setup finished!'
 		info "-> Run freqtrade bots with: ${ENV_FS} -b example.yml"
-		info '  1. ".yml" files can contain one or multiple bots.'
-		info '  2. Configs and strategies files are checked for existense.'
-		info '  3. Checking docker images for updates before start.'
+		info "  1. \".yml\" files can contain one or multiple bots."
+		info "  2. Configs and strategies files are checked for existense."
+		info "  3. Checking docker images for updates before start."
 	else
 		emergency "Cannot create \"${ENV_FS}\" symlink." && exit 1
 	fi
@@ -1122,6 +1127,7 @@ function _fsSetupServer_() {
 }
 
 function _fsSetupNtp_() {
+    echo
     info 'SETUP NTP: (Timezone to UTC)'
 
     if [[ _fsSetupNtpCheck = "false" ]]; then
@@ -1159,6 +1165,7 @@ function _fsSetupFreqtrade_() {
     local _configFile=""
     local _configFileNew=""
 
+    echo
     info 'SETUP FREQTRADE:'
     
     _fsDockerImage_ "${_docker}" > /dev/null
@@ -1300,6 +1307,7 @@ _fsSetupBinanceProxy_() {
     local _dockerTag="$(_fsDockerVarsTag_ "${_docker}")"
     local _dockerName="$(_fsDockerVarsName_ "${_docker}")"
 
+    echo
     info 'SETUP BINANCE-PROXY: (Ports: 8090-8091/tcp)'
 
     if [[ "$(_fsDockerPs_ "${_dockerName}")" = "true" ]]; then
@@ -1347,10 +1355,10 @@ _fsSetupBinanceProxy_() {
 function _fsSetupFrequi_() {
     #local _frequiYml="${ENV_FREQUI_YML}"
     local _frequiName="${ENV_FS}_frequi"
-
     local _nr=""
     local _setup=""
-
+    
+    echo
     info 'FREQUI: (Webserver API)'
     
 	if [[ "$(_fsDockerPs_ "${_frequiName}")" = "true" ]]; then
@@ -1951,7 +1959,7 @@ _setupStrategy_() {
 
 _fsSetupExampleBot_() {
     local _userData="${ENV_DIR_USER_DATA}"
-    local _botExampleYml="${ENV_DIR}/${ENV_FS}-example.yml"
+    local _botExampleYml="${ENV_DIR}/${ENV_FS}_example.yml"
     local _botExampleConfig=""
     local _botExampleConfigName=""
     local _frequiJson="$(basename "${ENV_FREQUI_JSON}")"
@@ -1961,13 +1969,14 @@ _fsSetupExampleBot_() {
     local _botExampleKey=""
     local _botExampleSecret=""
     local _botExamplePairlist=""
-    local _botExampleLog="${ENV_DIR_USER_DATA}/logs/${ENV_FS}-example.log"
+    local _botExampleLog="${ENV_DIR_USER_DATA}/logs/${ENV_FS}_example.log"
     local _setup=""
     local _error=""
 
+    echo
     info 'EXAMPLE (NFI):'
 
-    info "Creating an example bot ".yml" file for dryrun on Binance."
+    info "Creating an example bot \".yml\" file for dryrun on Binance."
     info "Incl. latest \"NostalgiaForInfinityX\" strategy, \"FreqUI\" and proxy"
         
     if [[ "$(_fsCaseConfirmation_ "Skip create an example bot?")" = "true" ]]; then
@@ -2073,7 +2082,7 @@ _fsSetupExampleBot_() {
                     info "1) The docker path is different from the real path and starts with \"/freqtrade\"."
                     info "2) Add your exchange api KEY and SECRET to: \"exampleconfig_secret.json\""
                     info "3) Change port number \"9001\" to an unused port between 9000-9100 in \"${_botExampleYml}\" file."
-                    notice "Run example bot with: \"${ENV_FS}\" $(basename "${_botExampleYml}")"
+                    notice "Run example bot with: ${ENV_FS} -b $(basename "${_botExampleYml}")"
                 fi
             fi
         else
