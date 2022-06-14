@@ -65,7 +65,7 @@ NO_COLOR="${NO_COLOR:-}"    # true = disable color. otherwise autodetected
 ENV_DIR="${__dir}"
 
 ENV_FS="freqstart"
-ENV_FS_VERSION='v0.0.1'
+ENV_FS_VERSION='v0.0.2'
 ENV_FS_SYMLINK="/user/local/bin/${ENV_FS}"
 ENV_FS_CONFIG="${ENV_DIR}/${ENV_FS}.config.json"
 ENV_FS_STRATEGIES="${ENV_DIR}/${ENV_FS}.strategies.json"
@@ -85,8 +85,10 @@ ENV_SERVER_IP="$(ip a | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '
 ENV_SERVER_URL=""
 ENV_INODE_SUM="$(ls -ali / | sed '2!d' | awk {'print $1'})"
 ENV_HASH="$(tr -dc A-Za-z0-9 </dev/urandom | head -c 13 ; echo '')"
+
 ENV_YES="false"
-ENV_MODE="false"
+ENV_SETUP="false"
+ENV_KILL="false"
 
 ### Functions
 ##############################################################################
@@ -168,21 +170,21 @@ function _fsIntro_() {
     local _inodeSum="${ENV_INODE_SUM}"
 	local _serverUrl="$(_fsJsonGet_ "${_fsConfig}" 'server_url')"    
 
-    info '###'
-    info '# FREQSTART: '"${_fsVersion}"
-    info '# Server ip: '"${_serverIp}"
+    echo '###'
+    echo '# FREQSTART: '"${_fsVersion}"
+    echo '# Server ip: '"${_serverIp}"
     if [[ ! -z "${_serverUrl}" ]]; then
-        info "# Server url: ${_serverUrl}"
+        echo "# Server url: ${_serverUrl}"
     else
-        info "# Server url: not set"
+        echo "# Server url: not set"
     fi
     # credit: https://stackoverflow.com/a/51688023
     if [[ "${_inodeSum}" = '2' ]]; then
-        info '# Docker: not inside a container'
+        echo '# Docker: not inside a container'
     else
-        warning '# Docker: inside a container'
+        echo '# Docker: inside a container'
     fi
-    info '###'
+    echo '###'
 
     printf '%s\n' \
     "{" \
@@ -205,16 +207,16 @@ function _fsStats_() {
 		| grep -o "real.*s" \
 		| sed "s#real$(echo '\t')##")"
 
-	info "###"
-    info '# Ping avg. (Binance): '"${_ping}"'ms | Vultr "Tokyo" Server avg.: 1.290ms'
-	info '# Time to API (Binance): '"${_time}"' | Vultr "Tokyo" Server avg.: 0m0.039s'
-	info '# Used memory (Server): '"${_memUsed}"'MB  (max. '"${_memTotal}"'MB)'
-	info '# Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:'
-	notice '# https://www.vultr.com/?ref=9122650-8H'
-	info "###"
+	echo "###"
+    echo '# Ping avg. (Binance): '"${_ping}"'ms | Vultr "Tokyo" Server avg.: 1.290ms'
+	echo '# Time to API (Binance): '"${_time}"' | Vultr "Tokyo" Server avg.: 0m0.039s'
+	echo '# Used memory (Server): '"${_memUsed}"'MB  (max. '"${_memTotal}"'MB)'
+	echo '# Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:'
+	echo '# https://www.vultr.com/?ref=9122650-8H'
+	echo "###"
 }
 
-function _fsAcquireScriptLock_() {
+function _fsScriptLock_() {
     local _lockDir=""
     local _tmpDir="${ENV_DIR_TMP:-/tmp}"
 
@@ -273,7 +275,7 @@ function _fsJsonGet_() {
 }
 
 function _fsJsonSet_() {
-    [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && return 1
+    [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
     local _jsonFile="${1}"
     local _jsonName="${2}"
@@ -333,7 +335,7 @@ function _fsCaseInvalid_() {
 }
 
 function _fsCaseEmpty_() {
-    input 'Input can not be empty!'
+    warning 'Response cannot be empty!'
 }
 
 function _fsUrlValidate_() {
@@ -436,6 +438,113 @@ function _fsSymlink_() {
 	else
         echo "true"
 	fi
+}
+
+function _fsStrategy_() {
+    [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
+
+    local _strategyName="${1}"
+    local _strategyFile=""
+    local _strategyFileNew=""
+    local _strategyFileCount=0
+    local _strategyFileType=""
+    local _strategyFileTypeName='unknown'
+    local _strategyTmp="${ENV_DIR_TMP}/${_strategyName}_${ENV_HASH}"
+    local _strategyDir="${ENV_DIR_USER_DATA_STRATEGIES}/${_strategyName}"
+    local _strategyUrls=""
+    local _strategyUrlsDeduped=""
+    local _strategyUrl=""
+    local _fsStrategies="${ENV_FS_STRATEGIES}"
+    
+    if [[ ! -f "${_fsStrategies}" ]]; then
+        printf '%s\n' \
+        "{" \
+        "    \"NostalgiaForInfinityX\": [" \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/NostalgiaForInfinityX.py\"," \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-binance.json\"," \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-bybit.json\"," \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-ftx.json\"," \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-gateio.json\"," \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-huobi.json\"," \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-kucoin.json\"," \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-okx.json\"," \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/exampleconfig-rebuy.json\"," \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/exampleconfig.json\"," \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/exampleconfig_secret.json\"," \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-binance-busd.json\"," \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-binance-usdt.json\"," \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-bybit-usdt.json\"," \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-ftx-usdt.json\"," \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-gateio-usdt.json\"," \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-huobi-usdt.json\"," \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-kucoin-usdt.json\"," \
+        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-okx-usdt.json\"" \
+        "    ]," \
+        "    \"DoesNothingStrategy\": [" \
+        "        \"https://raw.githubusercontent.com/freqtrade/freqtrade-strategies/master/user_data/strategies/berlinguyinca/DoesNothingStrategy.py\"" \
+        "    ]" \
+        "}" \
+        > "${_fsStrategies}"
+    fi
+    
+    _strategyUrls=()
+    while read; do
+    _strategyUrls+=( "$REPLY" )
+    done < <(jq -r ".${_strategyName}[]?" "${_fsStrategies}")
+
+    if [[ ! -z "${_strategyUrls[@]}" ]]; then
+        _strategyUrlsDeduped=()
+        while read; do
+        _strategyUrlsDeduped+=( "$REPLY" )
+        done < <(_fsDedupeArray_ "${_strategyUrls[@]}")
+    fi
+
+    #readarray -t _strategyUrls < <(jq -r ".${_strategyName}[]?" "${_fsStrategies}")
+    
+    if [[ ! -z "${_strategyUrlsDeduped[@]}" ]]; then
+        sudo mkdir -p "${_strategyTmp}"
+        sudo mkdir -p "${_strategyDir}"
+
+        for _strategyUrl in "${_strategyUrlsDeduped[@]}"; do
+            if [[ "$(_fsUrlValidate_ "${_strategyUrl}")" = "true" ]]; then
+                _strategyFile="$(basename "${_strategyUrl}")"
+                _strategyFileNew="${_strategyDir}/${_strategyFile}"
+                _strategyFileType="${_strategyFile##*.}"
+
+                if [ "${_strategyFileType}" == "py" ]; then
+                    _strategyFileTypeName='strategy'
+                elif [ "${_strategyFileType}" == "json" ]; then
+                    _strategyFileTypeName='config'
+                fi
+                
+                sudo curl -s -L "${_strategyUrl}" -o "${_strategyTmp}/${_strategyFile}"
+            
+                if [[ -f "${_strategyFileNew}" ]]; then
+                    if [[ -n "$(cmp --silent "${_strategyUrl}" "${_strategyFileNew}")" ]]; then
+                        cp -a "${_strategyTmp}/${_strategyFile}" "${_strategyFileNew}"
+                        _strategyFileCount=$((_strategyFileCount+1))
+
+                        info "\"${_strategyFile}\" \"${_strategyFileTypeName}\" updated."
+                    fi
+                else
+                    cp -a "${_strategyTmp}/${_strategyFile}" "${_strategyFileNew}"
+                    _strategyFileCount=$((_strategyFileCount+1))
+                    
+                    info "\"${_strategyFile}\" \"${_strategyFileTypeName}\" installed."
+                fi
+            fi
+        done
+        
+        sudo rm -rf "${_strategyTmp}"
+
+        if [[ "${_strategyFileCount}" -eq 0 ]]; then
+            notice "\"${_strategyName}\" latest version installed."
+        else
+            notice "\"${_strategyName}\" strategy is updated. Restart bots!"
+        fi
+    else
+        warning "\"${_strategyName}\" strategy not implemented."
+    fi
 }
 
 
@@ -556,13 +665,13 @@ function _fsDockerInspectPort_() {
 					| sed 's,:.*,,')
 
 				# credit: https://stackoverflow.com/a/22055411
-				_portsUnique=$(printf '%s\n' "${_ports[@]}" \
-					| awk '!($0 in _portSeen){_portSeen[$0];c++} END {print c}')
+				_portsUnique="$(printf '%s\n' "${_ports[@]}" \
+					| awk '!($0 in _portSeen){_portSeen[$0];c++} END {print c}')"
 
 				if (( _portsUnique != "${#_ports[@]}" )); then
-					_error '"'$(echo $(printf '%s\n' "${_ports[@]}" \
+					error "\"$($(echo $(printf '%s\n' "${_ports[@]}" \
 					| awk '!($0 in _portSeen){_portSeen[$0];next} 1') \
-					| sed 's# #", "#')'" duplicate ports found in "'$(basename "${_port}")'".'
+					| sed 's# #", "#')'" duplicate ports found in "'$(basename "${_port}"))\"."
 					
 					_error='true'
 				fi
@@ -739,12 +848,17 @@ function _fsDockerPs_() {
 
 function _fsDockerId2Name_() {
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
+    debug "_fsDockerId2Name_ ..."
 
 	local _dockerId="${1}"
 	local _dockerName=""
 
-	_dockerName="$(sudo docker inspect --format="{{.Name}}" "${_dockerId}" | sed 's,/,,')"
-	
+    debug "_dockerId: ${_dockerId}"
+    
+	_dockerName="$(sudo docker inspect --format="{{.Name}}" "${_dockerId}" | sed "s,\/,,")"
+
+    debug "_dockerName: ${_dockerName}"
+
 	if [[ ! -z "${_dockerName}" ]]; then
 		echo "${_dockerName}"
 	fi
@@ -763,17 +877,6 @@ function _fsDockerId2Port_() {
 	fi
 }
 
-function _fsDockerStop_() {
-    [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
-
-	_dockerName="${1}"
-
-	if [[ "$(_fsDockerPs_ "${_dockerName}")" = "true" ]]; then
-		sudo docker stop "${_dockerName}" && \
-		sudo docker rm "${_dockerName}"
-	fi
-}
-
 function _fsDockerRun_() {
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
@@ -784,7 +887,9 @@ function _fsDockerRun_() {
 	local _dockerName="$(_fsDockerVarsName_ "${_dockerRepo}")"
 
 	if [[ "$(_fsDockerImage_ "${_dockerRepo}"':'"${_dockerTag}")" = "update" ]]; then
-		_fsDockerStop_ "${_dockerName}"
+        if [[ "$(_fsDockerPs_ "${_dockerName}")" = "true" ]]; then
+            _fsDockerStop_ "${_dockerName}"
+        fi
 	fi
 
 	if [[ "$(_fsDockerPs_ "${_dockerName}")" = "false" ]]; then
@@ -806,45 +911,17 @@ function _fsDockerRun_() {
 	fi
 }
 
-function _fsDockerComposeInspect_() {
+function _fsDockerStop_() {
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
-    local _dir="${ENV_DIR}"
-	local _ymlPath="$(_fsDockerYml_ "${1}")"
-	local _ymlFile="${_ymlPath##*/}"
-	local _ymlFileName="${_ymlFile%.*}"
-	local _ymlFileType="${_ymlFile##*.}"
-	#local _ymlDir="${_ymlPath%/*}"
-	local _ymlProjectName="$(echo "${_ymlFileName}" | sed "s,-,_,g")"
-	local _dockerProjects=''
-	local _dockerProject=''
-	local _dockerProjectNotrunc=''
+	local _dockerStop="${1}"
+	local _dockerName="$(_fsDockerId2Name_ "${1}")"
 
-    if [[ -f "${_ymlPath}" ]]; then
-        echo
-        _fsCdown_ 10 'for any bot errors...'
-        echo
-        
-        _dockerProjects=("$(cd "${_dir}" && \
-        sudo docker-compose -f "${_ymlFile}" -p "${_ymlProjectName}" ps -q 2> /dev/null)")
-        
-        for _dockerProject in "${_dockerProjects[@]}"; do
-            _dockerProjectNotrunc="$(docker ps -q --no-trunc | grep "${_dockerProject}")"
-
-            # credit: https://serverfault.com/a/935674
-            if [[ -z "${_dockerProject}" ]] || [[ -z "${_dockerProjectNotrunc}" ]]; then
-                error "\"$(_fsDockerId2Name_ "${_dockerProject}")\" container is not running."
-                
-                sudo docker update --restart no "${_dockerProject}" > /dev/null
-                sudo docker stop "${_dockerProject}" > /dev/null
-                sudo docker rm -f "${_dockerProject}" > /dev/null
-                warning "  -> Set container \"restart\" to \"no\", stopped and removed."
-            else
-                notice "\"$(_fsDockerId2Name_ "${_dockerProject}")\" container is running."
-            fi
-            echo
-        done
-    fi
+    sudo docker update --restart no "${_dockerStop}" > /dev/null
+    sudo docker stop "${_dockerStop}" > /dev/null
+    sudo docker rm -f "${_dockerStop}" > /dev/null
+    
+    warning "  -> Set \"${_dockerName}\" container \"restart\" to \"no\", stopped and removed."
 }
 
 function _fsDockerYml_() {
@@ -857,142 +934,221 @@ function _fsDockerYml_() {
 
 	if [[ ! -z "${_ymlFileType}" ]]; then
     	if [[ ! "${_ymlFileType}" = 'yml' ]]; then
-			emergency "\"$(basename "${_ymlFile}")\" is not a \".yml\" file." && exit 1
+			error "\"$(basename "${_ymlFile}")\" is not a \".yml\" file." && exit 1
 		elif [[ ! -f "${_ymlPath}" ]]; then
-			emergency "\"$(basename "${_ymlFile}")\" does not exist." && exit 1
+			error "\"$(basename "${_ymlFile}")\" does not exist." && exit 1
 		else
 			echo "${_ymlPath}"
 		fi
 	else
-		emergency "\".yml\" parameter is missing." && exit 1
+		error "\".yml\" parameter is missing." && exit 1
 	fi
 }
 
-function _fsDockerCompose_() {
+function _fsDockerYmlImages_() {
+    [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
+
+	local _ymlPath="$(_fsDockerYml_ "${1}")"
+	local _ymlImages=""
+	local _ymlImagesDeduped=""
+	local _ymlImage=""
+
+    # images
+    # credit: https://stackoverflow.com/a/39612060
+    _ymlImages=()
+    while read; do
+    _ymlImages+=( "$REPLY" )
+    done < <(grep "image:" "${_ymlPath}" \
+    | sed "s,\s,,g" \
+    | sed "s,image:,,g")
+    
+    if [[ ! -z "${_ymlImages[@]}" ]]; then
+        _ymlImagesDeduped=()
+        while read; do
+        _ymlImagesDeduped+=( "$REPLY" )
+        done < <(_fsDedupeArray_ "${_ymlImages[@]}")
+    fi
+    
+    if [[ ! -z "${_ymlImagesDeduped[@]}" ]]; then
+        for _ymlImage in $_ymlImagesDeduped; do
+            _fsDockerImage_ "${_ymlImage}"
+        done
+    fi
+}
+
+function _fsDockerYmlStrategies_() {
+    [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
+
+	local _ymlPath="$(_fsDockerYml_ "${1}")"
+	local _ymlStrategies=""
+	local _ymlStrategiesDeduped=""
+	local _ymlStrategy=""
+    
+    _ymlStrategies=()
+    while read; do
+    _ymlStrategies+=( "$REPLY" )
+    done < <(grep "strategy" "${_ymlPath}" \
+    | grep -v "strategy-path" \
+    | sed "s,\s,,g" \
+    | sed "s,\-\-strategy,,g")
+
+    if [[ ! -z "${_ymlStrategies[@]}" ]]; then
+        _ymlStrategiesDeduped=()
+        while read; do
+        _ymlStrategiesDeduped+=( "$REPLY" )
+        done < <(_fsDedupeArray_ "${_ymlStrategies[@]}")
+    fi
+
+    if [[ ! -z "${_ymlStrategiesDeduped[@]}" ]]; then
+        for _ymlStrategy in $_ymlStrategiesDeduped; do              
+            _fsStrategy_ "${_ymlStrategy}"
+        done
+    fi
+}
+
+function _fsDockerYmlConfigs_() {
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
     local _dir="${ENV_DIR}"
 	local _ymlPath="$(_fsDockerYml_ "${1}")"
-	local _ymlForce="${2:-}"
-	local _ymlFile="${_ymlPath##*/}"
-	local _ymlFileName="${_ymlFile%.*}"
-	local _ymlFileType="${_ymlFile##*.}"
-	local _ymlContainer=""
-    local _ymlProject="$(echo "${_ymlFileName}" | sed "s,\-,_,g")"
-	local _ymlPorts=""
-	local _ymlPort=""
-	local _ymlImages=""
-	local _ymlImagesDeduped=""
-	local _ymlImage=""
-	local _ymlStrategies=""
-	local _ymlStrategiesDeduped=""
-	local _ymlStrategy=""
     local _ymlConfigsDeduped=""
     local _ymlConfigs=""
 	local _ymlConfig=""
 	local _ymlConfigNew=""
-	local _error=""
+    local _error=0
+
+    _ymlConfigs=()
+    while read; do
+    _ymlConfigs+=( "$REPLY" )
+    done < <(echo "$(grep -e "\-\-config" -e "\-c" "${_ymlPath}" \
+    | sed "s,\s,,g" \
+    | sed "s,\-\-config,,g" \
+    | sed "s,\-c,,g" \
+    | sed "s,\/freqtrade\/,,g")")
+
+    if [[ ! -z "${_ymlConfigs[@]}" ]]; then
+        _ymlConfigsDeduped=()
+        while read; do
+        _ymlConfigsDeduped+=( "$REPLY" )
+        done < <(_fsDedupeArray_ "${_ymlConfigs[@]}")
+    fi
+
+    if [[ ! -z "${_ymlConfigsDeduped[@]}" ]]; then
+        for _ymlConfig in $_ymlConfigsDeduped; do
+            debug "_ymlConfig: ${_ymlConfig}"
+
+            _ymlConfigNew="${_dir}/${_ymlConfig}"
+            debug "_ymlConfigNew: ${_ymlConfigNew}"
+
+            if [[ ! -f "${_ymlConfigNew}" ]]; then
+                error "\"$(basename "${_ymlConfigNew}")\" config file does not exist."
+                _error=$((_error+1))
+            fi
+        done
+    fi
+    
+    if [[ "${_error}" -gt 0 ]]; then
+        exit 1
+    fi
+}
+
+function _fsDockerComposeUp_() {
+    [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
+
+    local _dir="${ENV_DIR}"
+	local _ymlPath="$(_fsDockerYml_ "${1}")"
+	local _ymlMode="${2:-}"
+	local _ymlFile="${_ymlPath##*/}"
+	local _ymlFileName="${_ymlFile%.*}"
+    local _ymlProject="$(echo "${_ymlFileName}" | sed "s,\-,_,g")"
 
     if [[ -f "${_ymlPath}" ]]; then
-        notice 'Starting "'"${_ymlFile}"'" now...'
+        notice "Start \"$(basename "${_ymlPath}")\" docker projects..."
     
-        if [[ ! "${_ymlForce}" = "force" ]]; then
-            if [[ "$(_fsDockerInspectPort_ "${_ymlPath}")" = "false" ]]; then
-                _error='true'
+        _fsDockerYmlImages_ "${_ymlPath}"
+        _fsDockerYmlStrategies_ "${_ymlPath}"
+        _fsDockerYmlConfigs_ "${_ymlPath}"
+
+        if [[ "${_ymlMode}" = "force" ]]; then
+            cd "${_dir}" && \
+            sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" up -d --force-recreate
+
+            _fsDockerProjects_ "${_ymlPath}" "validate"
+        elif [[ "$(_fsDockerInspectPort_ "${_ymlPath}")" = "true" ]]; then
+            cd "${_dir}" && \
+            sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" up -d
+
+            _fsDockerProjects_ "${_ymlPath}" "validate"
+        fi
+    fi
+}
+
+function _fsDockerComposeKill_() {
+    [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
+    
+	local _ymlPath="$(_fsDockerYml_ "${1}")"
+    
+    if [[ -f "${_ymlPath}" ]]; then
+        notice "Kill \"$(basename "${_ymlPath}")\" docker projects..."
+        _fsDockerProjects_ "${_ymlPath}" "kill"
+    fi
+}
+
+function _fsDockerProjects_() {
+    debug "function _fsDockerProjects_"
+    [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
+
+    local _dir="${ENV_DIR}"
+	local _ymlPath="$(_fsDockerYml_ "${1}")"
+	local _ymlMode="${2}"
+	local _ymlFile="${_ymlPath##*/}"
+	local _ymlFileName="${_ymlFile%.*}"
+    local _ymlProject="$(echo "${_ymlFileName}" | sed "s,\-,_,g")"
+    local _dockerProjects=""
+    local _dockerProject=""
+    local _dockerProjectNotrunc=""
+    local _dockerProjectName=""
+
+    if [[ -f "${_ymlPath}" ]]; then
+        _dockerProjects=("$(cd "${_dir}" && \
+        sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" ps -q 2> /dev/null)")
+        
+        debug "_dockerProjects[@]:"
+        debug "$(printf '%s ' "${_dockerProjects[@]}"; printf '\n')"
+        
+        if [[ ! -z "${_dockerProjects[@]}" ]]; then
+            if [[ "${_ymlMode}" = "validate" ]]; then
+                _fsCdown_ 10 'for any errors...'
             fi
-        fi
-
-        # images
-        # credit: https://stackoverflow.com/a/39612060
-        _ymlImages=()
-        while read; do
-        _ymlImages+=( "$REPLY" )
-        done < <(grep "image:" "${_ymlPath}" \
-        | sed "s,\s,,g" \
-        | sed "s,image:,,")
         
-        if [[ ! -z "${_ymlImages[@]}" ]]; then
-            _ymlImagesDeduped=()
-            while read; do
-            _ymlImagesDeduped+=( "$REPLY" )
-            done < <(_fsDedupeArray_ "${_ymlImages[@]}")
-        fi
-        
-        if [[ ! -z "${_ymlImagesDeduped[@]}" ]]; then
-            for _ymlImage in "${_ymlImagesDeduped[@]}"; do
-                _fsDockerImage_ "${_ymlImage}"
-            done
-        fi
-        
-        # strategies
-        _ymlStrategies=()
-        while read; do
-        _ymlStrategies+=( "$REPLY" )
-        done < <(grep "strategy" "${_ymlPath}" \
-        | grep -v "strategy-path" \
-        | sed "s,\s,,g" \
-        | sed "s,\-\-strategy,,")
+            for _dockerProject in $_dockerProjects; do
+                debug "_dockerProject: ${_dockerProject}"
 
-        if [[ ! -z "${_ymlStrategies[@]}" ]]; then
-            _ymlStrategiesDeduped=()
-            while read; do
-            _ymlStrategiesDeduped+=( "$REPLY" )
-            done < <(_fsDedupeArray_ "${_ymlStrategies[@]}")
-        fi
+                _dockerProjectName="$(_fsDockerId2Name_ "${_dockerProject}")"
+                debug "_dockerProjectName: ${_dockerProjectName}"
 
-        if [[ ! -z "${_ymlStrategiesDeduped[@]}" ]]; then
-            for _ymlStrategy in "${_ymlStrategiesDeduped[@]}"; do              
-                _setupStrategy_ "${_ymlStrategy}"
-            done
-        fi
-        
-        # configs
-        _ymlConfigs=()
-        while read; do
-        _ymlConfigs+=( "$REPLY" )
-        done < <(echo "$(grep -e "\-\-config" -e "\-c" "${_ymlPath}" \
-        | sed "s,\s,,g" \
-        | sed "s,\-\-config,," \
-        | sed "s,\-c,," \
-        | sed "s,\/freqtrade\/,,")")
-
-        if [[ ! -z "${_ymlConfigs[@]}" ]]; then
-            _ymlConfigsDeduped=()
-            while read; do
-            _ymlConfigsDeduped+=( "$REPLY" )
-            done < <(_fsDedupeArray_ "${_ymlConfigs[@]}")
-        fi
-
-        if [[ ! -z "${_ymlConfigsDeduped[@]}" ]]; then
-            for _ymlConfig in "${_ymlConfigsDeduped[@]}"; do   
-                _ymlConfigNew="${_dir}/${_ymlConfig}"
+                _dockerProjectNotrunc="$(docker ps -q --no-trunc | grep "${_dockerProject}")"
+                debug "_dockerProjectNotrunc: ${_dockerProjectNotrunc}"
                 
-                if [[ ! -f "${_ymlConfigNew}" ]]; then
-                    error "\"$(basename "${_ymlConfigNew}")\" config file does not exist."
-                    _error='true'
+                if [[ "${_ymlMode}" = "validate" ]]; then
+                    # credit: https://serverfault.com/a/935674
+                    if [[ -z "${_dockerProject}" ]] || [[ -z "${_dockerProjectNotrunc}" ]]; then
+                        error "\"${_dockerProjectName}\" container is not running."
+                        
+                        _fsDockerStop_ "${_dockerProject}"
+                    else
+                        notice "\"${_dockerProjectName}\" container is running."
+                    fi
+                elif [[ "${_ymlMode}" = "kill" ]]; then
+                    if [[ "$(_fsCaseConfirmation_ "Kill \"${_dockerProjectName}\" container?")" = "true" ]]; then
+                        _fsDockerStop_ "${_dockerProject}"
+                    fi
                 fi
             done
-        fi
-    
-        # compose
-        if [[ "${_error}" != 'true' ]]; then		
-            if [[ "${_ymlForce}" == 'force' ]]; then
-                cd "${_dir}" && \
-                sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" up -d --force-recreate
-            else
-                cd "${_dir}" && \
-                sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" up -d			
-            fi
-            
-            if [[ "$(_fsDockerComposeInspect_ "${_ymlPath}")" = "true" ]]; then
-                notice "\"${_ymlFile}\" docker started."
-            else
-                error "\"${_ymlFile}\" docker not started."
-            fi
         else
-            error "\"${_ymlFile}\" docker not started."
+            info "No docker projects found..."
         fi
-	fi
+    fi
 }
 
 function _fsDockerKill_() {
@@ -1015,10 +1171,13 @@ function _fsStart_ {
 		
 	if [[ "$(_fsSymlink_ "${ENV_FS_SYMLINK}")" = "false" ]]; then
 		error 'Start setup first with: ./'"${ENV_FS}"'.sh --setup' && exit 1
-	else
-        _fsDockerCompose_ "${_dockerCompose}"
+	elif [[ "${ENV_KILL}" = "true" ]]; then
+        _fsDockerComposeKill_ "${_dockerCompose}"
+    else
+        _fsDockerComposeUp_ "${_dockerCompose}"
 	fi
 }
+
 
 ### FREQSTART - setup
 ##############################################################################
@@ -1844,122 +2003,16 @@ _setupFrequiCompose_() {
             rm -f "${_frequiServerLog}"
         fi
         
-        _fsDockerCompose_ "${_frequiYml}" 'force'
+        _fsDockerComposeUp_ "${_frequiYml}" 'force'
     else
         emergency "\"$(basename "${_frequiYml}")\" file not found." && exit 1
     fi
 }
 
-_setupStrategy_() {
-    [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
-
-    local _strategyName="${1}"
-    local _strategyFile=""
-    local _strategyFileNew=""
-    local _strategyFileCount=0
-    local _strategyFileType=""
-    local _strategyFileTypeName='unknown'
-    local _strategyTmp="${ENV_DIR_TMP}/${_strategyName}_${ENV_HASH}"
-    local _strategyDir="${ENV_DIR_USER_DATA_STRATEGIES}/${_strategyName}"
-    local _strategyUrls=""
-    local _strategyUrlsDeduped=""
-    local _strategyUrl=""
-    local _fsStrategies="${ENV_FS_STRATEGIES}"
-    
-    if [[ ! -f "${_fsStrategies}" ]]; then
-        printf '%s\n' \
-        "{" \
-        "    \"NostalgiaForInfinityX\": [" \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/NostalgiaForInfinityX.py\"," \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-binance.json\"," \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-bybit.json\"," \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-ftx.json\"," \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-gateio.json\"," \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-huobi.json\"," \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-kucoin.json\"," \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-okx.json\"," \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/exampleconfig-rebuy.json\"," \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/exampleconfig.json\"," \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/exampleconfig_secret.json\"," \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-binance-busd.json\"," \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-binance-usdt.json\"," \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-bybit-usdt.json\"," \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-ftx-usdt.json\"," \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-gateio-usdt.json\"," \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-huobi-usdt.json\"," \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-kucoin-usdt.json\"," \
-        "        \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-okx-usdt.json\"" \
-        "    ]," \
-        "    \"DoesNothingStrategy\": [" \
-        "        \"https://raw.githubusercontent.com/freqtrade/freqtrade-strategies/master/user_data/strategies/berlinguyinca/DoesNothingStrategy.py\"" \
-        "    ]" \
-        "}" \
-        > "${_fsStrategies}"
-    fi
-    
-    _strategyUrls=()
-    while read; do
-    _strategyUrls+=( "$REPLY" )
-    done < <(jq -r ".${_strategyName}[]?" "${_fsStrategies}")
-
-    if [[ ! -z "${_strategyUrls[@]}" ]]; then
-        _strategyUrlsDeduped=()
-        while read; do
-        _strategyUrlsDeduped+=( "$REPLY" )
-        done < <(_fsDedupeArray_ "${_strategyUrls[@]}")
-    fi
-
-    #readarray -t _strategyUrls < <(jq -r ".${_strategyName}[]?" "${_fsStrategies}")
-    
-    if [[ ! -z "${_strategyUrlsDeduped[@]}" ]]; then
-        sudo mkdir -p "${_strategyTmp}"
-        sudo mkdir -p "${_strategyDir}"
-
-        for _strategyUrl in "${_strategyUrlsDeduped[@]}"; do
-            if [[ "$(_fsUrlValidate_ "${_strategyUrl}")" = "true" ]]; then
-                _strategyFile="$(basename "${_strategyUrl}")"
-                _strategyFileNew="${_strategyDir}/${_strategyFile}"
-                _strategyFileType="${_strategyFile##*.}"
-
-                if [ "${_strategyFileType}" == "py" ]; then
-                    _strategyFileTypeName='strategy'
-                elif [ "${_strategyFileType}" == "json" ]; then
-                    _strategyFileTypeName='config'
-                fi
-                
-                sudo curl -s -L "${_strategyUrl}" -o "${_strategyTmp}/${_strategyFile}"
-            
-                if [[ -f "${_strategyFileNew}" ]]; then
-                    if [[ -n "$(cmp --silent "${_strategyUrl}" "${_strategyFileNew}")" ]]; then
-                        cp -a "${_strategyTmp}/${_strategyFile}" "${_strategyFileNew}"
-                        _strategyFileCount=$((_strategyFileCount+1))
-
-                        info "\"${_strategyFile}\" \"${_strategyFileTypeName}\" updated."
-                    fi
-                else
-                    cp -a "${_strategyTmp}/${_strategyFile}" "${_strategyFileNew}"
-                    _strategyFileCount=$((_strategyFileCount+1))
-                    
-                    info "\"${_strategyFile}\" \"${_strategyFileTypeName}\" installed."
-                fi
-            fi
-        done
-        
-        sudo rm -rf "${_strategyTmp}"
-
-        if [[ "${_strategyFileCount}" -eq 0 ]]; then
-            notice "\"${_strategyName}\" latest version installed."
-        else
-            notice "\"${_strategyName}\" strategy is updated. Restart bots!"
-        fi
-    else
-        warning "\"${_strategyName}\" strategy not implemented."
-    fi
-}
-
 _fsSetupExampleBot_() {
     local _userData="${ENV_DIR_USER_DATA}"
-    local _botExampleYml="${ENV_DIR}/${ENV_FS}_example.yml"
+    local _botExampleName="${ENV_FS}_example"
+    local _botExampleYml="${ENV_DIR}/${_botExampleName}.yml"
     local _botExampleConfig=""
     local _botExampleConfigName=""
     local _frequiJson="$(basename "${ENV_FREQUI_JSON}")"
@@ -2049,10 +2102,10 @@ _fsSetupExampleBot_() {
                 "---" \
                 "version: '3'" \
                 "services:" \
-                "  ${env_fsdocker}-example:" \
+                "  ${_botExampleName}:" \
                 "    image: freqtradeorg/freqtrade:stable" \
-                "    restart: \"no\"" \
-                "    container_name: ${env_fsdocker}-example" \
+                "    restart: \"unless-stopped\"" \
+                "    container_name: ${_botExampleName}" \
                 "    volumes:" \
                 "      - \"./user_data:/freqtrade/user_data\"" \
                 "    ports:" \
@@ -2061,13 +2114,15 @@ _fsSetupExampleBot_() {
                 "    " \
                 "    command: >" \
                 "      trade" \
-                "      --logfile /freqtrade/user_data/logs/${env_fsdocker}-example.log" \
+                "      --dry-run" \
+                "      --db-url sqlite:////freqtrade/user_data/${_botExampleName}.sqlite" \
+                "      --logfile /freqtrade/user_data/logs/${_botExampleName}.log" \
                 "      --strategy NostalgiaForInfinityX" \
-                "      --strategy-path /freqtrade/user_data/NostalgiaForInfinityX" \
+                "      --strategy-path /freqtrade/user_data/strategies/NostalgiaForInfinityX" \
                 "      --config /freqtrade/user_data/$(basename "${_botExampleConfig}")" \
-                "      --config /freqtrade/user_data/NostalgiaForInfinityX/exampleconfig.json" \
-                "      --config /freqtrade/user_data/NostalgiaForInfinityX/${_botExamplePairlist}" \
-                "      --config /freqtrade/user_data/NostalgiaForInfinityX/blacklist-binance.json" \
+                "      --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/exampleconfig.json" \
+                "      --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/${_botExamplePairlist}" \
+                "      --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/blacklist-binance.json" \
                 "      --config /freqtrade/user_data/${_frequiJson}" \
                 "      --config /freqtrade/user_data/${_binanceProxyJson}" \
                 > "${_botExampleYml}"
@@ -2111,6 +2166,7 @@ _fsSetupExampleBot_() {
   -y --yes         Yes
   -s --setup       Setup
   -b --bot  [arg]  Bot to process. Can be repeated.
+  -k --kill        Kill bots
 EOF
 
 # shellcheck disable=SC2015
@@ -2321,7 +2377,7 @@ fi
 
 function __b3bp_cleanup_before_exit () {
   rm -rf "${ENV_DIR_TMP}"
-  info "..."
+  info "~ Fin ~"
 }
 trap __b3bp_cleanup_before_exit EXIT
 
@@ -2340,7 +2396,7 @@ trap '__b3bp_err_report "${FUNCNAME:-.}" ${LINENO}' ERR
 
 # debug mode
 if [[ "${arg_d:?}" = "1" ]]; then
-  set -o xtrace
+  #set -o xtrace
   PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
   LOG_LEVEL="7"
   # Enable error backtracing
@@ -2370,32 +2426,42 @@ fi
 
 # setup mode
 if [[ "${arg_s:?}" = "1" ]]; then
-  ENV_MODE="setup"
+  ENV_SETUP="true"
 fi
 
+# kill mode
+if [[ "${arg_k:?}" = "1" ]]; then
+  ENV_KILL="true"
+fi
 
 ### Validation. Error out if the things required for your script are not present
 ##############################################################################
 
 #[[ "${arg_b:-}" ]] || help "Setting an \"example.yml\" file with -b or --bot is required"
+
+if [[ "${arg_k:?}" = "1" ]]; then
+    [[ "${arg_b:-}" ]] || help "Setting an \"example.yml\" file with -b or --bot is required with -k or --kill"
+fi
+
 #[[ "${LOG_LEVEL:-}" ]] || emergency "Cannot continue without LOG_LEVEL. "
 
 
 ### Runtime
 ##############################################################################
 
-_fsAcquireScriptLock_
+_fsScriptLock_
+# DEBUG - uncomment to remove docker container or images
 #_fsDockerKillContainer_
 #_fsDockerKill_
 
 _fsIntro_
-echo
-if [[ "${ENV_MODE}" = "setup" ]]; then
+
+if [[ "${ENV_SETUP}" = "true" ]]; then
     _fsSetup_
 else
     if [[ -n "${arg_b:-}" ]] && declare -p arg_b 2> /dev/null | grep -q '^declare \-a'; then
-      for ymlFile in "${arg_b[@]}"; do
-        _fsStart_ "${ymlFile}"
+      for bot in "${arg_b[@]}"; do
+        _fsStart_ "${bot}"
       done
     elif [[ -n "${arg_b:-}" ]]; then
       info "arg_b: ${arg_b}"
@@ -2403,6 +2469,6 @@ else
       info "arg_b: 0"
     fi
 fi
-echo
+
 _fsStats_
 exit 0
