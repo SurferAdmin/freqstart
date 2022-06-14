@@ -7,6 +7,8 @@ Freqstart simplifies the use of Freqtrade with Docker. Including a simple setup 
 configurations and FreqUI with a secured SSL proxy for IPs and domains. Freqtrade also automatically
 installs implemented strategies based on Docker Compose files and detects necessary updates.
 
+If you are not familiar with freqtrade, please read the complete documentation first on: [freqtrade.io](https://www.freqtrade.io/).
+
 ![Freqstart Screen Shot][product-screenshot]
 
 ### Features
@@ -35,8 +37,6 @@ This software is for educational purposes only. Do not risk money which you are 
 
 Freqstart will install freqtrade and the necessary NostalgiaForInfinity strategies and configs automatically.
 With many more "QoL" features tailored to harness the power of freqtrade and community tested extensions.
-
-If you are not familiar with freqtrade, please read the complete documentation first on [freqtrade.io](https://www.freqtrade.io/).
 
 ### Prerequisites
 
