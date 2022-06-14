@@ -1,25 +1,27 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART
+# FREQSTART v0.0.3
 
 Freqstart simplifies the use of Freqtrade with Docker. Including a simple setup guide for Freqtrade,
 configurations and FreqUI with a secured SSL proxy for IPs and domains. Freqtrade also automatically
 installs implemented strategies based on Docker Compose files and detects necessary updates.
 
+If you are not familiar with freqtrade, please read the complete documentation first on: [freqtrade.io](https://www.freqtrade.io/)
+
 ![Freqstart Screen Shot][product-screenshot]
 
 ### Features
 
-* Fully guided setup for Freqtrade with Docker including the config generator and "user_data" folder.
-* Automated version check of Docker images via manifest for minimal ressources and creating local backups.
-* Install server prerequisites and upgrades and check for timezone sync and set it to UTC.
-* Guided setup of FreqUI with Nginx proxy for secured IP (openssl), domain (letsencrypt) or localhost.
-* Setup for Binance proxy if you run multiple bots at once incl. reusable config file.
-* Example bot for Binance with all implemented features and as guidance for ".yml" container.
-* Automated installation of implemented strategies like NostalgiaForInfinity incl. updates.
+* `Freqtrade` Guided setup for Freqtrade with Docker including the config generator and "user_data" folder.
+* `Docker` Version check of images via manifest using minimal ressources and creating local backups.
+* `Prerequisites` Install server prerequisites and upgrades and check for timezone sync and set it to UTC.
+* `FreqUI` Full setup of FreqUI with Nginx proxy for secured IP (openssl), domain (letsencrypt) or localhost.
+* `Binance Proxy` Setup for Binance proxy if you run multiple bots at once incl. reusable config file.
+* `Example Bot` Example bot for Binance with all implemented features and as guidance for ".yml" container.
+* `Strategies` Automated installation of implemented strategies like NostalgiaForInfinity incl. updates.
 
-`Strategies:` Help expanding the list and include config files if possible: https://github.com/berndhofer/freqstart/blob/develop/freqstart.strategies.json
+Help expanding the strategies list and include config files if possible: https://github.com/berndhofer/freqstart/blob/develop/freqstart.strategies.json
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -36,13 +38,11 @@ This software is for educational purposes only. Do not risk money which you are 
 Freqstart will install freqtrade and the necessary NostalgiaForInfinity strategies and configs automatically.
 With many more "QoL" features tailored to harness the power of freqtrade and community tested extensions.
 
-If you are not familiar with freqtrade, please read the complete documentation first on [freqtrade.io](https://www.freqtrade.io/).
-
 ### Prerequisites
 
-`WARNING:` Freqstart installs server packages and configurations tailored to the needs of Freqtrade. It is recommended to set it up in a new and clean environment!
+`Warning` Freqstart installs server packages and configurations tailored to the needs of Freqtrade. It is recommended to set it up in a new and clean environment!
 
-Packages: git, curl, jq, docker-ce, chrony, nginx, certbot, python3-certbot-nginx, ufw, openssl
+`Packages` git, curl, jq, docker-ce, chrony, nginx, certbot, python3-certbot-nginx, ufw, openssl
 
 This project is beeing developed and testet on Vultr "Tokyo" Server with Debian and Ubuntu.
 
@@ -70,6 +70,10 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
 5. Start a `freqtrade` container
    ```sh
    freqstart -b example.yml
+   ```
+6. Disable a `freqtrade` container
+   ```sh
+   freqstart -b example.yml -k
    ```
    
 <p align="right">(<a href="#top">back to top</a>)</p>
