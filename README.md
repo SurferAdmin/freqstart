@@ -11,10 +11,10 @@ installs implemented strategies based on Docker Compose files and detects necess
 
 ### Features
 
-* `Freqtrade` Fully guided setup for Freqtrade with Docker including the config generator and "user_data" folder.
-* `Docker` Automated version check of Docker images via manifest for minimal ressources and creating local backups.
+* `Freqtrade` Guided setup for Freqtrade with Docker including the config generator and "user_data" folder.
+* `Docker` Version check of images via manifest using minimal ressources and creating local backups.
 * `Prerequisites` Install server prerequisites and upgrades and check for timezone sync and set it to UTC.
-* `FreqUI` Guided setup of FreqUI with Nginx proxy for secured IP (openssl), domain (letsencrypt) or localhost.
+* `FreqUI` Full setup of FreqUI with Nginx proxy for secured IP (openssl), domain (letsencrypt) or localhost.
 * `Binance Proxy` Setup for Binance proxy if you run multiple bots at once incl. reusable config file.
 * `Example Bot` Example bot for Binance with all implemented features and as guidance for ".yml" container.
 * `Strategies` Automated installation of implemented strategies like NostalgiaForInfinity incl. updates.
