@@ -1,0 +1,7 @@
+
+*.json
+!spec/freqstart.strategies.json
+*.txt
+*.py
+*.sqlite
+*.pyc
