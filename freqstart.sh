@@ -175,6 +175,7 @@ function _fsIntro_() {
     echo '# Server ip: '"${_serverIp}"
     if [[ ! -z "${_serverUrl}" ]]; then
         echo "# Server url: ${_serverUrl}"
+        ENV_SERVER_URL="${_serverUrl}"
     else
         echo "# Server url: not set"
     fi
@@ -438,7 +439,7 @@ function _fsSymlink_() {
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _symlink="${1}"
-	# credit: https://stackoverflow.com/a/36180056
+        # credit: https://stackoverflow.com/a/36180056
 	if [ -L "${_symlink}" ] ; then
 		if [ -e "${_symlink}" ] ; then
 			echo "true"
@@ -660,14 +661,15 @@ function _fsDockerImageInstalled_() {
 }
 
 function _fsDockerYmlPorts_() {
-        debug "function _fsDockerYmlPorts_"
+        #debug "function _fsDockerYmlPorts_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _dockerPorts="${@}"
-	local _error="false"
-
+	local _error=0
+        #debug "_dockerPorts[@]:"
+        #debug "$(printf '%s\n' "${_dockerPorts[@]}")"
     # get docker ports from yml file instead of port numbers
-	for _dockerPort in $_dockerPorts; do
+	for _dockerPort in ${_dockerPorts[@]}; do
 		if [[ "${_dockerPort##*.}" == 'yml' ]]; then
 			if [[ -f "${_dockerPort}" ]]; then
                 _dockerPorts=()
@@ -682,25 +684,22 @@ function _fsDockerYmlPorts_() {
 			fi
 		fi
 	done
-    
-        debug "_dockerPorts[@]:"
-        debug "$(printf '%s ' "${_dockerPorts[@]}")"
-    
-	for _dockerPort in $_dockerPorts; do
-        if [[ ! "$(_fsIsPort_ "${_dockerPort}")" = "false" ]]; then
-            _error="true"
+        #debug "_dockerPorts[@]:"
+        #debug "$(printf '%s\n' "${_dockerPorts[@]}")"
+	for _dockerPort in ${_dockerPorts[@]}; do
+        if [[ "$(_fsIsPort_ "${_dockerPort}")" = "false" ]]; then
+            _error=$((_error+1))
         fi
     done
     
-	if [[ ! "${_error}" = 'true' ]]; then
+	if [[ "${_error}" -eq 0 ]]; then
         printf '%s\n' "${_dockerPorts[@]}"
 	fi
 }
 
 function _fsDockerPortsUsed_() {
-        debug "function _fsDockerYmlPorts_"
-    
-	local _error="false"
+        #debug "function _fsDockerYmlPorts_"
+	local _error=0
 
     _dockerPortsUsed=()
 	#readarray -t _dockerPortsUsed < <(docker ps -q -a | xargs -I {} docker port {} | sed 's,.*->,,' | grep -o -E '[0-9]{4}.*')
@@ -712,48 +711,47 @@ function _fsDockerPortsUsed_() {
         debug "_dockerPortsUsed[@]:"
         debug "$(printf '%s ' "${_dockerPortsUsed[@]}")"
 
-	for _dockerPortUsed in $_dockerPortsUsed; do
+	for _dockerPortUsed in ${_dockerPortsUsed[@]}; do
         if [[ "$(_fsIsPort_ "${_dockerPortUsed}")" = "false" ]]; then
-            _error="true"
+            _error=$((_error+1))
         fi
     done
     
-	if [[ ! "${_error}" = 'true' ]]; then
+	if [[ "${_error}" -eq 0 ]]; then
         printf '%s\n' "${_dockerPortsUsed[@]}"
 	fi
 }
 
 function _fsDockerPortCompare_() {
-        debug "function _fsDockerPortCompare_"
+        #debug "function _fsDockerPortCompare_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _dockerPorts=("$(_fsDockerYmlPorts_ "${@}")")
 	local _dockerPort=""
 	local _dockerPortsUsed=("$(_fsDockerPortsUsed_)")
 	local _dockerPortUsed=""
-	local _error=""
+    local _dockerPortsCompare=""
+	local _dockerPortCompare=""
+	local _error=0
+        #debug "_dockerPorts[@]:"
+        #debug "$(printf '%s ' "${_dockerPorts[@]}")"
+        #debug "_dockerPortsUsed[@]:"
+        #debug "$(printf '%s ' "${_dockerPortsUsed[@]}")"
+    if [[ ! -z "${_dockerPortsUsed}" ]]; then
+            # credit: https://stackoverflow.com/a/28161520
+        _dockerPortsCompare=("$(echo ${_dockerPorts[@]} ${_dockerPortsUsed[@]} | tr ' ' '\n' | sort | uniq -D | uniq)")
 
-        debug "_dockerPorts[@]:"
-        debug "$(printf '%s ' "${_dockerPorts[@]}")"
-        debug "_dockerPortsUsed[@]:"
-        debug "$(printf '%s ' "${_dockerPortsUsed[@]}")"
+        for _dockerPortCompare in ${_dockerPortsCompare[@]}; do
+            _error=$((_error+1))
+            error "Port number \"${_dockerPortCompare}\" is already blocked."
+        done
+    fi
 
-    for _dockerPort in "${_dockerPorts[@]}"; do
-        debug "_dockerPort: ${_dockerPort}"
-        for _dockerPortUsed in "${_dockerPortsUsed[@]}"; do
-            debug "_dockerPortUsed: ${_dockerPortUsed}"
-            if [[ "${_dockerPort}" = "${_dockerPortUsed}" ]]; then
-				error "Port number \"${_dockerPort}\" is already blocked."
-				_error="true"
-			fi
-		done
-	done
-
-	if [[ "${_error}" = "true" ]]; then
-		echo "false"
-	else
-		echo "true"
-	fi
+    if [[ "${_error}" -eq 0 ]]; then
+        echo "true"
+    else
+        echo "false"
+    fi
 }
 
 function _fsDockerVersionCompare_() {
@@ -904,7 +902,7 @@ function _fsDockerId2Name_() {
 }
 
 function _fsDockerId2Port_() {
-    debug "function _fsDockerId2Port_"
+        debug "function _fsDockerId2Port_"
 
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
@@ -997,9 +995,8 @@ function _fsDockerYmlImages_() {
 	local _ymlImages=""
 	local _ymlImagesDeduped=""
 	local _ymlImage=""
-
-    # images
-    # credit: https://stackoverflow.com/a/39612060
+    local _error=0
+        # credit: https://stackoverflow.com/a/39612060
     _ymlImages=()
     while read; do
     _ymlImages+=( "$REPLY" )
@@ -1015,9 +1012,15 @@ function _fsDockerYmlImages_() {
     fi
     
     if [[ ! -z "${_ymlImagesDeduped[@]}" ]]; then
-        for _ymlImage in $_ymlImagesDeduped; do
+        for _ymlImage in ${_ymlImagesDeduped[@]}; do
             _fsDockerImage_ "${_ymlImage}"
         done
+    fi
+    
+    if [[ "${_error}" -eq 0 ]]; then
+        echo "true"
+    else
+        echo "false"
     fi
 }
 
@@ -1028,7 +1031,8 @@ function _fsDockerYmlStrategies_() {
 	local _ymlStrategies=""
 	local _ymlStrategiesDeduped=""
 	local _ymlStrategy=""
-    
+    local _error=0
+
     _ymlStrategies=()
     while read; do
     _ymlStrategies+=( "$REPLY" )
@@ -1045,13 +1049,20 @@ function _fsDockerYmlStrategies_() {
     fi
 
     if [[ ! -z "${_ymlStrategiesDeduped[@]}" ]]; then
-        for _ymlStrategy in $_ymlStrategiesDeduped; do              
+        for _ymlStrategy in ${_ymlStrategiesDeduped[@]}; do              
             _fsStrategy_ "${_ymlStrategy}"
         done
+    fi
+    
+    if [[ "${_error}" -eq 0 ]]; then
+        echo "true"
+    else
+        echo "false"
     fi
 }
 
 function _fsDockerYmlConfigs_() {
+        #debug "function _fsDockerYmlConfigs_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
     local _dir="${ENV_DIR}"
@@ -1070,21 +1081,21 @@ function _fsDockerYmlConfigs_() {
     | sed "s,\-\-config,,g" \
     | sed "s,\-c,,g" \
     | sed "s,\/freqtrade\/,,g")")
-
+        #debug "_ymlConfigs[@]:"
+        #debug "$(printf '%s\n' "${_ymlConfigs[@]}")"
     if [[ ! -z "${_ymlConfigs[@]}" ]]; then
         _ymlConfigsDeduped=()
         while read; do
         _ymlConfigsDeduped+=( "$REPLY" )
         done < <(_fsDedupeArray_ "${_ymlConfigs[@]}")
     fi
-
+        #debug "_ymlConfigsDeduped[@]:"
+        #debug "$(printf '%s\n' "${_ymlConfigsDeduped[@]}")"
     if [[ ! -z "${_ymlConfigsDeduped[@]}" ]]; then
-        for _ymlConfig in $_ymlConfigsDeduped; do
-            debug "_ymlConfig: ${_ymlConfig}"
-
+        for _ymlConfig in ${_ymlConfigsDeduped[@]}; do
+                #debug "_ymlConfig: ${_ymlConfig}"
             _ymlConfigNew="${_dir}/${_ymlConfig}"
-            debug "_ymlConfigNew: ${_ymlConfigNew}"
-
+                #debug "_ymlConfigNew: ${_ymlConfigNew}"
             if [[ ! -f "${_ymlConfigNew}" ]]; then
                 error "\"$(basename "${_ymlConfigNew}")\" config file does not exist."
                 _error=$((_error+1))
@@ -1092,12 +1103,15 @@ function _fsDockerYmlConfigs_() {
         done
     fi
     
-    if [[ "${_error}" -gt 0 ]]; then
-        exit 1
+    if [[ "${_error}" -eq 0 ]]; then
+        echo "true"
+    else
+        echo "false"
     fi
 }
 
 function _fsDockerComposeUp_() {
+        #debug "function _fsDockerComposeUp_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
     local _dir="${ENV_DIR}"
@@ -1106,24 +1120,38 @@ function _fsDockerComposeUp_() {
 	local _ymlFile="${_ymlPath##*/}"
 	local _ymlFileName="${_ymlFile%.*}"
     local _ymlProject="$(echo "${_ymlFileName}" | sed "s,\-,_,g")"
+    local _error=0
 
     if [[ -f "${_ymlPath}" ]]; then
         notice "Start \"$(basename "${_ymlPath}")\" docker projects..."
     
-        _fsDockerYmlImages_ "${_ymlPath}"
-        _fsDockerYmlStrategies_ "${_ymlPath}"
-        _fsDockerYmlConfigs_ "${_ymlPath}"
+        if [[ "$(_fsDockerYmlImages_ "${_ymlPath}")" = "false" ]]; then _error=$((_error+1)); fi
+        if [[ "$(_fsDockerYmlStrategies_ "${_ymlPath}")" = "false" ]]; then _error=$((_error+1)); fi
+        if [[ "$(_fsDockerYmlConfigs_ "${_ymlPath}")" = "false" ]]; then _error=$((_error+1)); fi
+            #debug "_error: ${_error}"
+            #debug "_fsDockerPortCompare_: $(_fsDockerPortCompare_ "${_ymlPath}")"
+        if [[ "${_error}" -eq 0 ]]; then
+            if [[ "${_ymlMode}" = "force" ]]; then
+                cd "${_dir}" && \
+                sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" up -d --force-recreate
+                
+                _fsDockerProjects_ "${_ymlPath}" "validate"
+            else
+                if [[ "$(_fsDockerPortCompare_ "${_ymlPath}")" = "false" ]] && \
+                [[ "$(_fsCaseConfirmation_ "Stop container that block ports?")" = "true" ]]; then
+                    _fsDockerProjects_ "${_ymlPath}" "kill"
 
-        if [[ "${_ymlMode}" = "force" ]]; then
-            cd "${_dir}" && \
-            sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" up -d --force-recreate
-
-            _fsDockerProjects_ "${_ymlPath}" "validate"
-        elif [[ "$(_fsDockerPortCompare_ "${_ymlPath}")" = "true" ]]; then
-            cd "${_dir}" && \
-            sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" up -d
-
-            _fsDockerProjects_ "${_ymlPath}" "validate"
+                    cd "${_dir}" && \
+                    sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" up -d
+                    
+                    _fsDockerProjects_ "${_ymlPath}" "validate"
+                else
+                    cd "${_dir}" && \
+                    sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" up -d
+                    
+                    _fsDockerProjects_ "${_ymlPath}" "validate"
+                fi
+            fi
         fi
     fi
 }
@@ -1140,7 +1168,7 @@ function _fsDockerComposeKill_() {
 }
 
 function _fsDockerProjects_() {
-    debug "function _fsDockerProjects_"
+        #debug "function _fsDockerProjects_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
     local _dir="${ENV_DIR}"
@@ -1157,26 +1185,22 @@ function _fsDockerProjects_() {
     if [[ -f "${_ymlPath}" ]]; then
         _dockerProjects=("$(cd "${_dir}" && \
         sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" ps -q 2> /dev/null)")
-        
-        debug "_dockerProjects[@]:"
-        debug "$(printf '%s ' "${_dockerProjects[@]}")"
-        
+            #debug "_dockerProjects[@]:"
+            #debug "$(printf '%s\n' "${_dockerProjects[@]}")"
         if [[ ! -z "${_dockerProjects[@]}" ]]; then
             if [[ "${_ymlMode}" = "validate" ]]; then
                 _fsCdown_ 10 'for any errors...'
             fi
         
             for _dockerProject in $_dockerProjects; do
-                debug "_dockerProject: ${_dockerProject}"
-
+                    #debug "_dockerProject: ${_dockerProject}"
                 _dockerProjectName="$(_fsDockerId2Name_ "${_dockerProject}")"
-                debug "_dockerProjectName: ${_dockerProjectName}"
-
+                    #debug "_dockerProjectName: ${_dockerProjectName}"
                 _dockerProjectNotrunc="$(docker ps -q --no-trunc | grep "${_dockerProject}")"
-                debug "_dockerProjectNotrunc: ${_dockerProjectNotrunc}"
+                    #debug "_dockerProjectNotrunc: ${_dockerProjectNotrunc}"
                 
                 if [[ "${_ymlMode}" = "validate" ]]; then              
-                    # credit: https://serverfault.com/a/935674
+                        # credit: https://serverfault.com/a/935674
                     if [[ -z "${_dockerProject}" ]] || [[ -z "${_dockerProjectNotrunc}" ]]; then
                         error "\"${_dockerProjectName}\" container is not running."
                         
@@ -1559,14 +1583,15 @@ _fsSetupBinanceProxy_() {
 function _fsSetupFrequi_() {
     #local _frequiYml="${ENV_FREQUI_YML}"
     local _frequiName="${ENV_FS}_frequi"
+    local _serverUrl="${ENV_SERVER_URL}"
     local _nr=""
-    local _setup=""
+    local _setup="true"
     
     echo
     info 'FREQUI: (Webserver API)'
     
 	if [[ "$(_fsDockerPs_ "${_frequiName}")" = "true" ]]; then
-    #if [[ "$(_fsDockerPortCompare_ "${_frequiYml}")" = "false" ]]; then
+        info "\"FreqUI\" is active: ${_serverUrl}"
         if [[ "$(_fsCaseConfirmation_ "Skip reconfigure \"FreqUI\" now?")" = "true" ]]; then
             _setup="false"
         fi
@@ -1576,7 +1601,7 @@ function _fsSetupFrequi_() {
         fi
     fi
 
-    if [[ "${_setup}" = "true" ]];then
+    if [[ ! "${_setup}" = "false" ]];then
         _fsSetupPkgs_ 'ufw'
         _fsSetupNginx_
         
@@ -1660,7 +1685,7 @@ _fsSetupNginx_() {
 
     sudo rm -f /etc/nginx/sites-enabled/default
     
-    sudo ufw allow http/tcp > /dev/null
+    #sudo ufw allow http/tcp > /dev/null
     sudo ufw allow "Nginx Full" > /dev/null
 
     _fsSetupNginxRestart_
@@ -1668,9 +1693,11 @@ _fsSetupNginx_() {
 
 _fsSetupNginxRestart_() {
     # kill and start again
-    sudo pkill -f nginx & wait $! >/dev/null 2>&1
-    sudo systemctl start nginx >/dev/null 2>&1
-    sudo nginx -s reload >/dev/null 2>&1
+    # >/dev/null 2>&1
+    #sudo pkill -f nginx & wait $!
+    #sudo systemctl start nginx
+    #sudo nginx -s reload
+    sudo systemctl reload nginx
 }
 
 _fsSetupNginxOpenssl_() {
@@ -1789,7 +1816,7 @@ _fsSetupNginxConfSecure_() {
         "    }" \
         "}" \
         "server {" \
-        "    listen ${server_name}:9000-9100 ssl;" \
+        "    listen \$server_name:9000-9900 ssl;" \
         "    server_name ${_serverName};" \
         "    " \
         "    include snippets/self-signed.conf;" \
@@ -1851,7 +1878,7 @@ _fsSetupNginxConfSecure_() {
     
     if [ -f "${_confPathNginx}" ]; then sudo mv "${_confPathNginx}" "${_confPathNginx}"'.disabled'; fi
 
-    sudo ufw allow https/tcp > /dev/null
+    #sudo ufw allow https/tcp > /dev/null
     
     sudo rm -f /etc/nginx/sites-enabled/default
 
@@ -1870,7 +1897,7 @@ _setupFrequiJson_() {
     local _yesNo="${ENV_YES}"
     local _setup="false"
 
-    if [[ "${_frequiJwt}" = "" ]]; then
+    if [[ -z "${_frequiJwt}" ]]; then
         _frequiJwt="$(_fsSecret_)"
     fi
 
@@ -1977,6 +2004,7 @@ _setupFrequiCompose_() {
     _fsJsonSet_ "${_fsConfig}" 'server_url' "${_serverUrl}"
 
     printf '%s\n' \
+    "{" \
     "    \"max_open_trades\": 1," \
     "    \"stake_currency\": \"BTC\"," \
     "    \"stake_amount\": 0.05," \
@@ -2011,7 +2039,7 @@ _setupFrequiCompose_() {
     "    \"pairlists\": [" \
     "        {\"method\": \"StaticPairList\"}" \
     "    ]," \
-    "    \"bot_name\": \"frequi-server\"," \
+    "    \"bot_name\": \"frequi_server\"," \
     "    \"initial_state\": \"running\"" \
     "}" \
     > "${_frequiServerJson}"
@@ -2038,7 +2066,7 @@ _setupFrequiCompose_() {
     "      trade" \
     "      --logfile /freqtrade/user_data/logs/$(basename ${_frequiServerLog})" \
     "      --strategy ${_frequiStrategy}" \
-    "      --strategy-path /freqtrade/user_data/${_frequiStrategy}" \
+    "      --strategy-path /freqtrade/user_data/strategies/${_frequiStrategy}" \
     "      --config /freqtrade/user_data/$(basename ${_frequiJson})" \
     "      --config /freqtrade/user_data/$(basename ${_frequiServerJson})" \
     > "${_frequiYml}"
@@ -2047,7 +2075,7 @@ _setupFrequiCompose_() {
         if [[ -f "${_frequiServerLog}" ]]; then
             rm -f "${_frequiServerLog}"
         fi
-        
+
         _fsDockerComposeUp_ "${_frequiYml}" 'force'
     else
         emergency "\"$(basename "${_frequiYml}")\" file not found." && exit 1
@@ -2083,7 +2111,7 @@ _fsSetupExampleBot_() {
         while true; do
             info "What is the name of your config file? For default name press <ENTER>."
             read -p " (filename) " _botExampleConfigName
-            case "${_configName}" in
+            case "${_botExampleConfigName}" in
                 "")
                     _botExampleConfigName="config"
                 ;;
