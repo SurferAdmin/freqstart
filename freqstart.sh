@@ -65,7 +65,7 @@ NO_COLOR="${NO_COLOR:-}"    # true = disable color. otherwise autodetected
 ENV_DIR="${__dir}"
 
 ENV_FS="freqstart"
-ENV_FS_VERSION='v0.0.2'
+ENV_FS_VERSION='v0.0.3'
 ENV_FS_SYMLINK="/user/local/bin/${ENV_FS}"
 ENV_FS_CONFIG="${ENV_DIR}/${ENV_FS}.config.json"
 ENV_FS_STRATEGIES="${ENV_DIR}/${ENV_FS}.strategies.json"
@@ -217,6 +217,8 @@ function _fsStats_() {
 }
 
 function _fsScriptLock_() {
+    debug "function _fsScriptLock_"
+    
     local _lockDir=""
     local _tmpDir="${ENV_DIR_TMP:-/tmp}"
 
@@ -229,16 +231,14 @@ function _fsScriptLock_() {
 
         if command mkdir -p "${_lockDir}" 2>/dev/null; then
             readonly SCRIPT_LOCK="${_lockDir}"
-            debug "Acquired script lock: ${SCRIPT_LOCK}"
+            debug "Script lock activated: ${SCRIPT_LOCK}"
         else
             if declare -f "__b3bp_cleanup_before_exit" &>/dev/null; then
                 emergency "Unable to acquire script lock: ${_lockDir}"
                 emergency "If you trust the script isn't running, delete the lock dir"
             else
-                printf "%s\n" "ERROR: Could not acquire script lock. If you trust the script isn't running, delete: ${_lockDir}"
-                exit 1
+                emergency "Could not acquire script lock. If you trust the script isn't running, delete: ${_lockDir}" && exit 1
             fi
-
         fi
     else
         emergency "Temporary directory is not defined!" && exit 1
@@ -355,6 +355,20 @@ function _fsUrlValidate_() {
         fi
     else
         echo "false"
+    fi
+}
+
+function _fsIsPort_() {
+    debug "function _fsDockerYmlPorts_"
+    [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
+    
+    _port="${1}"
+    # credit: https://stackoverflow.com/a/32107419
+    if [[ ! "${_port}" =~ ^[0-9]+$ ]]; then
+        emergency '"'"${_dockerPortUsed}"'" used port is not a number.' && exit 1
+        echo "false"
+    else
+        echo "true"
     fi
 }
 
@@ -538,7 +552,7 @@ function _fsStrategy_() {
         sudo rm -rf "${_strategyTmp}"
 
         if [[ "${_strategyFileCount}" -eq 0 ]]; then
-            notice "\"${_strategyName}\" latest version installed."
+            info "\"${_strategyName}\" latest version installed."
         else
             notice "\"${_strategyName}\" strategy is updated. Restart bots!"
         fi
@@ -632,7 +646,7 @@ function _fsDockerManifest_() {
 	fi
 }
 
-function _fsDockerInspectImage_() {
+function _fsDockerImageInstalled_() {
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _dockerRepo="${1}"
@@ -645,72 +659,97 @@ function _fsDockerInspectImage_() {
 	fi
 }
 
-function _fsDockerInspectPort_() {
+function _fsDockerYmlPorts_() {
+        debug "function _fsDockerYmlPorts_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
-	local _ports="${@}"
-	local _portsUnique=''
-	local _portsUsed=''
-	local _port=''
-	local _portSeen=''
-	local _portUsed=''
-	local _error=''
+	local _dockerPorts="${@}"
+	local _error="false"
 
-	for _port in "${_ports[@]}"; do
-		if [[ "${_port##*.}" == 'yml' ]]; then
-			if [[ -f "${_port}" ]]; then
-				readarray -t _ports < <(grep 'ports:' "${_port}" -A 1 \
-					| grep -o -E '[0-9]{4}.*' \
-					| sed 's,",,g' \
-					| sed 's,:.*,,')
+    # get docker ports from yml file instead of port numbers
+	for _dockerPort in $_dockerPorts; do
+		if [[ "${_dockerPort##*.}" == 'yml' ]]; then
+			if [[ -f "${_dockerPort}" ]]; then
+                _dockerPorts=()
+                while read; do
+                _dockerPorts+=( "$REPLY" )
+                done < <(grep 'ports:' "${_dockerPort}" -A 1 | grep -o -E '[0-9]{4}.*' | sed 's,",,g' | sed 's,:.*,,')
+				#readarray -t _dockerPorts < <(grep 'ports:' "${_dockerPort}" -A 1 | grep -o -E '[0-9]{4}.*' | sed 's,",,g' | sed 's,:.*,,')
 
-				# credit: https://stackoverflow.com/a/22055411
-				_portsUnique="$(printf '%s\n' "${_ports[@]}" \
-					| awk '!($0 in _portSeen){_portSeen[$0];c++} END {print c}')"
-
-				if (( _portsUnique != "${#_ports[@]}" )); then
-					error "\"$($(echo $(printf '%s\n' "${_ports[@]}" \
-					| awk '!($0 in _portSeen){_portSeen[$0];next} 1') \
-					| sed 's# #", "#')'" duplicate ports found in "'$(basename "${_port}"))\"."
-					
-					_error='true'
-				fi
-				
 				break
 			else
-				warning "\"$(basename "${_ports}")\" file does not exist."
-                _error='true'
+				emergency "\"$(basename "${_dockerPorts}")\" file does not exist." && exit 1
 			fi
 		fi
 	done
+    
+        debug "_dockerPorts[@]:"
+        debug "$(printf '%s ' "${_dockerPorts[@]}")"
+    
+	for _dockerPort in $_dockerPorts; do
+        if [[ ! "$(_fsIsPort_ "${_dockerPort}")" = "false" ]]; then
+            _error="true"
+        fi
+    done
+    
+	if [[ ! "${_error}" = 'true' ]]; then
+        printf '%s\n' "${_dockerPorts[@]}"
+	fi
+}
 
-	readarray -t _portsUsed < <(docker ps -q \
-	| xargs -I {} docker port {} \
-	| sed 's,.*->,,' \
-	| grep -o -E '[0-9]{4}.*')
+function _fsDockerPortsUsed_() {
+        debug "function _fsDockerYmlPorts_"
+    
+	local _error="false"
 
-	# alternative: docker inspect --format='{{range $p, $conf := .NetworkSettings.Ports}} {{$p}} -> {{(index $conf 0).HostPort}} {{end}}' $INSTANCE_ID
-	#printf '%s ' "${_portsUsed[@]}"; printf '\n'
+    _dockerPortsUsed=()
+	#readarray -t _dockerPortsUsed < <(docker ps -q -a | xargs -I {} docker port {} | sed 's,.*->,,' | grep -o -E '[0-9]{4}.*')
+    while read; do
+    _dockerPortsUsed+=( "$REPLY" )
+    done < <(docker ps -q -a | xargs -I {} docker port {} | sed "s,.*->,," | grep -o -E "[0-9]{4}(.*)")
+    #docker ps -q -a | xargs -I {} docker inspect --format='{{range $p, $conf := .NetworkSettings.Ports}} {{$p}} -> {{(index $conf 0).HostPort}} {{end}}' {}
 
-	for _portUsed in "${_portsUsed[@]}"; do
-		for _port in "${_ports[@]}"; do
-			# credit: https://stackoverflow.com/a/32107419
-			if [[ ! "${_port}" =~ ^[0-9]+$ ]]; then
-				emergency ' "'"${_port}"'" port is not a number.' && exit 1
-			fi
-			
-			if [[ ! "${_portUsed}" =~ ^[0-9]+$ ]]; then
-				emergency '"'"${_portUsed}"'" used port is not a number.' && exit 1
-			fi
-		
-			if [[ "${_portUsed}" == "${_port}" ]]; then
-				error "\"${_port}\" is already blocked."
-				_error='true'
+        debug "_dockerPortsUsed[@]:"
+        debug "$(printf '%s ' "${_dockerPortsUsed[@]}")"
+
+	for _dockerPortUsed in $_dockerPortsUsed; do
+        if [[ "$(_fsIsPort_ "${_dockerPortUsed}")" = "false" ]]; then
+            _error="true"
+        fi
+    done
+    
+	if [[ ! "${_error}" = 'true' ]]; then
+        printf '%s\n' "${_dockerPortsUsed[@]}"
+	fi
+}
+
+function _fsDockerPortCompare_() {
+        debug "function _fsDockerPortCompare_"
+    [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
+
+	local _dockerPorts=("$(_fsDockerYmlPorts_ "${@}")")
+	local _dockerPort=""
+	local _dockerPortsUsed=("$(_fsDockerPortsUsed_)")
+	local _dockerPortUsed=""
+	local _error=""
+
+        debug "_dockerPorts[@]:"
+        debug "$(printf '%s ' "${_dockerPorts[@]}")"
+        debug "_dockerPortsUsed[@]:"
+        debug "$(printf '%s ' "${_dockerPortsUsed[@]}")"
+
+    for _dockerPort in "${_dockerPorts[@]}"; do
+        debug "_dockerPort: ${_dockerPort}"
+        for _dockerPortUsed in "${_dockerPortsUsed[@]}"; do
+            debug "_dockerPortUsed: ${_dockerPortUsed}"
+            if [[ "${_dockerPort}" = "${_dockerPortUsed}" ]]; then
+				error "Port number \"${_dockerPort}\" is already blocked."
+				_error="true"
 			fi
 		done
 	done
 
-	if [[ "${_error}" == 'true' ]]; then
+	if [[ "${_error}" = "true" ]]; then
 		echo "false"
 	else
 		echo "true"
@@ -726,7 +765,7 @@ function _fsDockerVersionCompare_() {
 	local _dockerVersionLocal=""
 	
 	# local version
-	if [[ "$(_fsDockerInspectImage_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
+	if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
 		_dockerVersionLocal="$(docker inspect --format='{{index .RepoDigests 0}}' "${_dockerRepo}":"${_dockerTag}" \
 		| sed 's/.*@//')"
 	fi
@@ -761,7 +800,7 @@ function _fsDockerImage_() {
 	if [[ ! -d "${_dockerDir}" ]]; then mkdir -p "${_dockerDir}"; fi
 	
 	if [[ "${_dockerVersion}" = "greater" ]]; then
-        if [[ "$(_fsDockerInspectImage_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
+        if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
 			# update from docker hub
 
             warning '"'"${_dockerName}"':'"${_dockerTag}"'" image update found.'
@@ -772,7 +811,7 @@ function _fsDockerImage_() {
                 echo
                 
                 # make backup from local repository
-                if [[ "$(_fsDockerInspectImage_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
+                if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
                     sudo rm -f "${_dockerPath}"
                     sudo docker save -o "${_dockerPath}" "${_dockerRepo}"':'"${_dockerTag}"
                     
@@ -794,7 +833,7 @@ function _fsDockerImage_() {
 			echo
             
 			# make backup from local repository
-            if [[ "$(_fsDockerInspectImage_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
+            if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
 				sudo docker save -o "${_dockerPath}" "${_dockerRepo}"':'"${_dockerTag}"
                 
 				if [[ -f "${_dockerPath}" ]]; then
@@ -810,12 +849,12 @@ function _fsDockerImage_() {
 		warning '"'"${_dockerRepo}"':'"${_dockerTag}"'" can not load online image version.'
         
 		# if docker is not reachable try to load local backup
-        if [[ "$(_fsDockerInspectImage_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
+        if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
 			notice '"'"${_dockerRepo}"':'"${_dockerTag}"'" image is installed but can not be verified.' && echo "install"
 		elif [[ -f "${_dockerPath}" ]]; then
 			sudo docker load -i "${_dockerPath}"
             
-            if [[ "$(_fsDockerInspectImage_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
+            if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
 				notice '"'"${_dockerRepo}"':'"${_dockerTag}"'" backup image is installed but can not be verified.' && echo "install"
 			fi
 		else
@@ -829,14 +868,14 @@ function _fsDockerImage_() {
 function _fsDockerPs_() {
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
-	local _value="${1}"
-	local _all="${2:-}"
+	local _dockerValue="${1}"
+	local _dockerAll="${2:-}"
     local _dockerPs=""
 	
-	if [[ "${_all}" == 'all' ]]; then
-		_dockerPs="$(sudo docker ps -a | grep -ow "${_value}")"
+	if [[ "${_dockerAll}" == 'all' ]]; then
+		_dockerPs="$(sudo docker ps -a | grep -ow "${_dockerValue}")"
 	else
-		_dockerPs="$(sudo docker ps | grep -ow "${_value}")"
+		_dockerPs="$(sudo docker ps | grep -ow "${_dockerValue}")"
 	fi
 
 	if [[ ! -z "${_dockerPs}" ]]; then
@@ -847,17 +886,17 @@ function _fsDockerPs_() {
 }
 
 function _fsDockerId2Name_() {
+    debug "function _fsDockerId2Name_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
-    debug "_fsDockerId2Name_ ..."
 
 	local _dockerId="${1}"
 	local _dockerName=""
 
-    debug "_dockerId: ${_dockerId}"
+        debug "_dockerId: ${_dockerId}"
     
 	_dockerName="$(sudo docker inspect --format="{{.Name}}" "${_dockerId}" | sed "s,\/,,")"
 
-    debug "_dockerName: ${_dockerName}"
+        debug "_dockerName: ${_dockerName}"
 
 	if [[ ! -z "${_dockerName}" ]]; then
 		echo "${_dockerName}"
@@ -865,15 +904,21 @@ function _fsDockerId2Name_() {
 }
 
 function _fsDockerId2Port_() {
+    debug "function _fsDockerId2Port_"
+
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _dockerId="${1}"
-	local _dockerName=""
+	local _dockerPort=""
+    
+        debug "_dockerId: ${_dockerId}"
 
-	_dockerName="$(sudo docker inspect --format="{{.Port}}" "${_dockerId}")"
+	_dockerPort="$(sudo docker inspect --format="{{.Port}}" "${_dockerId}")"
+    
+        debug "_dockerPort: ${_dockerPort}"
 	
-	if [[ ! -z "${_dockerName}" ]]; then
-		echo "${_dockerName}"
+	if [[ ! -z "${_dockerPort}" ]]; then
+		echo "${_dockerPort}"
 	fi
 }
 
@@ -1074,7 +1119,7 @@ function _fsDockerComposeUp_() {
             sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" up -d --force-recreate
 
             _fsDockerProjects_ "${_ymlPath}" "validate"
-        elif [[ "$(_fsDockerInspectPort_ "${_ymlPath}")" = "true" ]]; then
+        elif [[ "$(_fsDockerPortCompare_ "${_ymlPath}")" = "true" ]]; then
             cd "${_dir}" && \
             sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" up -d
 
@@ -1114,7 +1159,7 @@ function _fsDockerProjects_() {
         sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" ps -q 2> /dev/null)")
         
         debug "_dockerProjects[@]:"
-        debug "$(printf '%s ' "${_dockerProjects[@]}"; printf '\n')"
+        debug "$(printf '%s ' "${_dockerProjects[@]}")"
         
         if [[ ! -z "${_dockerProjects[@]}" ]]; then
             if [[ "${_ymlMode}" = "validate" ]]; then
@@ -1130,7 +1175,7 @@ function _fsDockerProjects_() {
                 _dockerProjectNotrunc="$(docker ps -q --no-trunc | grep "${_dockerProject}")"
                 debug "_dockerProjectNotrunc: ${_dockerProjectNotrunc}"
                 
-                if [[ "${_ymlMode}" = "validate" ]]; then
+                if [[ "${_ymlMode}" = "validate" ]]; then              
                     # credit: https://serverfault.com/a/935674
                     if [[ -z "${_dockerProject}" ]] || [[ -z "${_dockerProjectNotrunc}" ]]; then
                         error "\"${_dockerProjectName}\" container is not running."
@@ -1521,7 +1566,7 @@ function _fsSetupFrequi_() {
     info 'FREQUI: (Webserver API)'
     
 	if [[ "$(_fsDockerPs_ "${_frequiName}")" = "true" ]]; then
-    #if [[ "$(_fsDockerInspectPort_ "${_frequiYml}")" = "false" ]]; then
+    #if [[ "$(_fsDockerPortCompare_ "${_frequiYml}")" = "false" ]]; then
         if [[ "$(_fsCaseConfirmation_ "Skip reconfigure \"FreqUI\" now?")" = "true" ]]; then
             _setup="false"
         fi
@@ -2401,6 +2446,7 @@ if [[ "${arg_d:?}" = "1" ]]; then
   LOG_LEVEL="7"
   # Enable error backtracing
   trap '__b3bp_err_report "${FUNCNAME:-.}" ${LINENO}' ERR
+  debug "$(docker ps -a)"
 fi
 
 # verbose mode
