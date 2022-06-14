@@ -7,7 +7,7 @@ Freqstart simplifies the use of Freqtrade with Docker. Including a simple setup 
 configurations and FreqUI with a secured SSL proxy for IPs and domains. Freqtrade also automatically
 installs implemented strategies based on Docker Compose files and detects necessary updates.
 
-If you are not familiar with freqtrade, please read the complete documentation first on: [freqtrade.io](https://www.freqtrade.io/).
+If you are not familiar with freqtrade, please read the complete documentation first on: [freqtrade.io](https://www.freqtrade.io/)
 
 ![Freqstart Screen Shot][product-screenshot]
 
