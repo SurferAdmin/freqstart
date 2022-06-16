@@ -66,7 +66,7 @@ ENV_DIR="${__dir}"
 
 ENV_FS="freqstart"
 ENV_FS_VERSION='v0.0.4'
-ENV_FS_SYMLINK="/user/local/bin/${ENV_FS}"
+ENV_FS_SYMLINK="/usr/local/bin/${ENV_FS}"
 ENV_FS_CONFIG="${ENV_DIR}/${ENV_FS}.config.json"
 ENV_FS_STRATEGIES="${ENV_DIR}/${ENV_FS}.strategies.json"
 
@@ -84,7 +84,7 @@ ENV_FREQUI_YML="${ENV_DIR}/${ENV_FS}_frequi.yml"
 ENV_SERVER_IP="$(ip a | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1' | head -1)"
 ENV_SERVER_URL=""
 ENV_INODE_SUM="$(ls -ali / | sed '2!d' | awk {'print $1'})"
-ENV_HASH="$(tr -dc A-Za-z0-9 </dev/urandom | head -c 13 ; echo '')"
+ENV_HASH="$(xxd -l8 -ps /dev/urandom)"
 
 ENV_YES=1
 ENV_SETUP=1
@@ -282,8 +282,7 @@ function _fsJsonGet_() {
     local _jsonName="${2}"
     local _jsonValue=""
         debug "_jsonFile: ${_jsonFile}"
-    _fsFileExist_ "${_jsonFile}"
-    
+    if [[ "$(_fsFileCheck_ "${_jsonFile}")" -eq 0 ]]; then
         _jsonValue="$(cat "${_jsonFile}" \
         | grep -o "${_jsonName}\"\?: \"\?.*\"\?" \
         | sed "s,\",,g" \
@@ -293,6 +292,7 @@ function _fsJsonGet_() {
         if [[ ! -z "${_jsonValue}" ]]; then
             echo "${_jsonValue}"
         fi
+    fi
 }
 
 function _fsJsonSet_() {
@@ -459,19 +459,39 @@ function _fsDate_() {
     echo "$(date +%y%m%d%H)"
 }
 
-function _fsHash_() {
-    local _fsHash="$(tr -dc A-Za-z0-9 </dev/urandom | head -c 13 ; echo '')"
-    echo "${_fsHash}"
+function _fsRandomHex_() {
+    #16-byte (128-bit) hex
+        debug "function _fsRandomHex_"
+
+    local _length="${1:-16}"
+    local _string=""
+
+    _string="$(xxd -l"${_length}" -ps /dev/urandom)"
+        debug "_string: ${_string}"
+    echo "${_string}"
 }
 
-function _fsPasswd_() {
-    local _fsPasswd="$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16 ; echo '')"
-    echo "${_fsPasswd}"
+function _fsRandomBase64_() {
+    #24-byte (196-bit) base64
+        debug "function _fsRandomBase64_"
+    local _length="${1:-24}"
+    local _string=""
+
+    _string="$(xxd -l"${_length}" -ps /dev/urandom | xxd -r -ps | base64)"
+        debug "_string: ${_string}"
+    echo "${_string}"
 }
 
-function _fsSecret_() {
-    local _fsSecret="$(tr -dc A-Za-z0-9 </dev/urandom | head -c 32 ; echo '')"
-    echo "${_fsSecret}"
+function _fsRandomBase64UrlSafe_() {
+    #24-byte (196-bit) base64
+        debug "function _fsRandomBase64UrlSafe_"
+
+    local _length="${1:-32}"
+    local _string=""
+
+    _string="$(xxd -l"${_length}" -ps /dev/urandom | xxd -r -ps | base64 | tr -d = | tr + - | tr / _)"
+        debug "_string: ${_string}"
+    echo "${_string}"
 }
 
 function _fsSymlink_() {
@@ -1350,10 +1370,11 @@ function _fsStart_ {
         debug "function _fsStart_"
 	local _dockerYml="${1:-}"
 	local _dockerCompose="${ENV_DIR}/$(basename "${_dockerYml}")"
+    local _symlink="${ENV_FS_SYMLINK}"
 		
-	if [[ "$(_fsSymlink_ "${ENV_FS_SYMLINK}")" = "false" ]]; then
-		error 'Start setup first with: ./'"${ENV_FS}"'.sh --setup' && exit 1
-	elif [[ "${ENV_KILL}" = "true" ]]; then
+	if [[ "$(_fsSymlink_ "${_symlink}")" -eq 1 ]]; then
+		alert 'Start setup first with: ./'"${ENV_FS}"'.sh --setup' && exit 1
+	elif [[ "${ENV_KILL}" -eq 0 ]]; then
         _fsDockerComposeKill_ "${_dockerCompose}"
     else
         _fsDockerComposeUp_ "${_dockerCompose}"
@@ -1366,6 +1387,9 @@ function _fsStart_ {
 
 function _fsSetup_() {
         debug "function _fsSetup_"
+    local _symlink="${ENV_FS_SYMLINK}"
+    local _symlinkSource="${ENV_DIR}/${ENV_FS}.sh"
+    
     _fsSetupServer_
     _fsSetupNtp_
     _fsSetupFreqtrade_
@@ -1373,11 +1397,12 @@ function _fsSetup_() {
     _fsSetupFrequi_
     _fsSetupExampleBot_
     
-	if [[ "$(_fsSymlink_ "${ENV_FS_SYMLINK}")" -eq 1 ]]; then
-		sudo ln -sf "${ENV_DIR}/${ENV_FS}.sh" "${ENV_FS_SYMLINK}"
+	if [[ "$(_fsSymlink_ "${_symlink}")" -eq 1 ]]; then
+        sudo rm -f "${_symlink}"
+		sudo ln -sfn "${_symlinkSource}" "${_symlink}"
 	fi
 	
-	if [[ "$(_fsSymlink_ "${ENV_FS_SYMLINK}")" -eq 0 ]]; then
+	if [[ "$(_fsSymlink_ "${_symlink}")" -eq 0 ]]; then
         echo
 		notice 'Setup finished!'
 		info "-> Run freqtrade bots with: ${ENV_FS} -b example.yml"
@@ -1385,7 +1410,7 @@ function _fsSetup_() {
 		info "  2. Configs and strategies files are checked for existense."
 		info "  3. Checking docker images for updates before start."
 	else
-		emergency "Cannot create symlink: \"${ENV_FS}\"" && exit 1
+		emergency "Cannot create symlink: \"${_symlink}\"" && exit 1
 	fi
 }
 
@@ -1769,7 +1794,7 @@ function _fsSetupFrequi_() {
             notice '  3) No, I dont want to use SSL (not recommended)'
             info '     -> Only for local use!'
             
-            if [[ "${_yesForce}" -eq 0 ]]; then
+            if [[ "${_yesForce}" -eq 1 ]]; then
                 read -p " (1/2/3) " _nr
             else
                 local _nr="3"
@@ -1808,7 +1833,7 @@ function _fsSetupNginx_() {
     local _confPathFrequi="${_confPath}/frequi.conf"
     local _confPathNginx="${_confPath}/default.conf"
     local _serverName="${ENV_SERVER_IP}"
-    
+        debug "_serverName: ${_serverName}"
     ENV_SERVER_URL="http://${_serverName}"
 
     _fsSetupPkgs_ "nginx"
@@ -1816,21 +1841,24 @@ function _fsSetupNginx_() {
     "server {" \
     "    listen 80;" \
     "    server_name ${_serverName};" \
-    "    " \
     "    location / {" \
+    "        proxy_set_header Host \$host;" \
+    "        proxy_set_header X-Real-IP \$remote_addr;" \
     "        proxy_pass http://127.0.0.1:9999;" \
     "    }" \
     "}" \
     "server {" \
     "    listen 9000-9100;" \
     "    server_name ${_serverName};" \
-    "    " \
     "    location / {" \
+    "        proxy_set_header Host \$host;" \
+    "        proxy_set_header X-Real-IP \$remote_addr;" \
     "        proxy_pass http://127.0.0.1:\$server_port;" \
     "    }" \
     "}" \
     > "${_confPathFrequi}"
 
+    _fsFileExist_ "${_confPathFrequi}"
     [[ "$(_fsFileCheck_ "${_confPathNginx}")" -eq 0 ]] && sudo mv "${_confPathNginx}" "${_confPathNginx}.disabled"
 
     sudo rm -f "/etc/nginx/sites-enabled/default"
@@ -1845,6 +1873,11 @@ function _fsSetupNginxRestart_() {
         debug "function _fsSetupNginxRestart_"
     # kill and start again
     # >/dev/null 2>&1
+    if [[ ! -z "$(sudo nginx -t 2>&1 | grep -ow "failed")" ]]; then
+        emergency "Error in nginx config file."
+        exit 1
+    fi
+
     sudo /etc/init.d/nginx stop
     sudo pkill -f nginx & wait $!
     sudo /etc/init.d/nginx start
@@ -2053,36 +2086,44 @@ function _fsSetupFrequiJson_() {
     local _frequiTmpPassword=""
     local _frequiCors="${ENV_SERVER_URL}"
     local _yesForce="${ENV_YES}"
-    local _yesNo=""
     local _setup=1
     
-    _frequiJwt="$(_fsJsonGet_ "${_frequiJson}" 'jwt_secret_key')"
-    _frequiUsername="$(_fsJsonGet_ "${_frequiJson}" 'username')"
-    _frequiPassword="$(_fsJsonGet_ "${_frequiJson}" 'password')"
+    _frequiJwt="$(_fsJsonGet_ "${_frequiJson}" "jwt_secret_key")"
+    _frequiUsername="$(_fsJsonGet_ "${_frequiJson}" "username")"
+    _frequiPassword="$(_fsJsonGet_ "${_frequiJson}" "password")"
 
     if [[ -z "${_frequiJwt}" ]]; then
-        _frequiJwt="$(_fsSecret_)"
+        _frequiJwt="$(_fsRandomBase64UrlSafe_)"
     fi
 
     if [[ ! -z "${_frequiUsername}" ]] || [[ ! -z "${_frequiPassword}" ]]; then
         warning "Login data for \"FreqUI\" already found."
         
         if [[ "$(_fsCaseConfirmation_ "Skip generating new login data?")" -eq 1 ]]; then
-            notice "Create your login data for \"FreqUI\" now!"
             _setup=0
         fi
     else
-        _setup=0
+        if [[ "$(_fsCaseConfirmation_ "Create \"FreqUI\" login data?")" -eq 0 ]]; then
+            _setup=0
+            
+            if [[ "${_yesForce}" -eq 0 ]]; then
+                _setup=1
+
+                _frequiUsername="$(_fsRandomBase64_ 16)"
+                _frequiPassword="$(_fsRandomBase64_ 16)"
+            fi
+        fi
     fi
-    
+        debug "_frequiJwt: ${_frequiJwt}"
+        debug "_frequiUsername: ${_frequiUsername}"
+        debug "_frequiPassword: ${_frequiPassword}"
     if [[ "${_setup}" = 0 ]]; then
-        # create username
+        info "Create your login data for \"FreqUI\" now!"
+            # create username
         while true; do
             read -p 'Enter username: ' _frequiUsername
                 debug "_frequiUsername: ${_frequiUsername}"
             if [[ ! -z "${_frequiUsername}" ]]; then
-                read -p 'Is the username "'"${_frequiUsername}"'" correct? (y/n) ' _yesNo
-
                 if [[ "$(_fsCaseConfirmation_ "Is the username \"${_frequiUsername}\" correct?")" -eq 0 ]]; then
                     break
                 else
@@ -2090,8 +2131,7 @@ function _fsSetupFrequiJson_() {
                 fi
             fi
         done
-        
-        # create password - NON VERBOSE
+            # create password - NON VERBOSE
         while true; do
             notice 'Enter password (ENTRY HIDDEN):'
             read -s _frequiPassword
@@ -2116,7 +2156,7 @@ function _fsSetupFrequiJson_() {
             esac
         done
     fi
-
+        # create frequi json for bots
     if [[ ! -z "${_frequiUsername}" ]] && [[ ! -z "${_frequiPassword}" ]]; then
         printf '%s\n' \
         "{" \
