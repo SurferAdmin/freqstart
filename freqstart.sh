@@ -65,7 +65,7 @@ NO_COLOR="${NO_COLOR:-}"    # true = disable color. otherwise autodetected
 ENV_DIR="${__dir}"
 
 ENV_FS="freqstart"
-ENV_FS_VERSION='v0.0.3'
+ENV_FS_VERSION='v0.0.4'
 ENV_FS_SYMLINK="/user/local/bin/${ENV_FS}"
 ENV_FS_CONFIG="${ENV_DIR}/${ENV_FS}.config.json"
 ENV_FS_STRATEGIES="${ENV_DIR}/${ENV_FS}.strategies.json"
@@ -75,7 +75,7 @@ ENV_DIR_USER_DATA_STRATEGIES="${ENV_DIR_USER_DATA}/strategies"
 ENV_DIR_DOCKER="${ENV_DIR}/docker"
 ENV_DIR_TMP="/tmp/${ENV_FS}"
 
-ENV_BINANCE_PROXY="${ENV_DIR_USER_DATA}"'/binance_proxy.json'
+ENV_BINANCE_PROXY="${ENV_DIR_USER_DATA}/binance_proxy.json"
 
 ENV_FREQUI_JSON="${ENV_DIR_USER_DATA}/frequi.json"
 ENV_FREQUI_SERVER_JSON="${ENV_DIR_USER_DATA}/frequi_server.json"
@@ -86,9 +86,9 @@ ENV_SERVER_URL=""
 ENV_INODE_SUM="$(ls -ali / | sed '2!d' | awk {'print $1'})"
 ENV_HASH="$(tr -dc A-Za-z0-9 </dev/urandom | head -c 13 ; echo '')"
 
-ENV_YES="false"
-ENV_SETUP="false"
-ENV_KILL="false"
+ENV_YES=1
+ENV_SETUP=1
+ENV_KILL=1
 
 ### Functions
 ##############################################################################
@@ -168,7 +168,9 @@ function _fsIntro_() {
     local _fsVersion="${ENV_FS_VERSION}"
     local _serverIp="${ENV_SERVER_IP}"
     local _inodeSum="${ENV_INODE_SUM}"
-	local _serverUrl="$(_fsJsonGet_ "${_fsConfig}" 'server_url')"    
+	local _serverUrl=""
+    
+	[[ "$(_fsFileCheck_ "${_fsConfig}")" -eq 0 ]] && _serverUrl="$(_fsJsonGet_ "${_fsConfig}" "server_url")"    
 
     echo '###'
     echo '# FREQSTART: '"${_fsVersion}"
@@ -193,13 +195,40 @@ function _fsIntro_() {
     "    \"server_url\": \"${_serverUrl}\"" \
     "}" \
     > "${_fsConfig}"
-
-	if [[ ! -f "${_fsConfig}" ]]; then
-		emergency "Cannot create \"$(basename "${_fsConfig}")\" file." && exit 1
-	fi
+    
+    _fsFileExist_ "${_fsConfig}"
 }
 
+function _fsFileCheck_() {
+        debug "function _fsFileCheck_"
+    local _file="${1:-}" # optional: path to file
+
+	if [[ -z "${_file}" ]]; then
+        debug "File is empty."
+        echo 1
+    elif [[ -f "${_file}" ]]; then
+        debug "File found: ${_file}"
+        echo 0
+    else
+		debug "Cannot find file: ${_file}"
+        echo 1
+	fi
+}
+function _fsFileExist_() {
+    [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
+        debug "function _fsFileExist_"
+    local _file="${1:-}" # optional: path to file
+    local _fileCheck=""
+    local _fileCheck="$(_fsFileCheck_ "${_file}")"
+        debug "_fileCheck: ${_fileCheck}"
+	if [[ "${_fileCheck}" -eq 1 ]]; then
+        emergency "Cannot create file: ${_file}" && exit 1
+    fi
+}
+
+
 function _fsStats_() {
+        debug "function _fsStats_"
 	# some handy stats to get you an impression how your server compares to the current possibly best location for binance
 	local _ping="$(ping -c 1 -w15 api3.binance.com | awk -F '/' 'END {print $5}')"
 	local _memUsed="$(free -m | awk 'NR==2{print $3}')"
@@ -218,8 +247,7 @@ function _fsStats_() {
 }
 
 function _fsScriptLock_() {
-    debug "function _fsScriptLock_"
-    
+        debug "function _fsScriptLock_"
     local _lockDir=""
     local _tmpDir="${ENV_DIR_TMP:-/tmp}"
 
@@ -247,80 +275,84 @@ function _fsScriptLock_() {
 }
 
 function _fsJsonGet_() {
-    [[ $# == 0 ]] && debug "Missing required argument to ${FUNCNAME[0]}"
+        debug "function _fsJsonGet_"
+    [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
-    local _jsonFile="${1:-}"
+    local _jsonFile="${1}"
     local _jsonName="${2}"
     local _jsonValue=""
-    
-    if [[ -f "${_jsonFile}" ]]; then
+        debug "_jsonFile: ${_jsonFile}"
+    _fsFileExist_ "${_jsonFile}"
     
         _jsonValue="$(cat "${_jsonFile}" \
-        | grep -o "${_jsonName}\"\?: \".*\"" \
+        | grep -o "${_jsonName}\"\?: \"\?.*\"\?" \
         | sed "s,\",,g" \
         | sed "s,\s,,g" \
         | sed "s,${_jsonName}:,,")"
-
+            debug "_jsonValue: ${_jsonValue}"
         if [[ ! -z "${_jsonValue}" ]]; then
             echo "${_jsonValue}"
-        else
-            debug "\"${_jsonName}\" empty value."
-            echo
         fi
-    else
-        debug '"'"${_jsonFile}"'" file does not exist.'
-        echo
-    fi
-    
-    exit 1
 }
 
 function _fsJsonSet_() {
+        debug "function _fsJsonSet_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
     local _jsonFile="${1}"
     local _jsonName="${2}"
     local _jsonValue="${3}"
-
-    # IMPORTANT - do not echo value for non-verbose inputs
-    if [[ -f "${_jsonFile}" ]]; then
-        if [[ ! -z "$(cat "${_jsonFile}" | grep -o "\"${_jsonName}\": \".*\"")" ]]; then
-                sed -i "s,\"${_jsonName}\": \".*\",\"${_jsonName}\": \"${_jsonValue}\"," "${_jsonFile}"
-        elif [[ ! -z "$(cat "${_jsonFile}" | grep -o "${_jsonName}: \".*\"")" ]]; then
-                sed -i "s,${_jsonName}: \".*\",${_jsonName}: \"${_jsonValue}\"," "${_jsonFile}"
-        else
-            emergency '"'"${_jsonFile}"'" can not find "'"${_jsonName}"'" name.' && exit 1
-        fi
-        
-        if [[ ! "$(_fsJsonGet_ "${_jsonFile}" "${_jsonName}")" = "${_jsonValue}" ]]; then
-            emergency '"'"${_jsonFile}"'" can not set value for "'"${_jsonName}"'" name.' && exit 1
-        fi
+        debug "_jsonFile: ${_jsonFile}"
+        debug "_jsonName: ${_jsonName}"
+        debug "_jsonValue: ${_jsonValue}"
+        debug "_jsonValue: IMPORTANT - Do not print value for non-verbose inputs."
+    _fsFileExist_ "${_jsonFile}"
+    
+    # "name": "value"
+    if [[ ! -z "$(cat "${_jsonFile}" | grep -o "\"${_jsonName}\": \".*\"")" ]]; then
+            debug '"name": "value"'
+        sed -i "s,\"${_jsonName}\": \".*\",\"${_jsonName}\": \"${_jsonValue}\"," "${_jsonFile}"
+    # name: "value"
+    elif [[ ! -z "$(cat "${_jsonFile}" | grep -o "${_jsonName}: \".*\"")" ]]; then
+            debug 'name: "value"'
+        sed -i "s,${_jsonName}: \".*\",${_jsonName}: \"${_jsonValue}\"," "${_jsonFile}"
+    # "name": value
+    elif [[ ! -z "$(cat "${_jsonFile}" | grep -o "\"${_jsonName}\": .*")" ]]; then
+            debug '"name": value'
+        sed -i "s,\"${_jsonName}\": .*,\"${_jsonName}\": ${_jsonValue}," "${_jsonFile}"
+    # name: value
+            debug 'name: value'
+    elif [[ ! -z "$(cat "${_jsonFile}" | grep -o "${_jsonName}: .*")" ]]; then
+        sed -i "s,${_jsonName}: .*,${_jsonName}: ${_jsonValue}," "${_jsonFile}"
     else
-        emergency '"'"${_jsonFile}"'" file does not exist.' && exit 1
+        emergency "Cannot find name: ${_jsonName}" && exit 1
     fi
 }
 
 function _fsCaseConfirmation_() {
+        debug "function _fsCaseConfirmation_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
+    local _question="${1}"
+    local _yesForce="${ENV_YES}"
     local _yesNo=""
     
-    notice "${1}"
+    notice "${_question}"
     
-    if [[ "${ENV_YES}" = "true" ]]; then
-        debug "Forcing confirmation with '-y' flag set"
-        echo "true"
+    if [[ "${_yesForce}" -eq 0 ]]; then
+        debug "Forcing confirmation with '-y' flag set."
+        echo 0
     else
         while true; do
             read -p " (y/n) " _yesNo
             
-            case "${_yesNo}" in
+            case ${_yesNo} in
                 [Yy]*)
-                    echo "true"
+                    echo 0
                     break
                     ;;
                 [Nn]*)
-                    echo "false"
+                    echo 1
                     break
                     ;;
                 *)
@@ -339,41 +371,46 @@ function _fsCaseEmpty_() {
     warning 'Response cannot be empty!'
 }
 
-function _fsUrlValidate_() {
+function _fsIsUrl_() {
+        debug "function _fsIsUrl_"
+    [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
+
     local _url="${1}"
-    # credit: https://stackoverflow.com/a/55267709
+        # credit: https://stackoverflow.com/a/55267709
     local _regex="^(https?|ftp|file)://[-A-Za-z0-9\+&@#/%?=~_|!:,.;]*[-A-Za-z0-9\+&@#/%=~_|]\.[-A-Za-z0-9\+&@#/%?=~_|!:,.;]*[-A-Za-z0-9\+&@#/%=~_|]$"
     local _status=""
 
     if [[ "${_url}" =~ $_regex ]]; then
-        # credit: https://stackoverflow.com/a/41875657
+            # credit: https://stackoverflow.com/a/41875657
         _status="$(curl -o /dev/null -Isw '%{http_code}' "${_url}")"
-        
-        if [[ "${_status}" = '200' ]]; then
-            echo "true"
+            debug "_status: ${_status}"
+        if [[ "${_status}" = "200" ]]; then
+            echo 0
         else
-            echo "false"
+            echo 1
         fi
     else
-        echo "false"
+        emergency "Url is not valid: ${_url}" && exit 1
     fi
 }
 
 function _fsIsPort_() {
-    debug "function _fsDockerYmlPorts_"
+        debug "function _fsIsPort_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
     
     _port="${1}"
-    # credit: https://stackoverflow.com/a/32107419
-    if [[ ! "${_port}" =~ ^[0-9]+$ ]]; then
-        emergency '"'"${_dockerPortUsed}"'" used port is not a number.' && exit 1
-        echo "false"
+        debug "_port: ${_port}"
+        # credit: https://stackoverflow.com/a/32107419
+    if [[ "${_port}" =~ ^[0-9]+$ ]]; then
+        echo 0
     else
-        echo "true"
+        emergency '"'"${_dockerPortUsed}"'" used port is not a number.' && exit 1
+        echo 1
     fi
 }
 
 function _fsCdown_() {
+        debug "function _fsCdown_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
     _secs="${1}"; shift; _text="${@}"
@@ -390,18 +427,20 @@ function _fsCdown_() {
 }
 
 function _fsIsAlphaDash_() {
+        debug "function _fsIsAlphaDash_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
     
     local _re='^[[:alnum:]_-]+$'
     
     if [[ ${1} =~ ${_re} ]]; then
-        echo "true"
+        echo 0
     else
-        echo "false"
+        echo 1
     fi
 }
 
 function _fsDedupeArray_() {
+        debug "function _fsDedupeArray_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
     
     declare -A _tmpArray
@@ -436,32 +475,40 @@ function _fsSecret_() {
 }
 
 function _fsSymlink_() {
+        debug "function _fsSymlink_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _symlink="${1}"
+        debug "_symlink: ${_symlink}"
         # credit: https://stackoverflow.com/a/36180056
-	if [ -L "${_symlink}" ] ; then
-		if [ -e "${_symlink}" ] ; then
-			echo "true"
-		else
+    if [ -L ${_symlink} ] ; then
+        if [ -e ${_symlink} ] ; then
+                debug "_symlink: Good link"
+			echo 0
+        else
+                debug "_symlink: Broken link"
 			sudo rm -f "${_symlink}"
-            echo "false"
-		fi
-	elif [ -e "${_symlink}" ] ; then
-		sudo rm -f "${_symlink}"
-        echo "false"
-	else
-        echo "true"
-	fi
+            echo 1
+        fi
+    elif [ -e ${_symlink} ] ; then
+                debug "_symlink: Not a link"
+			sudo rm -f "${_symlink}"
+            echo 1
+    else
+            debug "_symlink: Missing link"
+        sudo rm -f "${_symlink}"
+        echo 1
+    fi
 }
 
 function _fsStrategy_() {
+        debug "function _fsStrategy_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
     local _strategyName="${1}"
     local _strategyFile=""
     local _strategyFileNew=""
-    local _strategyFileCount=0
+    local _strategyUpdateCount=0
     local _strategyFileType=""
     local _strategyFileTypeName='unknown'
     local _strategyTmp="${ENV_DIR_TMP}/${_strategyName}_${ENV_HASH}"
@@ -471,7 +518,7 @@ function _fsStrategy_() {
     local _strategyUrl=""
     local _fsStrategies="${ENV_FS_STRATEGIES}"
     
-    if [[ ! -f "${_fsStrategies}" ]]; then
+    if [[ "$(_fsFileCheck_"${_fsStrategies}")" -eq 1 ]]; then
         printf '%s\n' \
         "{" \
         "    \"NostalgiaForInfinityX\": [" \
@@ -500,6 +547,8 @@ function _fsStrategy_() {
         "    ]" \
         "}" \
         > "${_fsStrategies}"
+        
+        _fsFileExist_"${_fsStrategies}"
     fi
     
     _strategyUrls=()
@@ -521,10 +570,10 @@ function _fsStrategy_() {
         sudo mkdir -p "${_strategyDir}"
 
         for _strategyUrl in "${_strategyUrlsDeduped[@]}"; do
-            if [[ "$(_fsUrlValidate_ "${_strategyUrl}")" = "true" ]]; then
+            if [[ "$(_fsIsUrl_ "${_strategyUrl}")" -eq 0 ]]; then
                 _strategyFile="$(basename "${_strategyUrl}")"
-                _strategyFileNew="${_strategyDir}/${_strategyFile}"
                 _strategyFileType="${_strategyFile##*.}"
+                _strategyPath="${_strategyDir}/${_strategyFile}"
 
                 if [ "${_strategyFileType}" == "py" ]; then
                     _strategyFileTypeName='strategy'
@@ -534,31 +583,37 @@ function _fsStrategy_() {
                 
                 sudo curl -s -L "${_strategyUrl}" -o "${_strategyTmp}/${_strategyFile}"
             
-                if [[ -f "${_strategyFileNew}" ]]; then
-                    if [[ -n "$(cmp --silent "${_strategyUrl}" "${_strategyFileNew}")" ]]; then
-                        cp -a "${_strategyTmp}/${_strategyFile}" "${_strategyFileNew}"
-                        _strategyFileCount=$((_strategyFileCount+1))
+                if [[ "$(_fsFileCheck_ "${_strategyPath}")" -eq 0 ]]; then
+                    if [[ -n "$(cmp --silent "${_strategyUrl}" "${_strategyPath}")" ]]; then
+                        cp -a "${_strategyTmp}/${_strategyFile}" "${_strategyPath}"
+                        _strategyUpdateCount=$((_strategyUpdateCount+1))
 
                         info "\"${_strategyFile}\" \"${_strategyFileTypeName}\" updated."
+                        
+                        _fsFileExist_ "${_strategyPath}"
                     fi
                 else
-                    cp -a "${_strategyTmp}/${_strategyFile}" "${_strategyFileNew}"
-                    _strategyFileCount=$((_strategyFileCount+1))
+                    cp -a "${_strategyTmp}/${_strategyFile}" "${_strategyPath}"
                     
                     info "\"${_strategyFile}\" \"${_strategyFileTypeName}\" installed."
+                    
+                    _fsFileExist_ "${_strategyPath}"
                 fi
             fi
         done
         
         sudo rm -rf "${_strategyTmp}"
 
-        if [[ "${_strategyFileCount}" -eq 0 ]]; then
+        if [[ "${_strategyUpdateCount}" -eq 0 ]]; then
             info "\"${_strategyName}\" latest version installed."
+            echo 0
         else
             notice "\"${_strategyName}\" strategy is updated. Restart bots!"
+            echo 1
         fi
     else
         warning "\"${_strategyName}\" strategy not implemented."
+        echo 0
     fi
 }
 
@@ -591,18 +646,47 @@ function _fsDockerVarsVersion_() {
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _docker="${1}"
-	local _dockerRepo="$(_fsDockerVarsRepo_ "${_docker}")"
-	local _dockerTag="$(_fsDockerVarsTag_ "${_docker}")"
-	local _dockerVersion="$(_fsDockerVersionCompare_ "${_dockerRepo}" "${_dockerTag}")"
+	local _dockerRepo=""
+	local _dockerTag=""
+	local _dockerVersion=""
+	local _dockerVersionLocal=""
+	local _dockerManifest=""
     
-	echo "${_dockerVersion}"
+    _dockerRepo="$(_fsDockerVarsRepo_ "${_docker}")"
+	_dockerTag="$(_fsDockerVarsTag_ "${_docker}")"
+	_dockerManifest="$(_fsDockerManifest_ "${_dockerRepo}" "${_dockerTag}")"
+	
+	# local version
+	if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" -eq 0 ]]; then
+		_dockerVersionLocal="$(docker inspect --format='{{index .RepoDigests 0}}' "${_dockerRepo}":"${_dockerTag}" \
+		| sed 's/.*@//')"
+	fi
+        debug "_dockerVersionLocal: ${_dockerVersionLocal}"
+	# docker version
+	if [[ ! -z "${_dockerManifest}" ]]; then
+		_dockerVersion="$(_fsJsonGet_ "${_dockerManifest}" "etag")"
+	fi
+        debug "_dockerVersion: ${_dockerVersion}"
+	# compare versions
+	if [[ -z "${_dockerVersion}" ]]; then
+        # unkown
+		echo 2
+	else
+		if [[ "${_dockerVersion}" = "${_dockerVersionLocal}" ]]; then
+            # equal
+			echo 0
+		else
+            # greater
+			echo 1
+		fi
+	fi
 }
 
 function _fsDockerVarsName_() {
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _docker="${1}"
-	local _dockerRepo=$(_fsDockerVarsRepo_ "${_docker}")
+	local _dockerRepo="$(_fsDockerVarsRepo_ "${_docker}")"
 	local _dockerName="${ENV_FS}_$(echo "${_dockerRepo}" | sed 's,\/,_,')"
 	echo "${_dockerName}"
 }
@@ -621,55 +705,66 @@ function _fsDockerVarsTag_() {
 }
 
 function _fsDockerManifest_() {
+        debug "function _fsDockerManifest_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _dockerRepo="${1}"
 	local _dockerTag="${2}"
-	local _dockerName="$(_fsDockerVarsName_ "${_dockerRepo}")"
-	local _dockerManifestTmp="${ENV_DIR_TMP}/${_dockerName}_${_dockerTag}_${ENV_HASH}.json"
+	local _dockerName=""
+	local _dockerManifestTmp=""
+    local _acceptM=""
+    local _acceptML=""
+    local _token=""
+    local _status=""
 
-	if [[ ! -f "${_dockerManifestTmp}" ]]; then
-		# credit: https://stackoverflow.com/a/64309017
-		local acceptM="application/vnd.docker.distribution.manifest.v2+json"
-		local acceptML="application/vnd.docker.distribution.manifest.list.v2+json"
-		local token="$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${_dockerRepo}:pull" \
-			| jq -r '.token')"
-		curl -H "Accept: ${acceptM}" \
-			-H "Accept: ${acceptML}" \
-			-H "Authorization: Bearer $token" \
-			-o "${_dockerManifestTmp}" \
-			-I -s -L "https://registry-1.docker.io/v2/${_dockerRepo}/manifests/${_dockerTag}"
-		if [[ -f "${_dockerManifestTmp}" ]] && [[ ! -z "$(echo | cat "${_dockerManifestTmp}" | grep -o '200 OK')" ]]; then
-			echo "${_dockerManifestTmp}"
-		fi
-	elif [[ ! -z "$(cat "${_dockerManifestTmp}" | grep -o '200 OK')" ]]; then
-		echo "${_dockerManifestTmp}"
-	fi
+	_dockerName="$(_fsDockerVarsName_ "${_dockerRepo}")"
+	_dockerManifestTmp="${ENV_DIR_TMP}/${_dockerName}_${_dockerTag}_${ENV_HASH}.json"
+        debug "_dockerManifestTmp: ${_dockerManifestTmp}"
+        # credit: https://stackoverflow.com/a/64309017
+    _acceptM="application/vnd.docker.distribution.manifest.v2+json"
+    _acceptML="application/vnd.docker.distribution.manifest.list.v2+json"
+    _token="$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${_dockerRepo}:pull" | jq -r '.token')"
+
+    curl -H "Accept: ${_acceptM}" -H "Accept: ${_acceptML}" -H "Authorization: Bearer ${_token}" -o "${_dockerManifestTmp}" \
+    -I -s -L "https://registry-1.docker.io/v2/${_dockerRepo}/manifests/${_dockerTag}" || true && debug "Cannot receive docker manifest file."
+
+    if [[ "$(_fsFileCheck_ "${_dockerManifestTmp}")" -eq 0 ]]; then
+        _status="$(cat "${_dockerManifestTmp}" | grep -o '200 OK')"
+            debug "_status: ${_status}"
+        if [[ ! -z "${_status}" ]]; then
+                echo "${_dockerManifestTmp}"
+        fi
+    fi
 }
 
 function _fsDockerImageInstalled_() {
+        debug "function _fsDockerImageInstalled_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _dockerRepo="${1}"
 	local _dockerTag="${2}"
-		
-	if [[ -n "$(docker inspect --type=image "${_dockerRepo}":"${_dockerTag}" > /dev/null 2>&1)" ]]; then
-		echo "true"
+    local _dockerImages=""
+    
+    _dockerImages="$(docker images -q "${_dockerRepo}:${_dockerTag}" 2> /dev/null)"
+		debug "_dockerImages: ${_dockerImages}"
+	if [[ ! -z "${_dockerImages}" ]]; then
+		echo 0
 	else
-		echo "false"
+		echo 1
 	fi
 }
 
 function _fsDockerYmlPorts_() {
-        #debug "function _fsDockerYmlPorts_"
+        debug "function _fsDockerYmlPorts_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _dockerPorts="${@}"
+	local _dockerPort=""
 	local _error=0
-        #debug "_dockerPorts[@]:"
-        #debug "$(printf '%s\n' "${_dockerPorts[@]}")"
+        debug "_dockerPorts[@]:"
+        debug "$(printf '%s\n' "${_dockerPorts[@]}")"
     # get docker ports from yml file instead of port numbers
-	for _dockerPort in ${_dockerPorts[@]}; do
+    for _dockerPort in ${_dockerPorts[@]}; do
 		if [[ "${_dockerPort##*.}" == 'yml' ]]; then
 			if [[ -f "${_dockerPort}" ]]; then
                 _dockerPorts=()
@@ -684,21 +779,23 @@ function _fsDockerYmlPorts_() {
 			fi
 		fi
 	done
-        #debug "_dockerPorts[@]:"
-        #debug "$(printf '%s\n' "${_dockerPorts[@]}")"
+        debug "_dockerPorts[@]:"
+        debug "$(printf '%s\n' "${_dockerPorts[@]}")"
 	for _dockerPort in ${_dockerPorts[@]}; do
-        if [[ "$(_fsIsPort_ "${_dockerPort}")" = "false" ]]; then
+        if [[ "$(_fsIsPort_ "${_dockerPort}")" -eq 1 ]]; then
             _error=$((_error+1))
         fi
     done
-    
+        debug "_error: ${_error}"
 	if [[ "${_error}" -eq 0 ]]; then
         printf '%s\n' "${_dockerPorts[@]}"
 	fi
 }
 
 function _fsDockerPortsUsed_() {
-        #debug "function _fsDockerYmlPorts_"
+        debug "function _fsDockerYmlPorts_"
+	local _dockerPortsUsed=""
+	local _dockerPortUsed=""
 	local _error=0
 
     _dockerPortsUsed=()
@@ -707,36 +804,37 @@ function _fsDockerPortsUsed_() {
     _dockerPortsUsed+=( "$REPLY" )
     done < <(docker ps -q -a | xargs -I {} docker port {} | sed "s,.*->,," | grep -o -E "[0-9]{4}(.*)")
     #docker ps -q -a | xargs -I {} docker inspect --format='{{range $p, $conf := .NetworkSettings.Ports}} {{$p}} -> {{(index $conf 0).HostPort}} {{end}}' {}
-
         debug "_dockerPortsUsed[@]:"
         debug "$(printf '%s ' "${_dockerPortsUsed[@]}")"
-
 	for _dockerPortUsed in ${_dockerPortsUsed[@]}; do
-        if [[ "$(_fsIsPort_ "${_dockerPortUsed}")" = "false" ]]; then
+        if [[ "$(_fsIsPort_ "${_dockerPortUsed}")" -eq 1 ]]; then
             _error=$((_error+1))
         fi
     done
-    
+        debug "_error: ${_error}"
 	if [[ "${_error}" -eq 0 ]]; then
         printf '%s\n' "${_dockerPortsUsed[@]}"
 	fi
 }
 
 function _fsDockerPortCompare_() {
-        #debug "function _fsDockerPortCompare_"
+        debug "function _fsDockerPortCompare_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
-	local _dockerPorts=("$(_fsDockerYmlPorts_ "${@}")")
+	local _dockerPorts="${@}"
 	local _dockerPort=""
-	local _dockerPortsUsed=("$(_fsDockerPortsUsed_)")
+	local _dockerPortsUsed=""
 	local _dockerPortUsed=""
     local _dockerPortsCompare=""
 	local _dockerPortCompare=""
 	local _error=0
-        #debug "_dockerPorts[@]:"
-        #debug "$(printf '%s ' "${_dockerPorts[@]}")"
-        #debug "_dockerPortsUsed[@]:"
-        #debug "$(printf '%s ' "${_dockerPortsUsed[@]}")"
+    
+	_dockerPorts=("$(_fsDockerYmlPorts_ "${_dockerPorts}")")
+	_dockerPortsUsed=("$(_fsDockerPortsUsed_)")
+        debug "_dockerPorts[@]:"
+        debug "$(printf '%s ' "${_dockerPorts[@]}")"
+        debug "_dockerPortsUsed[@]:"
+        debug "$(printf '%s ' "${_dockerPortsUsed[@]}")"
     if [[ ! -z "${_dockerPortsUsed}" ]]; then
             # credit: https://stackoverflow.com/a/28161520
         _dockerPortsCompare=("$(echo ${_dockerPorts[@]} ${_dockerPortsUsed[@]} | tr ' ' '\n' | sort | uniq -D | uniq)")
@@ -746,156 +844,137 @@ function _fsDockerPortCompare_() {
             error "Port number \"${_dockerPortCompare}\" is already blocked."
         done
     fi
-
+        debug "_error: ${_error}"
     if [[ "${_error}" -eq 0 ]]; then
-        echo "true"
+        echo 0
     else
-        echo "false"
+        echo 1
     fi
 }
 
-function _fsDockerVersionCompare_() {
-    [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
-
-	local _dockerRepo="${1}"
-	local _dockerTag="${2}"
-	local _dockerVersion=""
-	local _dockerVersionLocal=""
-	
-	# local version
-	if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
-		_dockerVersionLocal="$(docker inspect --format='{{index .RepoDigests 0}}' "${_dockerRepo}":"${_dockerTag}" \
-		| sed 's/.*@//')"
-	fi
-	
-	# docker version
-	if [[ "$(_fsDockerManifest_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
-		_dockerVersion="$(_fsJsonGet_ "${_fsDockerManifest_}" "etag")"
-	fi
-	
-	# compare versions
-	if [[ "${_dockerVersion}" = "" ]]; then
-		echo 'unkown'
-	else
-		if [[ "${_dockerVersion}" = "${_dockerVersionLocal}" ]]; then
-			echo 'equal'
-		else
-			echo 'greater'
-		fi
-	fi
-}
-
-function _fsDockerImage_() {
+function _fsDockerImageStatus_() {
+        debug "function _fsDockerImageStatus_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _docker="${1}"
     local _dockerDir="${ENV_DIR_DOCKER}"
-    local _dockerRepo="$(_fsDockerVarsPath_ "${_docker}")"
-    local _dockerTag="$(_fsDockerVarsTag_ "${_docker}")"
-    local _dockerName="$(_fsDockerVarsName_ "${_docker}")"
-    local _dockerVersion="$(_fsDockerVarsVersion_ "${_docker}")"
+    local _dockerRepo=""
+    local _dockerTag=""
+    local _dockerName=""
+    local _dockerVersion=""
+    local _dockerPath=""
+    local _dockerStatus=2 # status: 0=install; 1=update; 2=error
 
+    _dockerRepo="$(_fsDockerVarsRepo_ "${_docker}")"
+    _dockerTag="$(_fsDockerVarsTag_ "${_docker}")"
+    _dockerName="$(_fsDockerVarsName_ "${_docker}")"
+    _dockerVersion="$(_fsDockerVarsVersion_ "${_docker}")"
+    _dockerPath="$(_fsDockerVarsPath_ "${_docker}")"
+        #debug "_dockerVersion: ${_dockerVersion}"
 	if [[ ! -d "${_dockerDir}" ]]; then mkdir -p "${_dockerDir}"; fi
-	
-	if [[ "${_dockerVersion}" = "greater" ]]; then
-        if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
-			# update from docker hub
 
-            warning '"'"${_dockerName}"':'"${_dockerTag}"'" image update found.'
+	if [[ "${_dockerVersion}" -eq 0 ]]; then
+        # equal
+		info "\"${_dockerName}:${_dockerTag}\" current image already installed." && _dockerStatus=0
+	elif [[ "${_dockerVersion}" -eq 1 ]]; then
+        # greater
+        if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" -eq 0 ]]; then
+			# update from docker hub
+            warning "\"${_dockerName}:${_dockerTag}\" image update found."
             
-            if [[ "$(_fsCaseConfirmation_ "Do you want to update now?")" = "true" ]]; then
-                echo
+            if [[ "$(_fsCaseConfirmation_ "Do you want to update now?")" -eq 0 ]]; then
                 sudo docker pull "${_dockerRepo}"':'"${ENV_DOCKER_ARR[[_dockerTag]}"
-                echo
                 
                 # make backup from local repository
-                if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
+                if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" -eq 0 ]]; then
                     sudo rm -f "${_dockerPath}"
-                    sudo docker save -o "${_dockerPath}" "${_dockerRepo}"':'"${_dockerTag}"
+                    sudo docker save -o "${_dockerPath}" "${_dockerRepo}:${_dockerTag}"
                     
                     if [[ -f "${_dockerPath}" ]]; then
-                        notice '"'"${_dockerName}"':'"${_dockerTag}"'" backup image created.'
+                        debug "\"${_dockerRepo}:${_dockerTag}\" backup image created."
                     fi
                     
-                    notice '"'"${_dockerName}"':'"${_dockerTag}"'" image updated and installed.' && echo "update"
+                    notice "\"${_dockerRepo}:${_dockerTag}\" image updated and installed." && _dockerStatus=1
                 else
-                    emergency '"'"${_dockerName}"':'"${_dockerTag}"'" image could not be installed.' && exit 1
+                    emergency "\"${_dockerRepo}:${_dockerTag}\" image could not be installed." && exit 1
                 fi
             else
-                warning '"'"${_dockerName}"':'"${_dockerTag}"'" skipping image update...' && echo "install"
+                warning "Skipping image update..." && _dockerStatus="install"
             fi
 		else
 			# install from docker hub
-			echo
 			sudo docker pull "${_dockerRepo}"':'"${_dockerTag}"
-			echo
             
 			# make backup from local repository
-            if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
+            if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" -eq 0 ]]; then
 				sudo docker save -o "${_dockerPath}" "${_dockerRepo}"':'"${_dockerTag}"
                 
 				if [[ -f "${_dockerPath}" ]]; then
-					debug '"'"${_dockerRepo}"':'"${_dockerTag}"'" docker backup image created.'
+					debug "\"${_dockerRepo}:${_dockerTag}\" docker backup image created."
 				fi
                 
-				notice '"'"${_dockerRepo}"':'"${_dockerTag}"'" docker image installed.' && echo "install"
+				notice "\"${_dockerRepo}:${_dockerTag}\" docker image installed." && _dockerStatus=0
 			else
-				emergency '"'"${_dockerRepo}"':'"${_dockerTag}"'" could not be installed.' && exit 1
+				emergency "\"${_dockerRepo}:${_dockerTag}\" could not be installed." && exit 1
 			fi
 		fi
-	elif [[ "${_dockerVersion}" = "unknown" ]]; then
-		warning '"'"${_dockerRepo}"':'"${_dockerTag}"'" can not load online image version.'
-        
+	elif [[ "${_dockerVersion}" -eq 2 ]]; then
+        # unknown
+        warning "\"${_dockerName}:${_dockerTag}\" can not load online image version."
 		# if docker is not reachable try to load local backup
-        if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
-			notice '"'"${_dockerRepo}"':'"${_dockerTag}"'" image is installed but can not be verified.' && echo "install"
+        if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" -eq 0 ]]; then
+			notice "\"${_dockerName}:${_dockerTag}\" image is installed but can not be verified." && _dockerStatus=0
 		elif [[ -f "${_dockerPath}" ]]; then
 			sudo docker load -i "${_dockerPath}"
             
-            if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" = "true" ]]; then
-				notice '"'"${_dockerRepo}"':'"${_dockerTag}"'" backup image is installed but can not be verified.' && echo "install"
+            if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" -eq 0 ]]; then
+				notice "\"${_dockerName}:${_dockerTag}\" backup image is installed." && _dockerStatus=0
 			fi
 		else
-			emergency '"'"${_dockerRepo}"':'"${_dockerTag}"'" can not install backup image.' && exit 1
+			emergency "\"${_dockerName}:${_dockerTag}\" can not install backup image." && exit 1
 		fi
-	elif [[ "${_dockerVersion}" = "equal" ]]; then
-		notice '"'"${_dockerRepo}"':'"${_dockerTag}"'" current image already installed.' && echo "install"
 	fi
+        debug "_dockerStatus (0=install; 1=update; 2=error): ${_dockerStatus}"
+    # return status install, update, error
+    echo "${_dockerStatus}"
 }
 
 function _fsDockerPs_() {
+        debug "function _fsDockerPs_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
-	local _dockerValue="${1}"
-	local _dockerAll="${2:-}"
+    local _dockerValue="${1}"
+    local _dockerMode="${2:-}" #optional: show all docker container incl. non-active
     local _dockerPs=""
-	
-	if [[ "${_dockerAll}" == 'all' ]]; then
-		_dockerPs="$(sudo docker ps -a | grep -ow "${_dockerValue}")"
+    local _dockerPsAll=""
+    local _dockerMatching=1
+        debug "_dockerValue: ${_dockerValue}"
+        debug "_dockerMode (all|-): ${_dockerMode}"
+        # credit: https://serverfault.com/a/733498
+	if [[ "${_dockerMode}" = "all" ]]; then
+        _dockerPsAll="$(docker ps -a --filter="name=${_dockerValue}" -q | xargs)"
+        [[ -n ${_dockerPsAll} ]] && _dockerMatching=0
 	else
-		_dockerPs="$(sudo docker ps | grep -ow "${_dockerValue}")"
+        _dockerPs="$(docker ps --filter="name=${_dockerValue}" -q | xargs)"
+        [[ -n ${_dockerPs} ]] && _dockerMatching=0
 	fi
-
-	if [[ ! -z "${_dockerPs}" ]]; then
-		echo "true"
+        debug "_dockerPs: ${_dockerPs}"
+	if [[ "${_dockerMatching}" -eq 0 ]]; then
+		echo 0
 	else
-		echo "false"
+		echo 1
 	fi
 }
 
 function _fsDockerId2Name_() {
-    debug "function _fsDockerId2Name_"
+        debug "function _fsDockerId2Name_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _dockerId="${1}"
 	local _dockerName=""
-
         debug "_dockerId: ${_dockerId}"
-    
 	_dockerName="$(sudo docker inspect --format="{{.Name}}" "${_dockerId}" | sed "s,\/,,")"
-
         debug "_dockerName: ${_dockerName}"
-
 	if [[ ! -z "${_dockerName}" ]]; then
 		echo "${_dockerName}"
 	fi
@@ -903,40 +982,38 @@ function _fsDockerId2Name_() {
 
 function _fsDockerId2Port_() {
         debug "function _fsDockerId2Port_"
-
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _dockerId="${1}"
 	local _dockerPort=""
-    
         debug "_dockerId: ${_dockerId}"
-
 	_dockerPort="$(sudo docker inspect --format="{{.Port}}" "${_dockerId}")"
-    
         debug "_dockerPort: ${_dockerPort}"
-	
 	if [[ ! -z "${_dockerPort}" ]]; then
 		echo "${_dockerPort}"
 	fi
 }
 
 function _fsDockerRun_() {
+        debug "function _fsDockerRun_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
     local _dir="${ENV_DIR}"
 	local _dockerRepo="${1}"
 	local _dockerTag="${2}"
-	local _dockerRm="${3:-}"
-	local _dockerName="$(_fsDockerVarsName_ "${_dockerRepo}")"
+	local _dockerRm="${3:-}" #optional: remove docker container on exit or error
+	local _dockerName=""
+	
+    _dockerName="$(_fsDockerVarsName_ "${_dockerRepo}")"
 
-	if [[ "$(_fsDockerImage_ "${_dockerRepo}"':'"${_dockerTag}")" = "update" ]]; then
-        if [[ "$(_fsDockerPs_ "${_dockerName}")" = "true" ]]; then
+	if [[ "$(_fsDockerImageStatus_ "${_dockerRepo}:${_dockerTag}")" -eq 1 ]]; then
+        if [[ "$(_fsDockerPs_ "${_dockerName}")" -eq 0 ]]; then
             _fsDockerStop_ "${_dockerName}"
         fi
 	fi
 
-	if [[ "$(_fsDockerPs_ "${_dockerName}")" = "false" ]]; then
-		if [[ "${_dockerRm}" == 'rm' ]]; then
+	if [[ "$(_fsDockerPs_ "${_dockerName}")" -eq 1 ]]; then
+		if [[ "${_dockerRm}" = "rm" ]]; then
 			cd "${_dir}" && \
 				docker run --rm -d --name "${_dockerName}" -it "${_dockerRepo}"':'"${_dockerTag}" 2>&1
 		else
@@ -944,58 +1021,68 @@ function _fsDockerRun_() {
 				docker run -d --name "${_dockerName}" -it "${_dockerRepo}"':'"${_dockerTag}" 2>&1
 		fi
 		
-        if [[ "$(_fsDockerPs_ "${_dockerName}")" = "true" ]]; then
-			info '"'"${_dockerName}"'" activated.'
+        if [[ "$(_fsDockerPs_ "${_dockerName}")" -eq 0 ]]; then
+			notice "\"${_dockerName}\" activated."
 		else
-			emergency '"'"${_dockerName}"'" not activated.' && exit 1
+			emergency "\"${_dockerName}\" not activated." && exit 1
 		fi
 	else
-		info '"'"${_dockerName}"'" is already active.'
+		info "\"${_dockerName}\" is already active."
 	fi
 }
 
 function _fsDockerStop_() {
+        debug "function _fsDockerStop_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
-	local _dockerStop="${1}"
-	local _dockerName="$(_fsDockerId2Name_ "${1}")"
-
-    sudo docker update --restart no "${_dockerStop}" > /dev/null
-    sudo docker stop "${_dockerStop}" > /dev/null
-    sudo docker rm -f "${_dockerStop}" > /dev/null
+	local _dockerId="${1}"
+	local _dockerName=""
     
-    warning "  -> Set \"${_dockerName}\" container \"restart\" to \"no\", stopped and removed."
+	_dockerName="$(_fsDockerId2Name_ "${_dockerId}")"
+
+    sudo docker update --restart no "${_dockerId}" 2>&1
+    sudo docker stop "${_dockerId}" 2>&1
+    sudo docker rm -f "${_dockerId}" 2>&1
+    
+    warning "  -> Container set \"restart\" to \"no\", stopped and removed: ${_dockerName}"
 }
 
 function _fsDockerYml_() {
+        debug "function _fsDockerYml_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
     local _dir="${ENV_DIR}"
-	local _ymlPath="${_dir}/${1##*/}"
-	local _ymlFile="${_ymlPath##*/}"
-	local _ymlFileType="${_ymlFile##*.}"
+	local _ymlPath="${1}"
+	local _ymlFile=""
+	local _ymlFileType=""
+    
+    _ymlPath="${_dir}/${_ymlPath##*/}"
+	_ymlFile="${_ymlPath##*/}"
+	_ymlFileType="${_ymlFile##*.}"
 
 	if [[ ! -z "${_ymlFileType}" ]]; then
-    	if [[ ! "${_ymlFileType}" = 'yml' ]]; then
-			error "\"$(basename "${_ymlFile}")\" is not a \".yml\" file." && exit 1
-		elif [[ ! -f "${_ymlPath}" ]]; then
-			error "\"$(basename "${_ymlFile}")\" does not exist." && exit 1
-		else
+        if [[ "${_ymlFileType}" = 'yml' ]]; then
+            _fsFileExist_ "${_ymlPath}"
+
 			echo "${_ymlPath}"
-		fi
+        else
+            error "\"$(basename "${_ymlFile}")\" is not a \".yml\" file." && exit 1
+        fi
 	else
-		error "\".yml\" parameter is missing." && exit 1
+		error "\".yml\" file type is missing." && exit 1
 	fi
 }
 
 function _fsDockerYmlImages_() {
+        debug "function _fsDockerYmlImages_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
-	local _ymlPath="$(_fsDockerYml_ "${1}")"
+	local _ymlPath="${1}"
 	local _ymlImages=""
 	local _ymlImagesDeduped=""
 	local _ymlImage=""
-    local _error=0
+    
+	_ymlPath="$(_fsDockerYml_ "${_ymlPath}")"
         # credit: https://stackoverflow.com/a/39612060
     _ymlImages=()
     while read; do
@@ -1003,35 +1090,36 @@ function _fsDockerYmlImages_() {
     done < <(grep "image:" "${_ymlPath}" \
     | sed "s,\s,,g" \
     | sed "s,image:,,g")
-    
+        debug "_ymlImages[@]:"
+        debug "$(printf '%s\n' "${_ymlImages[@]}")"
     if [[ ! -z "${_ymlImages[@]}" ]]; then
         _ymlImagesDeduped=()
         while read; do
         _ymlImagesDeduped+=( "$REPLY" )
         done < <(_fsDedupeArray_ "${_ymlImages[@]}")
     fi
-    
+        debug "_ymlImagesDeduped[@]:"
+        debug "$(printf '%s\n' "${_ymlImagesDeduped[@]}")"
     if [[ ! -z "${_ymlImagesDeduped[@]}" ]]; then
         for _ymlImage in ${_ymlImagesDeduped[@]}; do
-            _fsDockerImage_ "${_ymlImage}"
+            if [[ "$(_fsDockerImageStatus_ "${_ymlImage}")" -eq 0 ]]; then
+                echo 0
+            else
+                echo 1
+            fi
         done
-    fi
-    
-    if [[ "${_error}" -eq 0 ]]; then
-        echo "true"
-    else
-        echo "false"
     fi
 }
 
 function _fsDockerYmlStrategies_() {
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
-	local _ymlPath="$(_fsDockerYml_ "${1}")"
+	local _ymlPath="${1}"
 	local _ymlStrategies=""
 	local _ymlStrategiesDeduped=""
 	local _ymlStrategy=""
-    local _error=0
+
+	_ymlPath="$(_fsDockerYml_ "${_ymlPath}")"
 
     _ymlStrategies=()
     while read; do
@@ -1040,38 +1128,40 @@ function _fsDockerYmlStrategies_() {
     | grep -v "strategy-path" \
     | sed "s,\s,,g" \
     | sed "s,\-\-strategy,,g")
-
+        debug "_ymlStrategies[@]:"
+        debug "$(printf '%s\n' "${_ymlStrategies[@]}")"
     if [[ ! -z "${_ymlStrategies[@]}" ]]; then
         _ymlStrategiesDeduped=()
         while read; do
         _ymlStrategiesDeduped+=( "$REPLY" )
         done < <(_fsDedupeArray_ "${_ymlStrategies[@]}")
     fi
-
+        debug "_ymlStrategiesDeduped[@]:"
+        debug "$(printf '%s\n' "${_ymlStrategiesDeduped[@]}")"
     if [[ ! -z "${_ymlStrategiesDeduped[@]}" ]]; then
         for _ymlStrategy in ${_ymlStrategiesDeduped[@]}; do              
-            _fsStrategy_ "${_ymlStrategy}"
+            if [[ "$(_fsStrategy_ "${_ymlStrategy}")" -eq 0 ]]; then
+                echo 0
+            else
+                echo 1
+            fi
         done
-    fi
-    
-    if [[ "${_error}" -eq 0 ]]; then
-        echo "true"
-    else
-        echo "false"
     fi
 }
 
 function _fsDockerYmlConfigs_() {
-        #debug "function _fsDockerYmlConfigs_"
+        debug "function _fsDockerYmlConfigs_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
     local _dir="${ENV_DIR}"
-	local _ymlPath="$(_fsDockerYml_ "${1}")"
+	local _ymlPath="${1}"
     local _ymlConfigsDeduped=""
     local _ymlConfigs=""
 	local _ymlConfig=""
 	local _ymlConfigNew=""
     local _error=0
+
+	_ymlPath="$(_fsDockerYml_ "${_ymlPath}")"
 
     _ymlConfigs=()
     while read; do
@@ -1081,123 +1171,144 @@ function _fsDockerYmlConfigs_() {
     | sed "s,\-\-config,,g" \
     | sed "s,\-c,,g" \
     | sed "s,\/freqtrade\/,,g")")
-        #debug "_ymlConfigs[@]:"
-        #debug "$(printf '%s\n' "${_ymlConfigs[@]}")"
+        debug "_ymlConfigs[@]:"
+        debug "$(printf '%s\n' "${_ymlConfigs[@]}")"
     if [[ ! -z "${_ymlConfigs[@]}" ]]; then
         _ymlConfigsDeduped=()
         while read; do
         _ymlConfigsDeduped+=( "$REPLY" )
         done < <(_fsDedupeArray_ "${_ymlConfigs[@]}")
     fi
-        #debug "_ymlConfigsDeduped[@]:"
-        #debug "$(printf '%s\n' "${_ymlConfigsDeduped[@]}")"
+        debug "_ymlConfigsDeduped[@]:"
+        debug "$(printf '%s\n' "${_ymlConfigsDeduped[@]}")"
     if [[ ! -z "${_ymlConfigsDeduped[@]}" ]]; then
         for _ymlConfig in ${_ymlConfigsDeduped[@]}; do
-                #debug "_ymlConfig: ${_ymlConfig}"
+                debug "_ymlConfig: ${_ymlConfig}"
             _ymlConfigNew="${_dir}/${_ymlConfig}"
-                #debug "_ymlConfigNew: ${_ymlConfigNew}"
+                debug "_ymlConfigNew: ${_ymlConfigNew}"
             if [[ ! -f "${_ymlConfigNew}" ]]; then
                 error "\"$(basename "${_ymlConfigNew}")\" config file does not exist."
                 _error=$((_error+1))
             fi
         done
     fi
-    
+        debug "_error: ${_error}"
     if [[ "${_error}" -eq 0 ]]; then
-        echo "true"
+        echo 0
     else
-        echo "false"
+        echo 1
     fi
 }
 
 function _fsDockerComposeUp_() {
-        #debug "function _fsDockerComposeUp_"
+        debug "function _fsDockerComposeUp_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
     local _dir="${ENV_DIR}"
-	local _ymlPath="$(_fsDockerYml_ "${1}")"
-	local _ymlMode="${2:-}"
-	local _ymlFile="${_ymlPath##*/}"
-	local _ymlFileName="${_ymlFile%.*}"
-    local _ymlProject="$(echo "${_ymlFileName}" | sed "s,\-,_,g")"
+	local _ymlPath="${1}"
+	local _ymlMode="${2:-}" #optional: force to restart container
+	local _ymlFile=""
+	local _ymlFileName=""
+    local _ymlProject=""
     local _error=0
+    local _dockerYmlImages=2
+    local _dockerYmlStrategies=2
+    local _dockerYmlConfigs=1
+
+	_ymlPath="$(_fsDockerYml_ "${_ymlPath}")"
+	_ymlFile="${_ymlPath##*/}"
+	_ymlFileName="${_ymlFile%.*}"
+    _ymlProject="$(echo "${_ymlFileName}" | sed "s,\-,_,g")"
+    _dockerYmlImages="$(_fsDockerYmlImages_ "${_ymlPath}")"
+    _dockerYmlStrategies="$(_fsDockerYmlStrategies_ "${_ymlPath}")"
+    _dockerYmlConfigs="$(_fsDockerYmlConfigs_ "${_ymlPath}")"
 
     if [[ -f "${_ymlPath}" ]]; then
         notice "Start \"$(basename "${_ymlPath}")\" docker projects..."
     
-        if [[ "$(_fsDockerYmlImages_ "${_ymlPath}")" = "false" ]]; then _error=$((_error+1)); fi
-        if [[ "$(_fsDockerYmlStrategies_ "${_ymlPath}")" = "false" ]]; then _error=$((_error+1)); fi
-        if [[ "$(_fsDockerYmlConfigs_ "${_ymlPath}")" = "false" ]]; then _error=$((_error+1)); fi
-            #debug "_error: ${_error}"
-            #debug "_fsDockerPortCompare_: $(_fsDockerPortCompare_ "${_ymlPath}")"
+        [[ "${_dockerYmlImages}" -eq 1 ]] && _ymlMode="force"
+        [[ "${_dockerYmlImages}" -eq 2 ]] && _error=$((_error+1))
+        [[ "${_dockerYmlStrategies}" -eq 1 ]] && _ymlMode="force"
+        [[ "${_dockerYmlStrategies}" -eq 2 ]] && _error=$((_error+1))
+        [[ "${_dockerYmlConfigs}" -eq 1 ]] && _error=$((_error+1))
+            debug "_error: ${_error}"
+            debug "_fsDockerPortCompare_: $(_fsDockerPortCompare_ "${_ymlPath}")"
         if [[ "${_error}" -eq 0 ]]; then
             if [[ "${_ymlMode}" = "force" ]]; then
                 cd "${_dir}" && \
                 sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" up -d --force-recreate
-                
-                _fsDockerProjects_ "${_ymlPath}" "validate"
             else
-                if [[ "$(_fsDockerPortCompare_ "${_ymlPath}")" = "false" ]] && \
-                [[ "$(_fsCaseConfirmation_ "Stop container that block ports?")" = "true" ]]; then
+                if [[ "$(_fsDockerPortCompare_ "${_ymlPath}")" -eq 0 ]]; then
+                    cd "${_dir}" && \
+                    sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" up -d
+                elif [[ "$(_fsCaseConfirmation_ "Stop container that block ports?")" -eq 0 ]]; then
                     _fsDockerProjects_ "${_ymlPath}" "kill"
 
                     cd "${_dir}" && \
                     sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" up -d
-                    
-                    _fsDockerProjects_ "${_ymlPath}" "validate"
-                else
-                    cd "${_dir}" && \
-                    sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" up -d
-                    
-                    _fsDockerProjects_ "${_ymlPath}" "validate"
                 fi
+                
             fi
+
+            _fsDockerProjects_ "${_ymlPath}" "validate"
+        else
+            alert "Too many errors. Review \"$(basename "${_ymlPath}")\" and restart script!"
         fi
     fi
 }
 
 function _fsDockerComposeKill_() {
+        debug "function _fsDockerComposeKill_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
     
-	local _ymlPath="$(_fsDockerYml_ "${1}")"
+    local _ymlPath="${1}"
+    local _ymlFile=""
     
-    if [[ -f "${_ymlPath}" ]]; then
-        notice "Kill \"$(basename "${_ymlPath}")\" docker projects..."
-        _fsDockerProjects_ "${_ymlPath}" "kill"
-    fi
+    _ymlPath="$(_fsDockerYml_ "${_ymlPath}")"
+    _ymlFile="$(basename "${_ymlPath}")"
+    
+    _fsFileExist_ "${_ymlPath}"
+    
+    notice "Kill \"${_ymlFile}\" docker projects..."
+    _fsDockerProjects_ "${_ymlPath}" "kill"
 }
 
 function _fsDockerProjects_() {
-        #debug "function _fsDockerProjects_"
+        debug "function _fsDockerProjects_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
     local _dir="${ENV_DIR}"
-	local _ymlPath="$(_fsDockerYml_ "${1}")"
+	local _ymlPath="${1}"
 	local _ymlMode="${2}"
-	local _ymlFile="${_ymlPath##*/}"
-	local _ymlFileName="${_ymlFile%.*}"
-    local _ymlProject="$(echo "${_ymlFileName}" | sed "s,\-,_,g")"
+	local _ymlFile=""
+	local _ymlFileName=""
+    local _ymlProject=""
     local _dockerProjects=""
     local _dockerProject=""
     local _dockerProjectNotrunc=""
     local _dockerProjectName=""
 
+    _ymlPath="$(_fsDockerYml_ "${_ymlPath}")"
+    _ymlFile="${_ymlPath##*/}"
+    _ymlFileName="${_ymlFile%.*}"
+    _ymlProject="$(echo "${_ymlFileName}" | sed "s,\-,_,g")"
+
     if [[ -f "${_ymlPath}" ]]; then
         _dockerProjects=("$(cd "${_dir}" && \
         sudo docker-compose -f "${_ymlFile}" -p "${_ymlProject}" ps -q 2> /dev/null)")
-            #debug "_dockerProjects[@]:"
-            #debug "$(printf '%s\n' "${_dockerProjects[@]}")"
+            debug "_dockerProjects[@]:"
+            debug "$(printf '%s\n' "${_dockerProjects[@]}")"
         if [[ ! -z "${_dockerProjects[@]}" ]]; then
             if [[ "${_ymlMode}" = "validate" ]]; then
                 _fsCdown_ 10 'for any errors...'
             fi
         
             for _dockerProject in $_dockerProjects; do
-                    #debug "_dockerProject: ${_dockerProject}"
+                    debug "_dockerProject: ${_dockerProject}"
                 _dockerProjectName="$(_fsDockerId2Name_ "${_dockerProject}")"
-                    #debug "_dockerProjectName: ${_dockerProjectName}"
+                    debug "_dockerProjectName: ${_dockerProjectName}"
                 _dockerProjectNotrunc="$(docker ps -q --no-trunc | grep "${_dockerProject}")"
-                    #debug "_dockerProjectNotrunc: ${_dockerProjectNotrunc}"
+                    debug "_dockerProjectNotrunc: ${_dockerProjectNotrunc}"
                 
                 if [[ "${_ymlMode}" = "validate" ]]; then              
                         # credit: https://serverfault.com/a/935674
@@ -1209,7 +1320,7 @@ function _fsDockerProjects_() {
                         notice "\"${_dockerProjectName}\" container is running."
                     fi
                 elif [[ "${_ymlMode}" = "kill" ]]; then
-                    if [[ "$(_fsCaseConfirmation_ "Kill \"${_dockerProjectName}\" container?")" = "true" ]]; then
+                    if [[ "$(_fsCaseConfirmation_ "Kill \"${_dockerProjectName}\" container?")" -eq 0 ]]; then
                         _fsDockerStop_ "${_dockerProject}"
                     fi
                 fi
@@ -1221,6 +1332,7 @@ function _fsDockerProjects_() {
 }
 
 function _fsDockerKill_() {
+        debug "function _fsDockerKill_"
 	_fsDockerKillContainer_
 	
 	sudo docker image ls -q | xargs -I {} sudo docker image rm -f {}
@@ -1235,6 +1347,7 @@ function _fsDockerKillContainer_() {
 ##############################################################################
 
 function _fsStart_ {
+        debug "function _fsStart_"
 	local _dockerYml="${1:-}"
 	local _dockerCompose="${ENV_DIR}/$(basename "${_dockerYml}")"
 		
@@ -1252,6 +1365,7 @@ function _fsStart_ {
 ##############################################################################
 
 function _fsSetup_() {
+        debug "function _fsSetup_"
     _fsSetupServer_
     _fsSetupNtp_
     _fsSetupFreqtrade_
@@ -1259,11 +1373,11 @@ function _fsSetup_() {
     _fsSetupFrequi_
     _fsSetupExampleBot_
     
-	if [[ "$(_fsSymlink_ "${ENV_FS_SYMLINK}")" = "false" ]]; then
+	if [[ "$(_fsSymlink_ "${ENV_FS_SYMLINK}")" -eq 1 ]]; then
 		sudo ln -sf "${ENV_DIR}/${ENV_FS}.sh" "${ENV_FS_SYMLINK}"
 	fi
 	
-	if [[ "$(_fsSymlink_ "${ENV_FS_SYMLINK}")" = "true" ]]; then
+	if [[ "$(_fsSymlink_ "${ENV_FS_SYMLINK}")" -eq 0 ]]; then
         echo
 		notice 'Setup finished!'
 		info "-> Run freqtrade bots with: ${ENV_FS} -b example.yml"
@@ -1271,31 +1385,32 @@ function _fsSetup_() {
 		info "  2. Configs and strategies files are checked for existense."
 		info "  3. Checking docker images for updates before start."
 	else
-		emergency "Cannot create \"${ENV_FS}\" symlink." && exit 1
+		emergency "Cannot create symlink: \"${ENV_FS}\"" && exit 1
 	fi
 }
 
 function _fsSetupPkgs_() {
+        debug "function _fsSetupPkgs_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}"
 
-    local _pkgs=("${@}")
+    local _pkgs="${@}"
     local _pkg=""
     local _status=""
+    local _getDocker="${ENV_DIR_DOCKER}/get-docker.sh"
 
-    for _pkg in "${_pkgs[@]}"; do
-        _status="$(dpkg-query -W --showformat='${Status}\n' "${_pkg}" | grep "install ok installed")"
-        if [[ -z "${_status}" ]]; then
+    for _pkg in ${_pkgs[@]}; do
+            debug "_pkg: ${_pkg}"
+        if [[ "$(_fsSetupPkgsStatus_ "${_pkg}")" -eq 0 ]]; then
+            debug "Already installed: ${_pkg}"
+        else
             if [[ "${_pkg}" = 'docker-ce' ]]; then
                 # docker setup
-                sudo apt-get remove docker docker-engine docker.io containerd runc
-                sudo apt-get install -y -q apt-transport-https ca-certificates curl gnupg-agent software-properties-common
-                sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-                sudo apt-get update
-                sudo apt-get install -y -q docker-ce docker-ce-cli containerd.io
-                adduser user
-                usermod -aG docker user
-                systemctl restart docker
-                systemctl enable docker
+                mkdir -p "${ENV_DIR_DOCKER}"
+                curl -fsSL "https://get.docker.com" -o "${_getDocker}"
+                sudo chmod +x "${_getDocker}"
+                sudo sh "${_getDocker}"
+                rm -f "${_getDocker}"
+                sudo apt install -y -q docker-compose
             elif [[ "${_pkg}" = 'chrony' ]]; then
                 # ntp setup
                 sudo apt-get install -y -q chrony
@@ -1313,28 +1428,43 @@ function _fsSetupPkgs_() {
                 sudo apt-get install -y -q "${_pkg}"
             fi
 
-            _status="$(dpkg-query -W --showformat='${Status}\n' "${_pkg}" | grep "install ok installed")"
-            if [[ -z "${_status}" ]]; then
-                emergency '"'"$_pkg"'" is not installed.'
+            if [[ "$(_fsSetupPkgsStatus_ "${_pkg}")" -eq 0 ]]; then
+                info "Installed: ${_pkg}"
             else
-                info '"'"$_pkg"'" is installed.'
+                emergency "Cannot install: ${_pkg}" && exit 1
             fi
-        else
-            info '"'"$_pkg"'" is already installed.'
         fi
     done
 }
 
+function _fsSetupPkgsStatus_() {
+        debug "function _fsDockerProjects_"
+    [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
+    
+    local _pkg="${1}"
+    local _status=""
+    
+    _status="$(dpkg-query -W --showformat='${Status}\n' "${_pkg}" 2>/dev/null | grep "install ok installed")"
+        debug "_status: ${_status}"
+    if [[ ! -z "${_status}" ]]; then
+        echo 0
+    else
+        echo 1
+    fi
+}
+
 function _fsSetupServer_() {
+        debug "function _fsSetupServer_"
+    echo
     info 'SETUP SERVER:'
     
     sudo apt-get update
 
-    _fsSetupPkgs_ git curl jq docker-ce
+    _fsSetupPkgs_ "git" "curl" "jq" "docker-ce"
     
     info 'Update server and install unattended-upgrades. Reboot may be required!'
     
-    if [[ "$(_fsCaseConfirmation_ "Skip server update?")" = "true" ]]; then
+    if [[ "$(_fsCaseConfirmation_ "Skip server update?")" -eq 0 ]]; then
         warning 'Skipping server update...'
     else
         sudo apt -o Dpkg::Options::="--force-confdef" dist-upgrade -y && \
@@ -1343,209 +1473,235 @@ function _fsSetupServer_() {
 
         if sudo test -f /var/run/reboot-required; then
             warning 'A reboot is required to finish installing updates.'
-            if [[ "$(__fsCaseConfirmation_ "Skip reboot now?")" = "true" ]]; then
+            if [[ "$(_fsCaseConfirmation_ "Skip reboot now?")" -eq 0 ]]; then
                 warning 'Skipping reboot...'
             else
                 sudo reboot
             fi
         else
-            info "A reboot is not required. Exiting..."
+            info "A reboot is not required."
         fi
     fi
 }
 
 function _fsSetupNtp_() {
+        debug "function _fsSetupNtp_"
     echo
-    info 'SETUP NTP: (Timezone to UTC)'
+    info "SETUP NTP:"
+    info "(Timezone to UTC)"
 
-    if [[ _fsSetupNtpCheck = "false" ]]; then
-        _fsSetupPkgs_ 'chrony'
+    if [[ "$(_fsSetupNtpCheck_)" = 1 ]]; then
+        _fsSetupPkgs_ "chrony"
         
-        if [[ _fsSetupNtpCheck = "false" ]]; then
+        if [[ "$(_fsSetupNtpCheck_)" = 1 ]]; then
             emergency 'NTP not active or not synchronized.'
         else
-            info  'NTP activated and synchronized.'
+            notice 'NTP activated and synchronized.'
         fi
     else
         info 'NTP is active and synchronized.'
     fi
 }
 
-function _fsSetupNtpCheck {
-    local timentp="$(timedatectl | grep -o 'NTP service: active')"
-    local timeutc="$(timedatectl | grep -o '(UTC, +0000)')"
-    local timesyn="$(timedatectl | grep -o 'System clock synchronized: yes')"
-    
+function _fsSetupNtpCheck_() {
+        debug "function _fsSetupNtpCheck"
+    local timentp=""
+    local timeutc=""
+    local timesyn=""
+
+    timentp="$(timedatectl | grep -o 'NTP service: active')"
+        debug "timentp: ${timentp}"
+    timeutc="$(timedatectl | grep -o '(UTC, +0000)')"
+        debug "timeutc: ${timeutc}"
+    timesyn="$(timedatectl | grep -o 'System clock synchronized: yes')"
+        debug "timesyn: ${timesyn}"
+
     if [[ ! -z "${timentp}" ]] || [[ ! -z  "${timeutc}" ]] || [[ ! -z  "${timesyn}" ]]; then
-        echo "true"
+        echo 0
     else
-        echo "false"
+        echo 1
     fi
 }
 
 function _fsSetupFreqtrade_() {
+        debug "function _fsSetupFreqtrade_"
+    local _dir="${ENV_DIR}"
     local _docker="freqtradeorg/freqtrade:stable"
-    local _dockerYml="${ENV_DIR}/${ENV_FS}_setup.yml"
+    local _dockerYml="${_dir}/${ENV_FS}_setup.yml"
+    local _dockerImageStatus=""
     local _dirUserData="${ENV_DIR_USER_DATA}"
     local _configKey=""
     local _configSecret=""
     local _configName=""
     local _configFile=""
-    local _configFileNew=""
+    local _configFileTmp=""
+    local _configFileBackup=""
 
     echo
     info 'SETUP FREQTRADE:'
     
-    _fsDockerImage_ "${_docker}" > /dev/null
+    _fsDockerImageStatus_ "${_docker}"
 
-    if [[ ! -d "${_dirUserData}" ]] && [[ -f "${_dockerYml}" ]]; then
+    if [[ ! -d "${_dirUserData}" ]]; then
         _fsSetupFreqtradeYml_
         
-        cd "${ENV_DIR}" && \
-        docker-compose --file "$(basename "${_dockerYml}")" \
-        run --rm freqtrade create-userdir --userdir "$(basename "${_dirUserData}")" \
-        || true
-                
-        if [[ ! -d "${_dirUserData}" ]]; then
-            emergency '"'"${_dirUserData}"'" directory can not be created.' && exit 1
-        else
-            info '"'"${_dirUserData}"'" directory created.'
-        fi
+        cd "${_dir}" && \
+        docker-compose --file "$(basename "${_dockerYml}")" run --rm freqtrade create-userdir --userdir "$(basename "${_dirUserData}")"
     fi
-    
+
+    if [[ ! -d "${_dirUserData}" ]]; then
+        emergency "Directory cannot be created: ${_dirUserData}" && exit 1
+    else
+        debug "Directory created: ${_dirUserData}"
+    fi
+
     info "A config is needed to start a bot!"
 
-    if [[ "$(_fsCaseConfirmation_ "Skip creating a config?")" = "true" ]]; then
+    if [[ "$(_fsCaseConfirmation_ "Skip creating a config?")" -eq 0 ]]; then
        warning "Skipping create a config..."
     else
         while true; do
             info "Choose a name for your config. For default name press <ENTER>."
             read -p " (filename) " _configName
-            case "${_configName}" in
+            case ${_configName} in
                 "")
                     _configName="config"
                 ;;
                 *)
                     _configName="${_configName%.*}"
 
-                    if [[ "$(_fsIsAlphaDash_ "${_configName}")" = "false" ]]; then
+                    if [[ "$(_fsIsAlphaDash_ "${_configName}")" -eq 1 ]]; then
                         warning "Only alpha-numeric or dash or underscore characters are allowed!"
                         _configName=""
                     fi
                 ;;
             esac
+            
             if [[ ! -z "${_configName}" ]]; then
-                info "The config file will be: \"${_configName}.json\""
-                if [[ "$(_fsCaseConfirmation_ "Is this correct?")" = "true" ]]; then
+                info "The config file name will be: ${_configName}.json"
+                if [[ "$(_fsCaseConfirmation_ "Is this correct?")" -eq 0 ]]; then
                     break
                 fi
             fi
         done
         
         _configFile="${_dirUserData}/${_configName}.json"
-        _configFileNew="${_dirUserData}/${_configName}.new.json"
+        _configFileTmp="${_dirUserData}/${_configName}.tmp.json"
         _configFileBackup="${_dirUserData}/${_configName}.bak.json"
 
-        if [[ -f "${_configFile}" ]]; then
+        if [[ "$(_fsFileCheck_ "${_configFile}")" -eq 0 ]]; then
             warning 'The config "'"$(basename ${_configFile})"'" already exist.'
-            if [[ "$(_fsCaseConfirmation_ "Replace the existing config file?")" = "false" ]]; then
+            if [[ "$(_fsCaseConfirmation_ "Replace the existing config file?")" -eq 1 ]]; then
                 _configName=""
                 rm -f "${_dockerYml}"
             fi
         fi
     fi
+        debug "_configName: ${_configName}"
+        debug "_configFile: ${_configFile}"
+        debug "_configFileTmp: ${_configFileTmp}"
+        debug "_configFileBackup: ${_configFileBackup}"
 
-    if [[ ! -z "${_configName}" ]] && [[ -d "${_dirUserData}" ]] && [[ -f "${_dockerYml}" ]]; then
+    if [[ ! -z "${_configName}" ]] && [[ -d "${_dirUserData}" ]]; then
         _fsSetupFreqtradeYml_
-        rm -f "${_configFileNew}"
+        rm -f "${_configFileTmp}"
         
-        cd "${ENV_DIR}" && \
+        cd "${_dir}" && \
         docker-compose --file "$(basename "${_dockerYml}")" \
-        run --rm freqtrade new-config --config "$(basename "${_dirUserData}")/$(basename "${_configFileNew}")" \
-
+        run --rm freqtrade new-config --config "$(basename "${_dirUserData}")/$(basename "${_configFileTmp}")"
+        
         rm -f "${_dockerYml}"
 
-        if [[ -f "${_configFileNew}" ]]; then
+        _fsFileExist_ "${_configFileTmp}"
 
-            if [[ "$(_fsCaseConfirmation_ 'Enter your exchange api KEY and SECRET now? (recommended)')" = "true" ]]; then
-                while true; do
-                    notice 'Enter your KEY for exchange api (ENTRY HIDDEN):'
-                    read -s _configKey
-                    echo
-                    case "${_configKey}" in 
-                        '')
-                            _fsCaseEmpty_
-                            ;;
-                        *)
-                            _fsJsonSet_ "${_configFileNew}" 'key' "${_configKey}" && \
-                            info "\"$(basename "${_configFile}")\" KEY is set."
-                            break
-                            ;;
-                    esac
-                done
+        if [[ "$(_fsCaseConfirmation_ "Enter your exchange api KEY and SECRET now? (recommended)")" -eq 0 ]]; then
+            while true; do
+                notice "Enter your KEY for exchange api (ENTRY HIDDEN):"
+                read -s _configKey
+                echo
+                case ${_configKey} in 
+                    "")
+                        _fsCaseEmpty_
+                        ;;
+                    *)
+                        _fsJsonSet_ "${_configFileTmp}" "key" "${_configKey}"
+                        info "KEY is set in: ${_configFile}"
+                        break
+                        ;;
+                esac
+            done
 
-                while true; do
-                    notice 'Enter your SECRET for exchange api (ENTRY HIDDEN):'
-                    read -s _configSecret
-                    echo
-                    case "${_configSecret}" in 
-                        '')
-                            _fsCaseEmpty_
-                            ;;
-                        *)
-                            _fsJsonSet_ "${_configFileNew}" 'secret' "${_configSecret}" && \
-                            info "\"$(basename "${_configFile}")\" SECRET is set."
-                            break
-                            ;;
-                    esac
-                done
-            else
-                warning 'Enter your exchange api KEY and SECRET manually to: "'"$(basename "${_configFile}")"'"'
-            fi
-            
-            cp -a "${_configFileNew}" "${_configFile}"
-            cp -a "${_configFileNew}" "${_configFileBackup}"
-
-            rm -f "${_configFileNew}"
+            while true; do
+                notice 'Enter your SECRET for exchange api (ENTRY HIDDEN):'
+                read -s _configSecret
+                echo
+                case ${_configSecret} in 
+                    "")
+                        _fsCaseEmpty_
+                        ;;
+                    *)
+                        _fsJsonSet_ "${_configFileTmp}" "secret" "${_configSecret}"
+                        info "SECRET is set in: ${_configFile}"
+                        break
+                        ;;
+                esac
+            done
         else
-            emergency '"'"$(basename "${_configFile}")"'" config file does not exist.' && exit 1
+            warning "Enter your exchange api KEY and SECRET to: ${_configFile}"
         fi
+        
+        cp -a "${_configFileTmp}" "${_configFile}"
+        cp -a "${_configFileTmp}" "${_configFileBackup}"
+
+        rm -f "${_configFileTmp}"
     fi
 }
 
 function _fsSetupFreqtradeYml_() {
-    local _dockerYml="${ENV_DIR}/${ENV_FS}_setup.yml"
+        debug "function _fsSetupFreqtradeYml_"
+    local _dir="${ENV_DIR}"
+    local _dockerYml="${_dir}/${ENV_FS}_setup.yml"
     local _dockerGit="https://raw.githubusercontent.com/freqtrade/freqtrade/stable/docker-compose.yml"
-
-    if [[ ! -f "${_dockerYml}" ]]; then
-        curl -s -L "${_dockerGit}" -o "${_dockerYml}" || emergency "Cannot reach: ${_dockerGit}" && exit 1
+        debug "_dockerYml: ${_dockerYml}"
+    if [[ "$(_fsFileCheck_ "${_dockerYml}")" -eq 1 ]]; then
+        curl -s -L "${_dockerGit}" -o "${_dockerYml}"
         
-        if [[ -f "${_dockerYml}" ]]; then
-            info '"'"${_dockerYml}"'" file created.'
-        else
-            emergency '"'"${_dockerYml}"'" file can not be created.' && exit 1
-        fi
+        _fsFileExist_ "${_dockerYml}"
     fi
 }
 
 _fsSetupBinanceProxy_() {
+        debug "function _fsSetupBinanceProxy_"
     local _binanceProxy="${ENV_BINANCE_PROXY}"
     local _docker="nightshift2k/binance-proxy:latest"
-    local _dockerRepo="$(_fsDockerVarsRepo_ "${_docker}")"
-    local _dockerTag="$(_fsDockerVarsTag_ "${_docker}")"
-    local _dockerName="$(_fsDockerVarsName_ "${_docker}")"
+    local _dockerRepo=""
+    local _dockerTag=""
+    local _dockerName=""
+    local _dockerActive=""
+
+        debug "_docker: ${_docker}"
+    _dockerRepo="$(_fsDockerVarsRepo_ "${_docker}")"
+        debug "_dockerRepo: ${_dockerRepo}"
+    _dockerTag="$(_fsDockerVarsTag_ "${_docker}")"
+        debug "_dockerTag: ${_dockerTag}"
+    _dockerName="$(_fsDockerVarsName_ "${_docker}")"
+        debug "_dockerName: ${_dockerName}"
+    _dockerActive="$(_fsDockerPs_ "${_dockerName}")"
 
     echo
-    info 'SETUP BINANCE-PROXY: (Ports: 8090-8091/tcp)'
-
-    if [[ "$(_fsDockerPs_ "${_dockerName}")" = "true" ]]; then
-        notice "\"${_dockerName}\" is already running, checking for updates..."
+    info "SETUP BINANCE-PROXY:"
+    info "(Ports: 8090-8091/tcp)"
+        debug "_dockerActive: ${_dockerActive}"
+    if [[ "${_dockerActive}" -eq 0 ]]; then
+        info "\"${_dockerName}\" is already running."
         
-        _fsDockerRun_ "${_dockerRepo}" "${_dockerTag}" 'rm'
+        _fsDockerRun_ "${_dockerRepo}" "${_dockerTag}" "rm"
     else
-        if [[ "$(_fsCaseConfirmation_ "Install \"binance-proxy\" and start now?")" = "true" ]]; then
-            if [[ ! -f "${_binanceProxy}" ]]; then
-                printf '%s\n' \
+        if [[ "$(_fsCaseConfirmation_ "Install \"binance-proxy\" and start now?")" -eq 0 ]]; then
+            _fsDockerImageStatus_ "${_docker}"
+
+            if [[ "$(_fsFileCheck_ "${_binanceProxy}")" -eq 1 ]]; then
+                printf "%s\n" \
                 "{" \
                 "    \"exchange\": {" \
                 "        \"name\": \"binance\"," \
@@ -1564,44 +1720,43 @@ _fsSetupBinanceProxy_() {
                 "}" \
                 > "${_binanceProxy}"
                 
-                if [[ ! -f "${_binanceProxy}" ]]; then
-                    emergency "Can not create \"$(basename "${_binanceProxy}")\" file." && exit 1
-                else
-                    info "\"$(basename "${_binanceProxy}")\" file created."
-                fi
-            else
-                info "\"$(basename "${_binanceProxy}")\" already exist."
+                _fsFileExist_ "${_binanceProxy}"
             fi
             
-            _fsDockerRun_ "${_dockerRepo}" "${_dockerTag}" 'rm'
+            _fsDockerRun_ "${_dockerRepo}" "${_dockerTag}" "rm"
         else
-            warning 'Skip "binance-proxy" installation...'
+            warning "Skipping installation..."
         fi
     fi
 }
 
 function _fsSetupFrequi_() {
-    #local _frequiYml="${ENV_FREQUI_YML}"
-    local _frequiName="${ENV_FS}_frequi"
+        debug "function _fsSetupFrequi_"
+    local _dockerName="${ENV_FS}_frequi"
     local _serverUrl="${ENV_SERVER_URL}"
+    local _yesForce="${ENV_YES}"
     local _nr=""
-    local _setup="true"
+    local _setup=1
     
     echo
     info 'FREQUI: (Webserver API)'
     
-	if [[ "$(_fsDockerPs_ "${_frequiName}")" = "true" ]]; then
+	if [[ "$(_fsDockerPs_ "${_dockerName}")" -eq 0 ]]; then
         info "\"FreqUI\" is active: ${_serverUrl}"
-        if [[ "$(_fsCaseConfirmation_ "Skip reconfigure \"FreqUI\" now?")" = "true" ]]; then
-            _setup="false"
+        if [[ "$(_fsCaseConfirmation_ "Skip reconfigure \"FreqUI\" now?")" -eq 0 ]]; then
+            _setup=1
+        else
+            _setup=0
         fi
     else
-        if [[ "$(_fsCaseConfirmation_ "Install \"FreqUI\" now?")" = "true" ]]; then
-            _setup="true"
+        if [[ "$(_fsCaseConfirmation_ "Install \"FreqUI\" now?")" -eq 0 ]]; then
+            _setup=0
+        else
+            _setup=1
         fi
     fi
-
-    if [[ ! "${_setup}" = "false" ]];then
+        debug "_setup: ${_setup}"
+    if [[ "${_setup}" -eq 0 ]];then
         _fsSetupPkgs_ 'ufw'
         _fsSetupNginx_
         
@@ -1614,23 +1769,23 @@ function _fsSetupFrequi_() {
             notice '  3) No, I dont want to use SSL (not recommended)'
             info '     -> Only for local use!'
             
-            if [[ ! "${ENV_YES}" = "true" ]]; then
+            if [[ "${_yesForce}" -eq 0 ]]; then
                 read -p " (1/2/3) " _nr
             else
                 local _nr="3"
             fi
-            case "${_nr}" in 
-                ['1'])
+            case ${_nr} in 
+                [1])
                     info "Continuing with 1) ..."
                     _fsSetupNginxOpenssl_
                     break
                     ;;
-                ['2'])
+                [2])
                     info "Continuing with 2) ..."
                     _setupNginxLetsencrypt_
                     break
                     ;;
-                ['3'])
+                [3])
                     info "Continuing with 3) ..."
                     break
                     ;;
@@ -1640,14 +1795,15 @@ function _fsSetupFrequi_() {
             esac
         done
         
-        _setupFrequiJson_
-        _setupFrequiCompose_
+        _fsSetupFrequiJson_
+        _fsSetupFrequiCompose_
     else
         warning "Skipping \"FreqUI\" installation..."
     fi
 }
 
-_fsSetupNginx_() {
+function _fsSetupNginx_() {
+        debug "function _fsSetupNginx_"
     local _confPath="/etc/nginx/conf.d"
     local _confPathFrequi="${_confPath}/frequi.conf"
     local _confPathNginx="${_confPath}/default.conf"
@@ -1656,34 +1812,28 @@ _fsSetupNginx_() {
     ENV_SERVER_URL="http://${_serverName}"
 
     _fsSetupPkgs_ "nginx"
-
     printf '%s\n' \
     "server {" \
     "    listen 80;" \
-    "    listen [::]:80;" \
     "    server_name ${_serverName};" \
     "    " \
     "    location / {" \
-    "        proxy_set_header Host \$host;" \
-    "        proxy_set_header X-Real-IP \$remote_addr;" \
     "        proxy_pass http://127.0.0.1:9999;" \
     "    }" \
     "}" \
     "server {" \
-    "    listen ${_serverName}:9000-9100;" \
+    "    listen 9000-9100;" \
     "    server_name ${_serverName};" \
     "    " \
     "    location / {" \
-    "        proxy_set_header Host \$host;" \
-    "        proxy_set_header X-Real-IP \$remote_addr;" \
     "        proxy_pass http://127.0.0.1:\$server_port;" \
     "    }" \
     "}" \
     > "${_confPathFrequi}"
 
-    if [ -f "${_confPathNginx}" ]; then sudo mv "${_confPathNginx}" "${_confPathNginx}"'.disabled'; fi
+    [[ "$(_fsFileCheck_ "${_confPathNginx}")" -eq 0 ]] && sudo mv "${_confPathNginx}" "${_confPathNginx}.disabled"
 
-    sudo rm -f /etc/nginx/sites-enabled/default
+    sudo rm -f "/etc/nginx/sites-enabled/default"
     
     #sudo ufw allow http/tcp > /dev/null
     sudo ufw allow "Nginx Full" > /dev/null
@@ -1691,17 +1841,21 @@ _fsSetupNginx_() {
     _fsSetupNginxRestart_
 }
 
-_fsSetupNginxRestart_() {
+function _fsSetupNginxRestart_() {
+        debug "function _fsSetupNginxRestart_"
     # kill and start again
     # >/dev/null 2>&1
-    #sudo pkill -f nginx & wait $!
+    sudo /etc/init.d/nginx stop
+    sudo pkill -f nginx & wait $!
+    sudo /etc/init.d/nginx start
     #sudo systemctl start nginx
     #sudo nginx -s reload
-    sudo systemctl reload nginx
+    #sudo systemctl reload nginx 2>/dev/null
 }
 
-_fsSetupNginxOpenssl_() {
-    _fsSetupNginxConfSecure_ 'openssl'
+function _fsSetupNginxOpenssl_() {
+        debug "function _fsSetupNginxOpenssl_"
+    _fsSetupNginxConfSecure_ "openssl"
 
     sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
     -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=www.example.com" \
@@ -1738,6 +1892,7 @@ _fsSetupNginxOpenssl_() {
 }
 
 _setupNginxLetsencrypt_() {
+        debug "function _setupNginxLetsencrypt_"
     local _domain=""
     local _domainIp=""
     local _serverIp="${ENV_SERVER_IP}"
@@ -1748,7 +1903,7 @@ _setupNginxLetsencrypt_() {
         if [[ "${_domain}" = "" ]]; then
             _fsCaseEmpty_
         else
-            if [[ "$(_fsCaseConfirmation_ "Is the domain \"${_domain}\" correct?")" = "true" ]]; then
+            if [[ "$(_fsCaseConfirmation_ "Is the domain \"${_domain}\" correct?")" -eq 0 ]]; then
                 _domainIp="$(ping -c 1 -w15 "${_domain}" | awk 'NR==1{print $3}' | sed "s,(,," | sed "s,),,")"
                 
                 if [[ ! "${_domainIp}" = "${_serverIp}" ]]; then
@@ -1766,7 +1921,8 @@ _setupNginxLetsencrypt_() {
     done
 }
 
-_fsSetupNginxCertbot_() {
+function _fsSetupNginxCertbot_() {
+        debug "function _fsSetupNginxCertbot_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
     local _domain="${1}"
@@ -1776,7 +1932,8 @@ _fsSetupNginxCertbot_() {
     sudo certbot --nginx -d "${_domain}"
 }
 
-_fsSetupNginxConfSecure_() {
+function _fsSetupNginxConfSecure_() {
+        debug "function _fsSetupNginxConfSecure_"
     [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
     local _mode="${1}"
@@ -1816,7 +1973,7 @@ _fsSetupNginxConfSecure_() {
         "    }" \
         "}" \
         "server {" \
-        "    listen \$server_name:9000-9900 ssl;" \
+        "    listen 9000-9900 ssl;" \
         "    server_name ${_serverName};" \
         "    " \
         "    include snippets/self-signed.conf;" \
@@ -1859,7 +2016,7 @@ _fsSetupNginxConfSecure_() {
         "    }" \
         "}" \
         "server {" \
-        "    listen ${_serverName}:9000-9990 ssl http2;" \
+        "    listen 9000-9990 ssl http2;" \
         "    server_name ${_serverName};" \
         "    " \
         "    ssl_certificate /etc/letsencrypt/live/${_serverName}/fullchain.pem;" \
@@ -1880,22 +2037,28 @@ _fsSetupNginxConfSecure_() {
 
     #sudo ufw allow https/tcp > /dev/null
     
-    sudo rm -f /etc/nginx/sites-enabled/default
+    sudo rm -f /etc/nginx/sites-enabled/default*
 
     _fsSetupNginxRestart_
 }
 
-_setupFrequiJson_() {
+function _fsSetupFrequiJson_() {
+        debug "function _fsSetupFrequiJson_"
     local _frequiJson="${ENV_FREQUI_JSON}"
-    local _frequiJwt="$(_fsJsonGet_ "${_frequiJson}" 'jwt_secret_key')"
-    local _frequiUsername="$(_fsJsonGet_ "${_frequiJson}" 'username')"
-    local _frequiPassword="$(_fsJsonGet_ "${_frequiJson}" 'password')"
+    local _frequiJwt=""
+    local _frequiUsername=""
+    local _frequiPassword=""
     local _frequiPasswordCompare=""
     local _frequiTmpUsername=""
     local _frequiTmpPassword=""
     local _frequiCors="${ENV_SERVER_URL}"
-    local _yesNo="${ENV_YES}"
-    local _setup="false"
+    local _yesForce="${ENV_YES}"
+    local _yesNo=""
+    local _setup=1
+    
+    _frequiJwt="$(_fsJsonGet_ "${_frequiJson}" 'jwt_secret_key')"
+    _frequiUsername="$(_fsJsonGet_ "${_frequiJson}" 'username')"
+    _frequiPassword="$(_fsJsonGet_ "${_frequiJson}" 'password')"
 
     if [[ -z "${_frequiJwt}" ]]; then
         _frequiJwt="$(_fsSecret_)"
@@ -1904,39 +2067,28 @@ _setupFrequiJson_() {
     if [[ ! -z "${_frequiUsername}" ]] || [[ ! -z "${_frequiPassword}" ]]; then
         warning "Login data for \"FreqUI\" already found."
         
-        if [[ "$(_fsCaseConfirmation_ "Skip generating new login data?")" = "false" ]]; then
+        if [[ "$(_fsCaseConfirmation_ "Skip generating new login data?")" -eq 1 ]]; then
             notice "Create your login data for \"FreqUI\" now!"
-            _setup="true"
+            _setup=0
         fi
     else
-        _setup="true"
+        _setup=0
     fi
     
-    if [[ "${_setup}" = "true" ]]; then
+    if [[ "${_setup}" = 0 ]]; then
         # create username
         while true; do
             read -p 'Enter username: ' _frequiUsername
-            
-            if [[ ! "${_frequiUsername}" = "" ]]; then
+                debug "_frequiUsername: ${_frequiUsername}"
+            if [[ ! -z "${_frequiUsername}" ]]; then
                 read -p 'Is the username "'"${_frequiUsername}"'" correct? (y/n) ' _yesNo
-            else
-                _yesNo=""
-            fi
-            
-            case "${_yesNo}" in 
-                [Yy]*)
+
+                if [[ "$(_fsCaseConfirmation_ "Is the username \"${_frequiUsername}\" correct?")" -eq 0 ]]; then
                     break
-                    ;;
-                [Nn]*)
+                else
                     info "Try again!"
-                    ;;
-                "")
-                    _fsCaseEmpty_
-                    ;;
-                *)
-                    _fsCaseInvalid_
-                    ;;
-            esac
+                fi
+            fi
         done
         
         # create password - NON VERBOSE
@@ -1944,7 +2096,7 @@ _setupFrequiJson_() {
             notice 'Enter password (ENTRY HIDDEN):'
             read -s _frequiPassword
             echo
-            case "${_frequiPassword}" in 
+            case ${_frequiPassword} in 
                 "")
                     _fsCaseEmpty_
                     ;;
@@ -1982,14 +2134,12 @@ _setupFrequiJson_() {
         "}" \
         > "${_frequiJson}"
 
-        
-        if [[ ! -f "${_frequiJson}" ]]; then
-            emergency "Can not create \"$(basename "${_frequiJson}")\" config file." && exit 1
-        fi
+        _fsFileExist_ "${_frequiJson}"
     fi
 }
 
-_setupFrequiCompose_() {
+function _fsSetupFrequiCompose_() {
+        debug "function _fsSetupFrequiCompose_"
     local _serverUrl="${ENV_SERVER_URL}"
     local _fsConfig="${ENV_FS_CONFIG}"
     local _frequiYml="${ENV_FREQUI_YML}"
@@ -2043,10 +2193,8 @@ _setupFrequiCompose_() {
     "    \"initial_state\": \"running\"" \
     "}" \
     > "${_frequiServerJson}"
-    
-    if [[ ! -f "${_frequiServerJson}" ]]; then
-        emergency "Can not create \"$(basename "${_frequiServerJson}")\" config file." && exit 1
-    fi
+
+    _fsFileExist_ "${_frequiServerJson}"
 
     printf -- '%s\n' \
     "---" \
@@ -2071,54 +2219,53 @@ _setupFrequiCompose_() {
     "      --config /freqtrade/user_data/$(basename ${_frequiServerJson})" \
     > "${_frequiYml}"
 
-    if [[ -f "${_frequiYml}" ]]; then
-        if [[ -f "${_frequiServerLog}" ]]; then
-            rm -f "${_frequiServerLog}"
-        fi
+    _fsFileExist_ "${_frequiYml}"
+    [[ "$(_fsFileCheck_ "${_frequiServerLog}")" -eq 0 ]] &&  rm -f "${_frequiServerLog}"
+    _fsDockerComposeUp_ "${_frequiYml}" 'force'
 
-        _fsDockerComposeUp_ "${_frequiYml}" 'force'
-    else
-        emergency "\"$(basename "${_frequiYml}")\" file not found." && exit 1
-    fi
 }
 
-_fsSetupExampleBot_() {
+function _fsSetupExampleBot_() {
+        debug "function _fsSetupExampleBot_"
     local _userData="${ENV_DIR_USER_DATA}"
     local _botExampleName="${ENV_FS}_example"
     local _botExampleYml="${ENV_DIR}/${_botExampleName}.yml"
     local _botExampleConfig=""
     local _botExampleConfigName=""
-    local _frequiJson="$(basename "${ENV_FREQUI_JSON}")"
-    local _binanceProxyJson="$(basename "${ENV_BINANCE_PROXY}")"
+    local _frequiJson=""
+    local _binanceProxyJson=""
     local _botExampleExchange=""
     local _botExampleCurrency=""
     local _botExampleKey=""
     local _botExampleSecret=""
     local _botExamplePairlist=""
     local _botExampleLog="${ENV_DIR_USER_DATA}/logs/${ENV_FS}_example.log"
-    local _setup=""
-    local _error=""
+    local _setup=1
+    local _error=0
 
     echo
     info 'EXAMPLE (NFI):'
 
+    _frequiJson="$(basename "${ENV_FREQUI_JSON}")"
+    _binanceProxyJson="$(basename "${ENV_BINANCE_PROXY}")"
+
     info "Creating an example bot \".yml\" file for dryrun on Binance."
     info "Incl. latest \"NostalgiaForInfinityX\" strategy, \"FreqUI\" and proxy"
         
-    if [[ "$(_fsCaseConfirmation_ "Skip create an example bot?")" = "true" ]]; then
+    if [[ "$(_fsCaseConfirmation_ "Skip create an example bot?")" -eq 0 ]]; then
         warning "Skipping example bot..."
     else
         while true; do
             info "What is the name of your config file? For default name press <ENTER>."
             read -p " (filename) " _botExampleConfigName
-            case "${_botExampleConfigName}" in
+            case ${_botExampleConfigName} in
                 "")
                     _botExampleConfigName="config"
                 ;;
                 *)
                     _botExampleConfigName="${_botExampleConfigName%.*}"
 
-                    if [[ "$(_fsIsAlphaDash_ "${_botExampleConfigName}")" = "false" ]]; then
+                    if [[ "$(_fsIsAlphaDash_ "${_botExampleConfigName}")" -eq 0 ]]; then
                         warning "Only alpha-numeric or dash or underscore characters are allowed!"
                         _botExampleConfigName=""
                     fi
@@ -2126,7 +2273,7 @@ _fsSetupExampleBot_() {
             esac
             if [[ ! -z "${_botExampleConfigName}" ]]; then
                 info "The config file will be: \"${_botExampleConfigName}.json\""
-                if [[ "$(_fsCaseConfirmation_ "Is this correct?")" = "true" ]]; then
+                if [[ "$(_fsCaseConfirmation_ "Is this correct?")" -eq 0 ]]; then
                     _botExampleConfig="${_userData}/${_botExampleConfigName}.json"
 
                     if [[ -f "${_botExampleConfig}" ]]; then
@@ -2135,14 +2282,14 @@ _fsSetupExampleBot_() {
                         _botExampleKey="$(_fsJsonGet_ "${_botExampleConfig}" 'key')"
                         _botExampleSecret="$(_fsJsonGet_ "${_botExampleConfig}" 'secret')"
                         
-                        _setup="true"
+                        _setup=0
                         break
                     else
                         error "\"$(basename "${_botExampleConfig}")\" config file does not exist."
                         _botExampleConfigName=""
                         
-                        if [[ "$(_fsCaseConfirmation_ "Skip create an example bot?")" = "true" ]]; then
-                            _setup='false'
+                        if [[ "$(_fsCaseConfirmation_ "Skip create an example bot?")" -eq 0 ]]; then
+                            _setup=1
                             break
                         fi
                     fi
@@ -2150,15 +2297,15 @@ _fsSetupExampleBot_() {
             fi
         done
         
-        if [[ "${_setup}" = "true" ]]; then
+        if [[ "${_setup}" -eq 0 ]]; then
             if [[ -z "${_botExampleKey}" || -z "${_botExampleSecret}" ]]; then
-                error 'Restart setup and create an example config with your API key and secret.'
-                _error='true'
+                error 'Your exchange api KEY and/or SECRET is missing.'
+                _error=1
             fi
             
             if [[ "${_botExampleExchange}" != 'binance' ]]; then
                 error 'Only "Binance" is supported for example bot.'
-                _error='true'
+                _error=1
             fi
 
             if [[ "${_botExampleCurrency}" == 'USDT' ]]; then
@@ -2167,10 +2314,10 @@ _fsSetupExampleBot_() {
                 _botExamplePairlist='pairlist-volume-binance-busd.json'
             else
                 error 'Only USDT and BUSD pairlist are supported.'
-                _error='true'
+                _error=1
             fi
         
-            if [[ ! "${_error}" = "true" ]]; then
+            if [[ "${_error}" -eq 0 ]]; then
                 printf -- '%s\n' \
                 "---" \
                 "version: '3'" \
@@ -2200,18 +2347,16 @@ _fsSetupExampleBot_() {
                 "      --config /freqtrade/user_data/${_binanceProxyJson}" \
                 > "${_botExampleYml}"
                 
-                if [[ ! -f "${_botExampleYml}" ]]; then
-                    emergency "\"$(basename "${_botExampleYml}")\" file could not be created." && exit 1
-                else
-                    if [[ -f "${_botExampleLog}" ]]; then
-                        rm -f "${_botExampleLog}"
-                    fi
+                _fsFileExist_"${_botExampleYml}"
+                
+                [[ "$(_fsFileCheck_ "${_botExampleLog}")" -eq 0 ]] &&  rm -f "${_botExampleLog}"
 
-                    info "1) The docker path is different from the real path and starts with \"/freqtrade\"."
-                    info "2) Add your exchange api KEY and SECRET to: \"exampleconfig_secret.json\""
-                    info "3) Change port number \"9001\" to an unused port between 9000-9100 in \"${_botExampleYml}\" file."
-                    notice "Run example bot with: ${ENV_FS} -b $(basename "${_botExampleYml}")"
-                fi
+                info "1) The docker path is different from the real path and starts with \"/freqtrade\"."
+                info "2) Add your exchange api KEY and SECRET to: \"exampleconfig_secret.json\""
+                info "3) Change port number \"9001\" to an unused port between 9000-9100 in \"${_botExampleYml}\" file."
+                notice "Run example bot with: ${ENV_FS} -b $(basename "${_botExampleYml}")"
+            else
+                alert "Too many errors. Cannot create example bot!"
             fi
         else
             warning "Skipping example bot..."
@@ -2232,14 +2377,13 @@ _fsSetupExampleBot_() {
 
 # shellcheck disable=SC2015
 [[ "${__usage+x}" ]] || read -r -d '' __usage <<-'EOF' || true # exits non-zero when EOF encountered
-  -v               Enable verbose mode, print script as it is executed
-  -d --debug       Enables debug mode
   -h --help        This page
+  -s --setup       Install and update
+  -b --bot  [arg]  Start any ".yml" project
+  -k --kill        Kill any ".yml" project
+  -y --yes         Yes on every confirmation
   -n --no-color    Disable color output
-  -y --yes         Yes
-  -s --setup       Setup
-  -b --bot  [arg]  Bot to process. Can be repeated.
-  -k --kill        Kill bots
+  -d --debug       Enables debug mode
 EOF
 
 # shellcheck disable=SC2015
@@ -2474,12 +2618,6 @@ if [[ "${arg_d:?}" = "1" ]]; then
   LOG_LEVEL="7"
   # Enable error backtracing
   trap '__b3bp_err_report "${FUNCNAME:-.}" ${LINENO}' ERR
-  debug "$(docker ps -a)"
-fi
-
-# verbose mode
-if [[ "${arg_v:?}" = "1" ]]; then
-  set -o verbose
 fi
 
 # no color mode
@@ -2495,7 +2633,7 @@ fi
 
 # force yes mode
 if [[ "${arg_y:?}" = "1" ]]; then
-  ENV_YES="true"
+  ENV_YES=0
 fi
 
 # setup mode
@@ -2523,13 +2661,14 @@ fi
 ### Runtime
 ##############################################################################
 
+# restrict script to run only once a time
 _fsScriptLock_
+
 # DEBUG - uncomment to remove docker container or images
 #_fsDockerKillContainer_
 #_fsDockerKill_
 
 _fsIntro_
-
 if [[ "${ENV_SETUP}" = "true" ]]; then
     _fsSetup_
 else
@@ -2538,11 +2677,10 @@ else
         _fsStart_ "${bot}"
       done
     elif [[ -n "${arg_b:-}" ]]; then
-      info "arg_b: ${arg_b}"
+        help "Help using ${0}"
     else
-      info "arg_b: 0"
+        help "Help using ${0}"
     fi
 fi
-
 _fsStats_
 exit 0
