@@ -7,6 +7,8 @@
 * Fixed an error in FreqUI routine with domain configuration.
 * Rewrite project.yml restart to "no" and update restart to "on-failure" after validation.
 
+### Freqtrade with Docker
+
 Freqstart simplifies the use of Freqtrade with Docker. Including a simple setup guide for Freqtrade,
 configurations and FreqUI with a secured SSL proxy for IPs and domains. Freqtrade also automatically
 installs implemented strategies based on Docker Compose files and detects necessary updates.
