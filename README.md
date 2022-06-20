@@ -3,6 +3,8 @@
 <!-- FREQSTART -->
 # FREQSTART
 
+### Changelog
+
 `v0.0.6`
 * Fixed an error in FreqUI routine with domain configuration.
 * Rewrite project.yml restart to "no" and update restart to "on-failure" after validation.
