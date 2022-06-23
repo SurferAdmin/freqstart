@@ -63,7 +63,7 @@ NO_COLOR="${NO_COLOR:-}"  # true = disable color. otherwise autodetected
 
 # FREQSTART - variables
 FS_NAME="freqstart"
-FS_VERSION='v0.0.6'
+FS_VERSION='v0.0.7'
 FS_SYMLINK="/usr/local/bin/${FS_NAME}"
 
 FS_DIR="${__dir}"
@@ -484,7 +484,7 @@ function _fsDedupeArray_() {
 }
 
 function _fsDate_() {
-  echo "$(date +%y%m%d%H)"
+  date +%y%m%d%H
 }
 
 function _fsRandomHex_() {
@@ -545,12 +545,13 @@ function _fsIsSymlink_() {
 }
 
 function _fsStrategy_() {
-    debug "function _fsStrategy_"
+    debug "# function _fsStrategy_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
   local _strategyName="${1}"
   local _strategyFile=""
   local _strategyFileNew=""
+  local _strategyUpdate="$(_fsDate_)"
   local _strategyUpdateCount=0
   local _strategyFileType=""
   local _strategyFileTypeName='unknown'
@@ -560,7 +561,8 @@ function _fsStrategy_() {
   local _strategyUrlsDeduped=""
   local _strategyUrl=""
   local _fsStrategies="${FS_STRATEGIES}"
-  
+  local _strategyJson=""
+
   if [[ "$(_fsIsFile_ "${_fsStrategies}")" -eq 1 ]]; then
     printf '%s\n' \
     "{" \
@@ -635,7 +637,7 @@ function _fsStrategy_() {
           fi
         else
           cp -a "${_strategyTmp}/${_strategyFile}" "${_strategyPath}"
-          
+          _strategyUpdateCount=$((_strategyUpdateCount+1))
           info "\"${_strategyFile}\" \"${_strategyFileTypeName}\" installed."
           
           _fsFileExist_ "${_strategyPath}"
@@ -646,15 +648,20 @@ function _fsStrategy_() {
     sudo rm -rf "${_strategyTmp}"
 
     if [[ "${_strategyUpdateCount}" -eq 0 ]]; then
-      info "\"${_strategyName}\" latest version installed."
-      echo 0
+      info "\"${_strategyName}\" already latest version installed."
     else
-      notice "\"${_strategyName}\" strategy is updated. Restart bots!"
-      echo 1
+      notice "\"${_strategyName}\" strategy is installed/updated."
+
+      _strategyJson=$(jq -n \
+        --arg update "${_strategyUpdate}" \
+        '$ARGS.named'
+      )
+        debug "_strategyJson[@]:"
+        debug "$(printf '%s\n' "${_strategyJson[@]}")"
+      printf "%s\n" ${_strategyJson} | jq . > "${_strategyDir}/${_strategyName}.conf.json"
     fi
   else
     warning "\"${_strategyName}\" strategy not implemented."
-    echo 0
   fi
 }
 
@@ -1180,46 +1187,6 @@ function _fsDockerYmlConfigs_() {
   fi
 }
 
-function _fsDockerCmd_() {
-    debug "function _fsDockerCmd_"
-  [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
-  
-  local _cmd="${@}"
-
-  _cmd="$(echo "${_cmd}" | sed "s,\[,,g" | sed "s,\],,g" | sed "s,\",,g" | sed "s,\=, ,g" | sed "s,\/freqtrade\/,,g" | sed "s,\s,\n,g")"
-    debug "_cmd[@]:"
-    debug "$(printf '%s\n' "${_cmd[@]}")"
-  printf '%s\n' "${_cmd[@]}"
-}
-
-function _fsDockerStrategies_() {
-    debug "function _fsDockerStrategies_"
-  [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
-
-  local _cmd="${@}"
-  local _configs=""
-  local _config=""
-  local _error=0
-
-  _configs=()
-  while read; do
-    _configs+=("$REPLY")
-  done < <(_fsDockerCmd_ "${_cmd}")
-
-  for ((index=0; index < ${#_configs[@]}; index++)); do
-    if [[ ! -z "$(echo "${_configs[index]}" | grep -eow "\-\-stragey" -eow "\-s")" ]]; then
-      _config="${_dir}/${_configs[index+1]}"
-        debug "_config: ${_config}"
-    fi
-  done
-    debug "_error: ${_error}"
-  if [[ "${_error}" -eq 0 ]]; then
-    echo 0
-  else
-    echo 1
-  fi
-}
-
 function _fsDockerProjects_() {
     debug "function _fsDockerProjects_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
@@ -1233,9 +1200,20 @@ function _fsDockerProjects_() {
   local _ymlName=""
   local _ymlContainers=""
   local _ymlContainer=""
+  local _containerCmd=""
   local _containerRunning=""
+  local _containerRestart=1
   local _containerName=""
   local _containerConfigs=""
+  local _containerStrategy=""
+  local _containerStrategyDir=""
+  local _containerStrategyPath=""
+  local _containerStrategyUpdate=""
+  local _containerJson=""
+  local _containerJsonInner=""
+  local _containerConfPath=""
+  local _containerCount=0
+  local _strategyUpdate=""
   local _ymlImages=""
   local _ymlStrategies=""
   local _ymlConfigs=""
@@ -1249,6 +1227,7 @@ function _fsDockerProjects_() {
   _ymlFileName="${_ymlFile%.*}"
   _ymlName="$(echo "${_ymlFileName}" | sed "s,\-,_,g")"  
   _ymlContainers=()
+  _containerConfPath="${_projectDir}/${_ymlFileName}.conf.json"
 
   if [[ "${_projectMode}" = "compose" ]]; then
     notice "Starting project: ${_ymlFile}"
@@ -1264,7 +1243,7 @@ function _fsDockerProjects_() {
     _ymlPorts="$(_fsDockerYmlPorts_ "${_projectPath}")"
         debug "_ymlPorts: ${_ymlPorts}"
     [[ "${_ymlImages}" -eq 1 ]] && _error=$((_error+1))
-    [[ "${_ymlStrategies}" -eq 1 ]] && _error=$((_error+1))
+    #[[ "${_ymlStrategies}" -eq 1 ]] && _error=$((_error+1))
     [[ "${_ymlConfigs}" -eq 1 ]] && _error=$((_error+1))
     [[ "${_ymlPorts}" -eq 1 ]] && _error=$((_error+1))
       debug "_error: ${_error}"
@@ -1274,7 +1253,7 @@ function _fsDockerProjects_() {
   elif [[ "${_projectMode}" = "validate" ]]; then
     notice "Validate project: ${_ymlFile}"
 
-    _fsCdown_ 15 "for any errors..."
+    _fsCdown_ 30 "for any errors..."
   elif [[ "${_projectMode}" = "kill" ]]; then
       notice "Kill project: ${_ymlFile}"
   fi
@@ -1288,7 +1267,65 @@ function _fsDockerProjects_() {
     for _ymlContainer in ${_ymlContainers[@]}; do
       _containerName="$(_fsDockerId2Name_ "${_ymlContainer}")"
         debug "_containerName: ${_containerName}"
+      #sudo docker inspect "${_ymlContainer}"
       if [[ "${_projectMode}" = "compose" ]]; then
+        _containerCmd="$(sudo docker inspect --format="{{.Config.Cmd}}" "${_ymlContainer}")"
+        _containerCmd="$(echo "${_containerCmd}" | sed "s,\[,,g" | sed "s,\],,g" | sed "s,\",,g" | sed "s,\=, ,g" | sed "s,\/freqtrade\/,,g" | sed "s,\s,\n,g")"
+          debug "_containerCmd[@]:"
+          debug "$(printf '%s\n' "${_containerCmd[@]}")"
+
+        for i in $_containerCmd[@]; do
+          [[ "${_containerStrategy}" = "set" ]] && _containerStrategy="${i}"
+          [[ "${_containerStrategyDir}" = "set" ]] && _containerStrategyDir="${i}"
+          [[ -n "$(echo "${i}" | grep -Eo "\-s$|\--strategy$")" ]] && _containerStrategy="set"
+          [[ -n "$(echo "${i}" | grep -Eo "\--strategy-path$")" ]] && _containerStrategyDir="set"
+        done
+          debug "_containerStrategy: ${_containerStrategy}"
+          debug "_containerStrategyDir: ${_containerStrategyDir}"
+
+        _containerStrategyPath="${_containerStrategyDir}/${_containerStrategy}.conf.json"
+
+        if [[ "$(_fsIsFile_ "${_containerStrategyPath}")" -eq 0 ]]; then
+          _strategyUpdate=$(jq -r '.update' < "${_containerStrategyPath}")
+          _strategyUpdate=$(echo "${_strategyUpdate}" | sed "s,null,," | sed "s,\s,,g" | sed "s,\n,,g")
+            debug "_strategyUpdate: ${_strategyUpdate}"
+        else
+          _strategyUpdate=""
+        fi
+
+        if [[ "$(_fsIsFile_ "${_containerConfPath}")" -eq 0 ]]; then
+          _containerStrategyUpdate=$(jq -r '.'$_containerName'[0].strategy_update' < "${_containerConfPath}")
+          _containerStrategyUpdate=$(echo "${_containerStrategyUpdate}" | sed "s,null,," | sed "s,\s,,g" | sed "s,\n,,g")
+            debug "_containerStrategyUpdate: ${_containerStrategyUpdate}"
+        else
+          _containerStrategyUpdate=""
+        fi
+
+        if [[ -n "${_strategyUpdate}" ]]; then
+          if [[ -n "${_containerStrategyUpdate}" ]]; then
+            if [[ ! "${_containerStrategyUpdate}" = "${_strategyUpdate}" ]]; then
+              warning "Strategy is outdated. Restarting container!"
+              _containerRestart=0
+            fi
+          fi
+
+          _containerStrategyUpdate="${_strategyUpdate}"
+        else
+          warning "Cannot verify strategy update: ${_containerStrategy}"
+        fi
+
+        _containerJsonInner=$(jq -n \
+          --arg strategy "${_containerStrategy}" \
+          --arg strategy_path "${_containerStrategyDir}" \
+          --arg strategy_update "${_containerStrategyUpdate}" \
+          '$ARGS.named'
+        )
+        _containerJson=$(jq -n \
+          --argjson ${_containerName} "[${_containerJsonInner}]" \
+          '$ARGS.named'
+        )
+        _procjectJson[$_containerCount]="${_containerJson}"
+
           # compare container image and latest local image version
         _containerImage="$(sudo docker inspect --format="{{.Config.Image}}" "${_ymlContainer}")"
           debug "_containerImage: ${_containerImage}"
@@ -1299,9 +1336,13 @@ function _fsDockerProjects_() {
         if [[ ! "${_containerImageVersion}" = "${_dockerImageVersion}" ]]; then
           warning "Newer image version found."
           if [[ "$(_fsCaseConfirmation_ "Restart container?")" -eq 0 ]]; then
-            _fsDockerStop_ "${_containerName}"
+            _containerRestart=0
           fi
         fi
+        if [[ "${_containerRestart}" -eq 0 ]]; then
+          _fsDockerStop_ "${_containerName}"
+        fi
+        _containerCount=$((_containerCount+1))
       elif [[ "${_projectMode}" = "validate" ]]; then
         _containerRunning="$(docker ps --filter="name=${_containerName}" -q)"
           debug "_containerRunning: ${_containerRunning}"
@@ -1323,9 +1364,12 @@ function _fsDockerProjects_() {
   
   if [[ "${_projectMode}" = "compose" ]]; then
     if [[ "${_error}" -eq 0 ]]; then
+        printf "%s\n" ${_procjectJson[@]} | jq . > "${_containerConfPath}"
       if [[ ${_projectForce} = "force" ]]; then
+        echo
         cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" up -d --force-recreate
       else
+        echo
         cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" up -d
       fi
       _fsDockerProjects_ "${_projectPath}" "validate"
