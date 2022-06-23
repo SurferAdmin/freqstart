@@ -5,6 +5,10 @@
 
 ### Changelog
 
+`v0.0.7`
+* Implemented strategy update check for every container via project config file.
+* Raised countdown to 30s to validate docker container.
+
 `v0.0.6`
 * Fixed an error in FreqUI routine with domain configuration.
 * Rewrite project.yml restart to "no" and update restart to "on-failure" after validation.
