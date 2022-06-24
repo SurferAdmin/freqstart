@@ -63,12 +63,12 @@ NO_COLOR="${NO_COLOR:-}"  # true = disable color. otherwise autodetected
 
 # FREQSTART - variables
 FS_NAME="freqstart"
-FS_VERSION='v0.0.7'
+FS_VERSION='v0.0.8'
 FS_SYMLINK="/usr/local/bin/${FS_NAME}"
 
 FS_DIR="${__dir}"
 if [[ -L "${FS_SYMLINK}" ]] && [[ -e "${FS_SYMLINK}" ]]; then
-  FS_DIR="$(dirname $(readlink -f "${FS_SYMLINK}"))"
+  FS_DIR="$(dirname "$(readlink -f "${FS_SYMLINK}")")"
 fi
 FS_DIR_TMP="/tmp/${FS_NAME}"
 FS_DIR_DOCKER="${FS_DIR}/docker"
@@ -85,7 +85,7 @@ FS_FREQUI_YML="${FS_DIR}/${FS_NAME}_frequi.yml"
 
 FS_SERVER_IP="$(ip a | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1' | head -1)"
 FS_SERVER_URL=""
-FS_INODE_SUM="$(ls -ali / | sed '2!d' | awk {'print $1'})"
+FS_INODE_SUM="$(ls -ali / | sed '2!d' | awk '{print $1}')"
 FS_HASH="$(xxd -l8 -ps /dev/urandom)"
 
 FS_YES=1
@@ -166,7 +166,7 @@ function help () {
 
 
 function _fsIntro_() {
-    debug "function _fsIntro_"
+    debug "# function _fsIntro_"
   local _fsConfig="${FS_CONFIG}"
   local _dir="${FS_DIR}"
   local _fsVersion="${FS_VERSION}"
@@ -182,7 +182,7 @@ function _fsIntro_() {
   echo "# FREQSTART: ${_fsVersion}"
   echo "# Dir: ${_dir}"
   echo "# Server ip: ${_serverIp}"
-  if [[ ! -z "${_serverUrl}" ]]; then
+  if [[ -n "${_serverUrl}" ]]; then
     echo "# Server url: ${_serverUrl}"
     FS_SERVER_URL="${_serverUrl}"
   else
@@ -196,7 +196,7 @@ function _fsIntro_() {
   fi
   echo '###'
 
-  printf '%s\n' \
+  printf "%s\n" \
   "{" \
   "    \"version\": \"${_fsVersion}\"" \
   "    \"server_url\": \"${_serverUrl}\"" \
@@ -207,7 +207,7 @@ function _fsIntro_() {
 }
 
 function _fsIsFile_() {
-    debug "function _fsIsFile_"
+    debug "# function _fsIsFile_"
   local _file="${1:-}" # optional: path to file
 
 	if [[ -z "${_file}" ]]; then
@@ -223,7 +223,7 @@ function _fsIsFile_() {
 }
 
 function _fsFileExist_() {
-    debug "function _fsFileExist_"
+    debug "# function _fsFileExist_"
   local _file="${1:-}" # optional: path to file
 
 	if [[ "$(_fsIsFile_ "${_file}")" -eq 1 ]]; then
@@ -232,7 +232,7 @@ function _fsFileExist_() {
 }
 
 function _fsIsYml_() {
-    debug "function _fsIsYml_"
+    debug "# function _fsIsYml_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
   local _dir="${FS_DIR}"
@@ -247,7 +247,7 @@ function _fsIsYml_() {
 	_fileType="${_file##*.}"
     debug "_fileType: ${_fileType}"
 
-	if [[ ! -z "${_fileType}" ]]; then
+	if [[ -n "${_fileType}" ]]; then
     if [[ "${_fileType}" = 'yml' ]]; then
       _fsFileExist_ "${_path}"
 
@@ -261,37 +261,42 @@ function _fsIsYml_() {
 }
 
 function _fsStats_() {
-    debug "function _fsStats_"
+    debug "# function _fsStats_"
+	local _ping
+	local _memUsed
+	local _memTotal
+	local _time
 	# some handy stats to get you an impression how your server compares to the current possibly best location for binance
-	local _ping="$(ping -c 1 -w15 api3.binance.com | awk -F '/' 'END {print $5}')"
-	local _memUsed="$(free -m | awk 'NR==2{print $3}')"
-	local _memTotal="$(free -m | awk 'NR==2{print $2}')"
-	local _time="$((time curl -X GET "https://api.binance.com/api/v3/exchangeInfo?symbol=BNBBTC") 2>&1 > /dev/null \
+	_ping="$(ping -c 1 -w15 api3.binance.com | awk -F '/' 'END {print $5}')"
+	_memUsed="$(free -m | awk 'NR==2{print $3}')"
+	_memTotal="$(free -m | awk 'NR==2{print $2}')"
+	_time="$( (time curl -X GET "https://api.binance.com/api/v3/exchangeInfo?symbol=BNBBTC") 2>&1 > /dev/null \
 		| grep -o "real.*s" \
-		| sed "s#real$(echo '\t')##")"
+		| sed "s#real$(echo '\t')##" )"
 
 	echo "###"
-  echo '# Ping avg. (Binance): '"${_ping}"'ms | Vultr "Tokyo" Server avg.: 1.290ms'
-	echo '# Time to API (Binance): '"${_time}"' | Vultr "Tokyo" Server avg.: 0m0.039s'
-	echo '# Used memory (Server): '"${_memUsed}"'MB  (max. '"${_memTotal}"'MB)'
-	echo '# Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:'
-	echo '# https://www.vultr.com/?ref=9122650-8H'
+  echo "# Ping avg. (Binance): ${_ping}ms | Vultr \"Tokyo\" Server avg.: 1.290ms"
+	echo "# Time to API (Binance): ${_time} | Vultr \"Tokyo\" Server avg.: 0m0.039s"
+	echo "# Used memory (Server): ${_memUsed}MB  (max. ${_memTotal}MB)"
+	echo "# Get closer to Binance? Try Vultr \"Tokyo\" Server and get \$100 usage for free:"
+	echo "# https://www.vultr.com/?ref=9122650-8H"
 	echo "###"
 }
 
 function _fsScriptLock_() {
-    debug "function _fsScriptLock_"
+    debug "# function _fsScriptLock_"
   local _lockDir=""
   local _tmpDir="${FS_DIR_TMP:-/tmp}"
+  local _system="${1:-}"
 
-  if [[ ! -z "${_tmpDir}" ]]; then
-    if [[ "${1:-}" == 'system' ]]; then
+  if [[ -n "${_tmpDir}" ]]; then
+    if [[ "${_system}" = "system" ]]; then
       _lockDir="${_tmpDir}/$(basename "$0").lock"
     else
       _lockDir="${_tmpDir}/$(basename "$0").${UID}.lock"
     fi
 
-    if command mkdir -p "${_lockDir}" 2>/dev/null; then
+    if sudo mkdir -p "${_lockDir}" 2>/dev/null; then
       readonly SCRIPT_LOCK="${_lockDir}"
       debug "Script lock activated: ${SCRIPT_LOCK}"
     else
@@ -308,7 +313,7 @@ function _fsScriptLock_() {
 }
 
 function _fsJsonGet_() {
-    debug "function _fsJsonGet_"
+    debug "# function _fsJsonGet_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
   local _jsonFile="${1}"
@@ -316,19 +321,18 @@ function _fsJsonGet_() {
   local _jsonValue=""
     debug "_jsonFile: ${_jsonFile}"
   if [[ "$(_fsIsFile_ "${_jsonFile}")" -eq 0 ]]; then
-    _jsonValue="$(cat "${_jsonFile}" \
-    | grep -o "${_jsonName}\"\?: \"\?.*\"\?" \
+    _jsonValue="$(grep -o "${_jsonName}\"\?: \"\?.*\"\?" "${_jsonFile}" \
     | sed "s,\",,g" \
     | sed "s,\s,,g" \
     | sed "s#,##g" \
     | sed "s,${_jsonName}:,,")"
       debug "_jsonValue: ${_jsonValue}"
-    [[ ! -z "${_jsonValue}" ]] && echo "${_jsonValue}"
+    [[ -n "${_jsonValue}" ]] && echo "${_jsonValue}"
   fi
 }
 
 function _fsJsonSet_() {
-    debug "function _fsJsonSet_"
+    debug "# function _fsJsonSet_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
   local _jsonFile="${1}"
@@ -340,16 +344,16 @@ function _fsJsonSet_() {
     debug "_jsonValue: IMPORTANT - Do not print value for non-verbose inputs."
   _fsFileExist_ "${_jsonFile}"
   
-  if [[ ! -z "$(cat "${_jsonFile}" | grep -ow "\"${_jsonName}\": \".*\"")" ]]; then
+  if grep -qow "\"${_jsonName}\": \".*\"" "${_jsonFile}"; then
       debug '"name": "value"'
     sed -i "s,\"${_jsonName}\": \".*\",\"${_jsonName}\": \"${_jsonValue}\"," "${_jsonFile}"
-  elif [[ ! -z "$(cat "${_jsonFile}" | grep -ow "${_jsonName}: \".*\"")" ]]; then
+  elif grep -qow "${_jsonName}: \".*\"" "${_jsonFile}"; then
       debug 'name: "value"'
     sed -i "s,${_jsonName}: \".*\",${_jsonName}: \"${_jsonValue}\"," "${_jsonFile}"
-  #elif [[ ! -z "$(cat "${_jsonFile}" | grep -o "\"${_jsonName}\": .*")" ]]; then
+  #elif [[ -n "$(cat "${_jsonFile}" | grep -o "\"${_jsonName}\": .*")" ]]; then
   #    debug '"name": value'
   #  sed -i "s,\"${_jsonName}\": .*,\"${_jsonName}\": ${_jsonValue}," "${_jsonFile}"
-  #elif [[ ! -z "$(cat "${_jsonFile}" | grep -o "${_jsonName}: .*")" ]]; then
+  #elif [[ -n "$(cat "${_jsonFile}" | grep -o "${_jsonName}: .*")" ]]; then
   #    debug 'name: value'
   #  sed -i "s,${_jsonName}: .*,${_jsonName}: ${_jsonValue}," "${_jsonFile}"
   else
@@ -358,7 +362,7 @@ function _fsJsonSet_() {
 }
 
 function _fsCaseConfirmation_() {
-    debug "function _fsCaseConfirmation_"
+    debug "# function _fsCaseConfirmation_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
   local _question="${1}"
@@ -372,7 +376,7 @@ function _fsCaseConfirmation_() {
     echo 0
   else
     while true; do
-      read -p " (y/n) " _yesNo
+      read -rp " (y/n) " _yesNo
       
       case ${_yesNo} in
         [Yy]*)
@@ -400,7 +404,7 @@ function _fsCaseEmpty_() {
 }
 
 function _fsIsUrl_() {
-    debug "function _fsIsUrl_"
+    debug "# function _fsIsUrl_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
   local _url="${1}"
@@ -422,30 +426,15 @@ function _fsIsUrl_() {
   fi
 }
 
-function _fsIsPort_() {
-    debug "function _fsIsPort_"
-  [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
-  
-  _port="${1}"
-    debug "_port: ${_port}"
-    # credit: https://stackoverflow.com/a/32107419
-  if [[ "${_port}" =~ ^[0-9]+$ ]]; then
-    echo 0
-  else
-    emergency '"'"${_dockerPortUsed}"'" used port is not a number.'
-    echo 1
-  fi
-}
-
 function _fsCdown_() {
-    debug "function _fsCdown_"
+    debug "# function _fsCdown_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
-  _secs="${1}"; shift; _text="${@}"
+  _secs="${1}"; shift; _text=( "$@" )
     
   while [[ "${_secs}" -gt -1 ]]; do
     if [[ "${_secs}" -gt 0 ]]; then
-      printf '\r\033[KWaiting '"${_secs}"' seconds '"${_text}"
+      printf '\r\033[KWaiting '"${_secs}"' seconds '"${_text[*]}"
       sleep 1
     else
       printf '\r\033[K'
@@ -455,7 +444,7 @@ function _fsCdown_() {
 }
 
 function _fsIsAlphaDash_() {
-    debug "function _fsIsAlphaDash_"
+    debug "# function _fsIsAlphaDash_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
   
   local _re='^[[:alnum:]_-]+$'
@@ -468,7 +457,7 @@ function _fsIsAlphaDash_() {
 }
 
 function _fsDedupeArray_() {
-    debug "function _fsDedupeArray_"
+    debug "# function _fsDedupeArray_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
   
   declare -A _tmpArray
@@ -488,7 +477,7 @@ function _fsDate_() {
 }
 
 function _fsRandomHex_() {
-    debug "function _fsRandomHex_ (16-byte (128-bit) hex)"
+    debug "# function _fsRandomHex_ (16-byte (128-bit) hex)"
   local _length="${1:-16}"
   local _string=""
 
@@ -498,7 +487,7 @@ function _fsRandomHex_() {
 }
 
 function _fsRandomBase64_() {
-    debug "function _fsRandomBase64_ (24-byte (196-bit) base64)"
+    debug "# function _fsRandomBase64_ (24-byte (196-bit) base64)"
   local _length="${1:-24}"
   local _string=""
 
@@ -508,7 +497,7 @@ function _fsRandomBase64_() {
 }
 
 function _fsRandomBase64UrlSafe_() {
-    debug "function _fsRandomBase64UrlSafe_ (24-byte (196-bit) base64)"
+    debug "# function _fsRandomBase64UrlSafe_ (24-byte (196-bit) base64)"
   local _length="${1:-32}"
   local _string=""
 
@@ -518,14 +507,14 @@ function _fsRandomBase64UrlSafe_() {
 }
 
 function _fsIsSymlink_() {
-    debug "function _fsIsSymlink_"
+    debug "# function _fsIsSymlink_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _symlink="${1}"
     debug "_symlink: ${_symlink}"
     # credit: https://stackoverflow.com/a/36180056
-  if [ -L ${_symlink} ] ; then
-    if [ -e ${_symlink} ] ; then
+  if [ -L "${_symlink}" ] ; then
+    if [ -e "${_symlink}" ] ; then
         debug "_symlink: Good link"
 			echo 0
     else
@@ -533,7 +522,7 @@ function _fsIsSymlink_() {
 			sudo rm -f "${_symlink}"
       echo 1
     fi
-  elif [ -e ${_symlink} ] ; then
+  elif [ -e "${_symlink}" ] ; then
         debug "_symlink: Not a link"
 			sudo rm -f "${_symlink}"
       echo 1
@@ -549,22 +538,22 @@ function _fsStrategy_() {
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
   local _strategyName="${1}"
-  local _strategyFile=""
-  local _strategyFileNew=""
-  local _strategyUpdate="$(_fsDate_)"
+  local _strategyFile
+  local _strategyFileNew
+  local _strategyUpdate
   local _strategyUpdateCount=0
-  local _strategyFileType=""
-  local _strategyFileTypeName='unknown'
+  local _strategyFileType
+  local _strategyFileTypeName="unknown"
   local _strategyTmp="${FS_DIR_TMP}/${_strategyName}_${FS_HASH}"
   local _strategyDir="${FS_DIR_USER_DATA_STRATEGIES}/${_strategyName}"
-  local _strategyUrls=""
-  local _strategyUrlsDeduped=""
-  local _strategyUrl=""
+  local _strategyUrls=()
+  local _strategyUrlsDeduped=()
+  local _strategyUrl
   local _fsStrategies="${FS_STRATEGIES}"
-  local _strategyJson=""
+  local _strategyJson
 
   if [[ "$(_fsIsFile_ "${_fsStrategies}")" -eq 1 ]]; then
-    printf '%s\n' \
+    printf "%s\n" \
     "{" \
     "  \"NostalgiaForInfinityX\": [" \
     "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/NostalgiaForInfinityX.py\"," \
@@ -596,19 +585,19 @@ function _fsStrategy_() {
     _fsFileExist_ "${_fsStrategies}"
   fi
   
-  _strategyUrls=()
-  while read; do
+  while read -r; do
   _strategyUrls+=( "$REPLY" )
   done < <(jq -r ".${_strategyName}[]?" "${_fsStrategies}")
-
-  if [[ ! -z "${_strategyUrls[@]}" ]]; then
-    _strategyUrlsDeduped=()
-    while read; do
+    debug "_strategyUrls[@]:"
+    debug "$(printf '%s\n' "${_strategyUrls[@]}")"
+  if (( ${#_strategyUrls[@]} )); then
+    while read -r; do
     _strategyUrlsDeduped+=( "$REPLY" )
     done < <(_fsDedupeArray_ "${_strategyUrls[@]}")
   fi
-  
-  if [[ ! -z "${_strategyUrlsDeduped[@]}" ]]; then
+    debug "_strategyUrlsDeduped[@]:"
+    debug "$(printf '%s\n' "${_strategyUrlsDeduped[@]}")"
+  if (( ${#_strategyUrlsDeduped[@]} )); then
     sudo mkdir -p "${_strategyTmp}"
     sudo mkdir -p "${_strategyDir}"
 
@@ -618,47 +607,47 @@ function _fsStrategy_() {
         _strategyFileType="${_strategyFile##*.}"
         _strategyPath="${_strategyDir}/${_strategyFile}"
 
-        if [ "${_strategyFileType}" == "py" ]; then
-          _strategyFileTypeName='strategy'
-        elif [ "${_strategyFileType}" == "json" ]; then
-          _strategyFileTypeName='config'
+        if [[ "${_strategyFileType}" = "py" ]]; then
+          _strategyFileTypeName="strategy"
+        elif [[ "${_strategyFileType}" = "json" ]]; then
+          _strategyFileTypeName="config"
         fi
-        
+
         sudo curl -s -L "${_strategyUrl}" -o "${_strategyTmp}/${_strategyFile}"
-      
+
         if [[ "$(_fsIsFile_ "${_strategyPath}")" -eq 0 ]]; then
           if [[ -n "$(cmp --silent "${_strategyUrl}" "${_strategyPath}")" ]]; then
             cp -a "${_strategyTmp}/${_strategyFile}" "${_strategyPath}"
             _strategyUpdateCount=$((_strategyUpdateCount+1))
 
             info "\"${_strategyFile}\" \"${_strategyFileTypeName}\" updated."
-            
+
             _fsFileExist_ "${_strategyPath}"
           fi
         else
           cp -a "${_strategyTmp}/${_strategyFile}" "${_strategyPath}"
           _strategyUpdateCount=$((_strategyUpdateCount+1))
           info "\"${_strategyFile}\" \"${_strategyFileTypeName}\" installed."
-          
+
           _fsFileExist_ "${_strategyPath}"
         fi
       fi
     done
-    
+
     sudo rm -rf "${_strategyTmp}"
 
     if [[ "${_strategyUpdateCount}" -eq 0 ]]; then
       info "\"${_strategyName}\" already latest version installed."
     else
       notice "\"${_strategyName}\" strategy is installed/updated."
-
+      _strategyUpdate="$(_fsDate_)"
       _strategyJson=$(jq -n \
         --arg update "${_strategyUpdate}" \
         '$ARGS.named'
       )
         debug "_strategyJson[@]:"
         debug "$(printf '%s\n' "${_strategyJson[@]}")"
-      printf "%s\n" ${_strategyJson} | jq . > "${_strategyDir}/${_strategyName}.conf.json"
+      printf "%s\n" "${_strategyJson}" | jq . > "${_strategyDir}/${_strategyName}.conf.json"
     fi
   else
     warning "\"${_strategyName}\" strategy not implemented."
@@ -674,9 +663,13 @@ function _fsDockerVarsPath_() {
 
 	local _docker="${1}"
 	local _dockerDir="${FS_DIR_DOCKER}"
-	local _dockerName="$(_fsDockerVarsName_ "${_docker}")"
-	local _dockerTag="$(_fsDockerVarsTag_ "${_docker}")"
-	local _dockerPath="${_dockerDir}/${_dockerName}_${_dockerTag}.docker"
+	local _dockerName
+  local _dockerTag
+	local _dockerPath
+
+	_dockerName="$(_fsDockerVarsName_ "${_docker}")"
+	_dockerTag="$(_fsDockerVarsTag_ "${_docker}")"
+	_dockerPath="${_dockerDir}/${_dockerName}_${_dockerTag}.docker"
 
 	echo "${_dockerPath}"
 }
@@ -725,8 +718,12 @@ function _fsDockerVarsName_() {
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _docker="${1}"
-	local _dockerRepo="$(_fsDockerVarsRepo_ "${_docker}")"
-	local _dockerName="${FS_NAME}_$(echo "${_dockerRepo}" | sed 's,\/,_,')"
+	local _dockerRepo
+	local _dockerName
+
+	_dockerRepo="$(_fsDockerVarsRepo_ "${_docker}")"
+	_dockerName="${FS_NAME}_${_dockerRepo//\//_}"
+    debug "_dockerName: ${_dockerName}"
 	echo "${_dockerName}"
 }
 
@@ -744,7 +741,7 @@ function _fsDockerVarsTag_() {
 }
 
 function _fsDockerVersionLocal_() {
-    debug "function _fsDockerVersionLocal_"
+    debug "# function _fsDockerVersionLocal_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _dockerRepo="${1}"
@@ -755,12 +752,12 @@ function _fsDockerVersionLocal_() {
 		_dockerVersionLocal="$(docker inspect --format='{{index .RepoDigests 0}}' "${_dockerRepo}:${_dockerTag}" \
 		| sed 's/.*@//')"
     
-    [[ ! -z "${_dockerVersionLocal}" ]] && echo "${_dockerVersionLocal}"
+    [[ -n "${_dockerVersionLocal}" ]] && echo "${_dockerVersionLocal}"
 	fi
 }
 
 function _fsDockerVersionHub_() {
-    debug "function _fsDockerVersionHub_"
+    debug "# function _fsDockerVersionHub_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _dockerRepo="${1}"
@@ -786,12 +783,12 @@ function _fsDockerVersionHub_() {
   -I -s -L "https://registry-1.docker.io/v2/${_dockerRepo}/manifests/${_dockerTag}"
 
   if [[ "$(_fsIsFile_ "${_dockerManifest}")" -eq 0 ]]; then
-    _status="$(cat "${_dockerManifest}" | grep -o '200 OK')"
+    _status="$(grep -o "200 OK" "${_dockerManifest}")"
       debug "_status: ${_status}"
-    if [[ ! -z "${_status}" ]]; then
+    if [[ -n "${_status}" ]]; then
       _dockerVersionHub="$(_fsJsonGet_ "${_dockerManifest}" "etag")"
       
-      if [[ ! -z "${_dockerVersionHub}" ]]; then
+      if [[ -n "${_dockerVersionHub}" ]]; then
         echo "${_dockerVersionHub}"
       fi
     fi
@@ -799,7 +796,7 @@ function _fsDockerVersionHub_() {
 }
 
 function _fsDockerImageInstalled_() {
-    debug "function _fsDockerImageInstalled_"
+    debug "# function _fsDockerImageInstalled_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _dockerRepo="${1}"
@@ -808,7 +805,7 @@ function _fsDockerImageInstalled_() {
   
   _dockerImages="$(docker images -q "${_dockerRepo}:${_dockerTag}" 2> /dev/null)"
 		debug "_dockerImages: ${_dockerImages}"
-	if [[ ! -z "${_dockerImages}" ]]; then
+	if [[ -n "${_dockerImages}" ]]; then
 		echo 0
 	else
 		echo 1
@@ -816,7 +813,7 @@ function _fsDockerImageInstalled_() {
 }
 
 function _fsDockerImageVersion_() {
-    debug "function _fsDockerImageVersion_"
+    debug "# function _fsDockerImageVersion_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _dockerImage="${1}"
@@ -842,7 +839,7 @@ function _fsDockerImageVersion_() {
       # greater
     _dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerRepo}" "${_dockerTag}")"
 
-    if [[ ! -z "${_dockerVersionLocal}" ]]; then
+    if [[ -n "${_dockerVersionLocal}" ]]; then
         # update from docker hub
       warning "\"${_dockerRepo}:${_dockerTag}\" update found."
       
@@ -896,7 +893,7 @@ function _fsDockerImageVersion_() {
 }
 
 function _fsDockerPsName_() {
-    debug "function _fsDockerPsName_"
+    debug "# function _fsDockerPsName_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
   local _dockerName="${1}"
@@ -911,11 +908,11 @@ function _fsDockerPsName_() {
 	if [[ "${_dockerMode}" = "all" ]]; then
     _dockerPsAll="$(docker ps -a --format '{{.Names}}' | grep -ow "${_dockerName}")"
       debug "_dockerPsAll: ${_dockerPsAll}"
-    [[ ! -z "${_dockerPsAll}" ]] && _dockerMatching=0
+    [[ -n "${_dockerPsAll}" ]] && _dockerMatching=0
   else
     _dockerPs="$(docker ps --format '{{.Names}}' | grep -ow "${_dockerName}")"
       debug "_dockerPs: ${_dockerPs}"
-    [[ ! -z "${_dockerPs}" ]] && _dockerMatching=0
+    [[ -n "${_dockerPs}" ]] && _dockerMatching=0
 	fi
     debug "_dockerMatching: ${_dockerMatching}"
 	if [[ "${_dockerMatching}" -eq 0 ]]; then
@@ -926,7 +923,7 @@ function _fsDockerPsName_() {
 }
 
 function _fsDockerId2Name_() {
-    debug "function _fsDockerId2Name_"
+    debug "# function _fsDockerId2Name_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _dockerId="${1}"
@@ -934,13 +931,13 @@ function _fsDockerId2Name_() {
     debug "_dockerId: ${_dockerId}"
 	_dockerName="$(sudo docker inspect --format="{{.Name}}" "${_dockerId}" | sed "s,\/,,")"
     debug "_dockerName: ${_dockerName}"
-	if [[ ! -z "${_dockerName}" ]]; then
+	if [[ -n "${_dockerName}" ]]; then
 		echo "${_dockerName}"
 	fi
 }
 
 function _fsDockerRun_() {
-    debug "function _fsDockerRun_"
+    debug "# function _fsDockerRun_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
   local _dir="${FS_DIR}"
@@ -973,7 +970,7 @@ function _fsDockerRun_() {
 }
 
 function _fsDockerStop_() {
-    debug "function _fsDockerStop_"
+    debug "# function _fsDockerStop_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _dockerName="${1}"
@@ -991,7 +988,7 @@ function _fsDockerStop_() {
 }
 
 function _fsDockerYmlImages_() {
-    debug "function _fsDockerYmlImages_"
+    debug "# function _fsDockerYmlImages_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _path="${1}"
@@ -1002,22 +999,22 @@ function _fsDockerYmlImages_() {
 	_path="$(_fsIsYml_ "${_path}")"
     # credit: https://stackoverflow.com/a/39612060
   _ymlImages=()
-  while read; do
+  while read -r; do
     _ymlImages+=( "$REPLY" )
   done < <(grep "image:" "${_path}" | sed "s,\s,,g" | sed "s,image:,,g")
     debug "_ymlImages[@]:"
     debug "$(printf '%s\n' "${_ymlImages[@]}")"
-  if [[ ! -z "${_ymlImages[@]}" ]]; then
+  if (( ${#_ymlImages[@]} )); then
     _ymlImagesDeduped=()
-    while read; do
+    while read -r; do
     _ymlImagesDeduped+=( "$REPLY" )
     done < <(_fsDedupeArray_ "${_ymlImages[@]}")
   fi
     debug "_ymlImagesDeduped[@]:"
     debug "$(printf '%s\n' "${_ymlImagesDeduped[@]}")"
-  if [[ ! -z "${_ymlImagesDeduped[@]}" ]]; then
-    for _ymlImage in ${_ymlImagesDeduped[@]}; do
-      if [[ ! -z "$(_fsDockerImageVersion_ "${_ymlImage}")" ]]; then
+  if (( ${#_ymlImagesDeduped[@]} )); then
+    for _ymlImage in "${_ymlImagesDeduped[@]}"; do
+      if [[ -n "$(_fsDockerImageVersion_ "${_ymlImage}")" ]]; then
         echo 0
       else
         echo 1
@@ -1027,7 +1024,7 @@ function _fsDockerYmlImages_() {
 }
 
 function _fsDockerYmlPorts_() {
-    debug "function _fsDockerYmlPorts_"
+    debug "# function _fsDockerYmlPorts_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _ymlPath="${1}"
@@ -1039,10 +1036,10 @@ function _fsDockerYmlPorts_() {
 	_ymlPath="$(_fsIsYml_ "${_ymlPath}")"
   _ymlFile="${_ymlPath##*/}"
   _ymlFileName="${_ymlFile%.*}"
-  _ymlName="$(echo "${_ymlFileName}" | sed "s,\-,_,g")"
-
+  _ymlName="${_ymlFileName//-/_}"
+    debug "_ymlName: ${_ymlName}"
   _dockerPortsYml=()
-  while read; do
+  while read -r; do
     _dockerPortsYml+=("$REPLY")
   done < <(grep 'ports:' "${_ymlPath}" -A 1 | grep -oE "[0-9]{4}.*" | sed "s,\",,g" | sed "s,:.*,,")
     debug "_dockerPortsYml[@]:"
@@ -1058,13 +1055,13 @@ function _fsDockerYmlPorts_() {
   done
   
   _dockerPortsProject=()
-  while read; do
+  while read -r; do
   _dockerPortsProject+=("$REPLY")
   done < <(sudo docker ps -a -f name="${_ymlName}" | awk 'NR > 1 {print $12}' | sed "s,->.*,," | sed "s,.*:,,")
     debug "_dockerPortsProject[@]:"
     debug "$(printf '%s\n' "${_dockerPortsProject[@]}")"
   _dockerPortsAll=()
-  while read; do
+  while read -r; do
   _dockerPortsAll+=("$REPLY")
   done < <(sudo docker ps -a | awk 'NR > 1 {print $12}' | sed "s,->.*,," | sed "s,.*:,,")
     debug "_dockerPortsAll[@]:"
@@ -1072,13 +1069,17 @@ function _fsDockerYmlPorts_() {
   _dockerPortsBlocked=("$(printf "%s\n" "${_dockerPortsAll[@]}" "${_dockerPortsProject[@]}" | sort | uniq -u)")
     debug "_dockerPortsBlocked[@]:"
     debug "$(printf '%s\n' "${_dockerPortsBlocked[@]}")"
-  _dockerPortsCompare=("$(echo ${_dockerPortsYml[@]} ${_dockerPortsBlocked[@]} | tr ' ' '\n' | sort | uniq -D | uniq)")
+  _dockerPortsCompare=("$(echo "${_dockerPortsYml[@]}" "${_dockerPortsBlocked[@]}" | tr ' ' '\n' | sort | uniq -D | uniq)")
     debug "_dockerPortsCompare[@]:"
     debug "$(printf '%s\n' "${_dockerPortsCompare[@]}")"
-  for _dockerPortCompare in ${_dockerPortsCompare[@]}; do
-    _error=$((_error+1))
-    error "Port is already allocated: ${_dockerPortCompare}"
-  done
+  if (( ${#_dockerPortsCompare[@]} )); then
+    for _dockerPortCompare in "${_dockerPortsCompare[@]}"; do
+      if [[ "${_dockerPortCompare}" =~ ^[0-9]+$ ]]; then
+        _error=$((_error+1))
+        error "Port is already allocated: ${_dockerPortCompare}"
+      fi
+    done
+  fi
     debug "_error: ${_error}"
 	if [[ "${_error}" -eq 0 ]]; then
     echo 0
@@ -1088,7 +1089,7 @@ function _fsDockerYmlPorts_() {
 }
 
 function _fsDockerYmlStrategies_() {
-    debug "function _fsDockerYmlStrategies_"
+    debug "# function _fsDockerYmlStrategies_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
 	local _ymlPath="${1}"
@@ -1100,10 +1101,9 @@ function _fsDockerYmlStrategies_() {
 	_ymlPath="$(_fsIsYml_ "${_ymlPath}")"
 
   _strategies=()
-  while read; do
+  while read -r; do
     _strategies+=( "$REPLY" )
-  done < <(cat "${_ymlPath}" \
-  | grep "strategy" \
+  done < <(grep "strategy" "${_ymlPath}" \
   | grep -v "strategy-path" \
   | sed "s,\=,,g" \
   | sed "s,\",,g" \
@@ -1111,16 +1111,16 @@ function _fsDockerYmlStrategies_() {
   | sed "s,\-\-strategy,,g")
     debug "_strategies[@]:"
     debug "$(printf '%s\n' "${_strategies[@]}")"
-  if [[ ! -z "${_strategies[@]}" ]]; then
+  if (( ${#_strategies[@]} )); then
     _strategiesDeduped=()
-    while read; do
+    while read -r; do
       _strategiesDeduped+=( "$REPLY" )
     done < <(_fsDedupeArray_ "${_strategies[@]}")
   fi
     debug "_strategiesDeduped[@]:"
     debug "$(printf '%s\n' "${_strategiesDeduped[@]}")"
-  if [[ ! -z "${_strategiesDeduped[@]}" ]]; then
-    for _strategy in ${_strategiesDeduped[@]}; do        
+  if (( ${#_strategiesDeduped[@]} )); then
+    for _strategy in "${_strategiesDeduped[@]}"; do        
       if [[ "$(_fsStrategy_ "${_strategy}")" -eq 1 ]]; then
         _update=$((_update+1))
       fi
@@ -1135,7 +1135,7 @@ function _fsDockerYmlStrategies_() {
 }
 
 function _fsDockerYmlConfigs_() {
-    debug "function _fsDockerYmlConfigs_"
+    debug "# function _fsDockerYmlConfigs_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
   local _dir="${FS_DIR}"
@@ -1149,27 +1149,27 @@ function _fsDockerYmlConfigs_() {
 	_ymlPath="$(_fsIsYml_ "${_ymlPath}")"
 
   _configs=()
-  while read; do
+  while read -r; do
   _configs+=( "$REPLY" )
-  done < <(echo "$(grep -e "\-\-config" -e "\-c" "${_ymlPath}" \
+  done < <(grep -e "\-\-config" -e "\-c" "${_ymlPath}" \
   | sed "s,\=,,g" \
   | sed "s,\",,g" \
   | sed "s,\s,,g" \
   | sed "s,\-\-config,,g" \
   | sed "s,\-c,,g" \
-  | sed "s,\/freqtrade\/,,g")")
+  | sed "s,\/freqtrade\/,,g")
     debug "_configs[@]:"
     debug "$(printf '%s\n' "${_configs[@]}")"
-  if [[ ! -z "${_configs[@]}" ]]; then
+  if (( ${#_configs[@]} )); then
     _configsDeduped=()
-    while read; do
+    while read -r; do
       _configsDeduped+=( "$REPLY" )
     done < <(_fsDedupeArray_ "${_configs[@]}")
   fi
     debug "_configsDeduped[@]:"
     debug "$(printf '%s\n' "${_configsDeduped[@]}")"
-  if [[ ! -z "${_configsDeduped[@]}" ]]; then
-    for _config in ${_configsDeduped[@]}; do
+  if (( ${#_configsDeduped[@]} )); then
+    for _config in "${_configsDeduped[@]}"; do
         debug "_config: ${_config}"
       _configPath="${_dir}/${_config}"
         debug "_configPath: ${_configPath}"
@@ -1188,7 +1188,7 @@ function _fsDockerYmlConfigs_() {
 }
 
 function _fsDockerProjects_() {
-    debug "function _fsDockerProjects_"
+    debug "# function _fsDockerProjects_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
   local _projectDir="${FS_DIR}"
@@ -1200,21 +1200,21 @@ function _fsDockerProjects_() {
   local _ymlName=""
   local _ymlContainers=""
   local _ymlContainer=""
-  local _containerCmd=""
+  local _containerCmd
   local _containerRunning=""
   local _containerRestart=1
   local _containerName=""
   local _containerConfigs=""
   local _containerStrategy=""
-  local _containerStrategyDir=""
-  local _containerStrategyPath=""
   local _containerStrategyUpdate=""
   local _containerJson=""
   local _containerJsonInner=""
   local _containerConfPath=""
   local _containerCount=0
-  local _strategyUpdate=""
-  local _ymlImages=""
+  local _strategyUpdate
+  local _strategyDir
+  local _strategyPath
+  local _ymlImages
   local _ymlStrategies=""
   local _ymlConfigs=""
   local _ymlPorts=""
@@ -1225,7 +1225,9 @@ function _fsDockerProjects_() {
   _projectPath="$(_fsIsYml_ "${_projectPath}")"
   _ymlFile="${_projectPath##*/}"
   _ymlFileName="${_ymlFile%.*}"
-  _ymlName="$(echo "${_ymlFileName}" | sed "s,\-,_,g")"  
+  #_ymlName="$(echo "${_ymlFileName}" | sed "s,\-,_,g")"
+  _ymlName="${_ymlFileName//\-/_}"
+    debug "_ymlName: ${_ymlName}"
   _ymlContainers=()
   _containerConfPath="${_projectDir}/${_ymlFileName}.conf.json"
 
@@ -1259,52 +1261,49 @@ function _fsDockerProjects_() {
   fi
 
   if [[ "${_error}" -eq 0 ]]; then
-    while read; do
+    while read -r; do
       _ymlContainers+=( "$REPLY" )
     done < <(cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" ps -q)
       debug "_ymlContainers[@]:"
       debug "$(printf '%s\n' "${_ymlContainers[@]}")"
-    for _ymlContainer in ${_ymlContainers[@]}; do
+    for _ymlContainer in "${_ymlContainers[@]}"; do
       _containerName="$(_fsDockerId2Name_ "${_ymlContainer}")"
         debug "_containerName: ${_containerName}"
-      #sudo docker inspect "${_ymlContainer}"
       if [[ "${_projectMode}" = "compose" ]]; then
-        _containerCmd="$(sudo docker inspect --format="{{.Config.Cmd}}" "${_ymlContainer}")"
-        _containerCmd="$(echo "${_containerCmd}" | sed "s,\[,,g" | sed "s,\],,g" | sed "s,\",,g" | sed "s,\=, ,g" | sed "s,\/freqtrade\/,,g" | sed "s,\s,\n,g")"
-          debug "_containerCmd[@]:"
-          debug "$(printf '%s\n' "${_containerCmd[@]}")"
-
-        for i in $_containerCmd[@]; do
-          [[ "${_containerStrategy}" = "set" ]] && _containerStrategy="${i}"
-          [[ "${_containerStrategyDir}" = "set" ]] && _containerStrategyDir="${i}"
-          [[ -n "$(echo "${i}" | grep -Eo "\-s$|\--strategy$")" ]] && _containerStrategy="set"
-          [[ -n "$(echo "${i}" | grep -Eo "\--strategy-path$")" ]] && _containerStrategyDir="set"
-        done
+        _containerCmd="$(sudo docker inspect --format="{{.Config.Cmd}}" "${_ymlContainer}" \
+        | sed "s,\[, ,g" \
+        | sed "s,\], ,g" \
+        | sed "s,\",,g" \
+        | sed "s,\=, ,g" \
+        | sed "s,\/freqtrade\/,,g")"
+          debug "_containerCmd: ${_containerCmd}"
+        _containerStrategy=$(echo "${_containerCmd}" | grep -Eo "(\-s|\--strategy) [-A-Za-z0-9_]+ " \
+        | sed "s,\--strategy,," \
+        | sed "s,\s,,g")
           debug "_containerStrategy: ${_containerStrategy}"
+        _containerStrategyDir=$(echo "${_containerCmd}" | grep -Eo "\--strategy-path [-A-Za-z0-9_/]+ " \
+        | sed "s,\-\-strategy-path,," \
+        | sed "s,\s,,g")
           debug "_containerStrategyDir: ${_containerStrategyDir}"
-
-        _containerStrategyPath="${_containerStrategyDir}/${_containerStrategy}.conf.json"
-
-        if [[ "$(_fsIsFile_ "${_containerStrategyPath}")" -eq 0 ]]; then
-          _strategyUpdate=$(jq -r '.update' < "${_containerStrategyPath}")
+        _strategyPath="${_containerStrategyDir}/${_containerStrategy}.conf.json"
+        if [[ "$(_fsIsFile_ "${_strategyPath}")" -eq 0 ]]; then
+          _strategyUpdate=$(jq -r '.update' < "${_strategyPath}")
           _strategyUpdate=$(echo "${_strategyUpdate}" | sed "s,null,," | sed "s,\s,,g" | sed "s,\n,,g")
-            debug "_strategyUpdate: ${_strategyUpdate}"
         else
           _strategyUpdate=""
         fi
-
+          debug "_strategyUpdate: ${_strategyUpdate}"
         if [[ "$(_fsIsFile_ "${_containerConfPath}")" -eq 0 ]]; then
-          _containerStrategyUpdate=$(jq -r '.'$_containerName'[0].strategy_update' < "${_containerConfPath}")
+          _containerStrategyUpdate=$(jq -r ".${_containerName}[0].strategy_update" < "${_containerConfPath}")
           _containerStrategyUpdate=$(echo "${_containerStrategyUpdate}" | sed "s,null,," | sed "s,\s,,g" | sed "s,\n,,g")
-            debug "_containerStrategyUpdate: ${_containerStrategyUpdate}"
         else
           _containerStrategyUpdate=""
         fi
-
+          debug "_containerStrategyUpdate: ${_containerStrategyUpdate}"
         if [[ -n "${_strategyUpdate}" ]]; then
           if [[ -n "${_containerStrategyUpdate}" ]]; then
             if [[ ! "${_containerStrategyUpdate}" = "${_strategyUpdate}" ]]; then
-              warning "Strategy is outdated. Restarting container!"
+              warning "Strategy is outdated: ${_containerStrategy}"
               _containerRestart=0
             fi
           fi
@@ -1313,7 +1312,7 @@ function _fsDockerProjects_() {
         else
           warning "Cannot verify strategy update: ${_containerStrategy}"
         fi
-
+          debug "_containerStrategyUpdate: ${_containerStrategyUpdate}"
         _containerJsonInner=$(jq -n \
           --arg strategy "${_containerStrategy}" \
           --arg strategy_path "${_containerStrategyDir}" \
@@ -1321,7 +1320,7 @@ function _fsDockerProjects_() {
           '$ARGS.named'
         )
         _containerJson=$(jq -n \
-          --argjson ${_containerName} "[${_containerJsonInner}]" \
+          --argjson "${_containerName}" "[${_containerJsonInner}]" \
           '$ARGS.named'
         )
         _procjectJson[$_containerCount]="${_containerJson}"
@@ -1352,7 +1351,7 @@ function _fsDockerProjects_() {
           _fsDockerStop_ "${_containerName}"
         else
           sudo docker update --restart=on-failure "${_containerName}" >/dev/null
-          notice "\"${_containerName}\" container is running."
+          info "\"${_containerName}\" container is running."
         fi
       elif [[ "${_projectMode}" = "kill" ]]; then
         if [[ "$(_fsCaseConfirmation_ "Kill \"${_containerName}\" container?")" -eq 0 ]]; then
@@ -1364,9 +1363,8 @@ function _fsDockerProjects_() {
   
   if [[ "${_projectMode}" = "compose" ]]; then
     if [[ "${_error}" -eq 0 ]]; then
-        printf "%s\n" ${_procjectJson[@]} | jq . > "${_containerConfPath}"
+        printf "%s\n" "${_procjectJson[@]}" | jq . > "${_containerConfPath}"
       if [[ ${_projectForce} = "force" ]]; then
-        echo
         cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" up -d --force-recreate
       else
         echo
@@ -1377,20 +1375,20 @@ function _fsDockerProjects_() {
       alert "Too many errors! Cannot start: ${_ymlFile}"
     fi
   elif [[ "${_projectMode}" = "kill" ]]; then
-    if [[ -z "${_ymlContainers[@]}" ]]; then
+    if (( ${#_ymlContainers[@]} )); then
       notice "No active projects in: ${_ymlFile}"
     fi
   fi
 }
 
 function _fsDockerKillImages_() {
-    debug "function _fsDockerKillImages_"
+    debug "# function _fsDockerKillImages_"
   _fsDockerKillContainers_
 	sudo docker image ls -q | xargs -I {} sudo docker image rm -f {}
 }
 
 function _fsDockerKillContainers_() {
-    debug "function _fsDockerKillContainers_"
+    debug "# function _fsDockerKillContainers_"
 	sudo docker ps -a -q | xargs -I {} sudo docker rm -f {}
 }
 
@@ -1399,7 +1397,7 @@ function _fsDockerKillContainers_() {
 ##############################################################################
 
 function _fsStart_ {
-    debug "function _fsStart_"
+    debug "# function _fsStart_"
 	local _yml="${1:-}"
   local _symlink="${FS_SYMLINK}"
 
@@ -1418,7 +1416,7 @@ function _fsStart_ {
 ##############################################################################
 
 function _fsSetup_() {
-    debug "function _fsSetup_"
+    debug "# function _fsSetup_"
   local _symlink="${FS_SYMLINK}"
   local _symlinkSource="${FS_DIR}/${FS_NAME}.sh"
   
@@ -1447,15 +1445,15 @@ function _fsSetup_() {
 }
 
 function _fsSetupPkgs_() {
-    debug "function _fsSetupPkgs_"
+    debug "# function _fsSetupPkgs_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}"
 
-  local _pkgs="${@}"
+  local _pkgs=( "$@" )
   local _pkg=""
   local _status=""
   local _getDocker="${FS_DIR_DOCKER}/get-docker.sh"
 
-  for _pkg in ${_pkgs[@]}; do
+  for _pkg in "${_pkgs[@]}"; do
       debug "_pkg: ${_pkg}"
     if [[ "$(_fsSetupPkgsStatus_ "${_pkg}")" -eq 0 ]]; then
       info "Already installed: ${_pkg}"
@@ -1495,7 +1493,7 @@ function _fsSetupPkgs_() {
 }
 
 function _fsSetupPkgsStatus_() {
-    debug "function _fsDockerProjects_"
+    debug "# function _fsDockerProjects_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
   
   local _pkg="${1}"
@@ -1503,7 +1501,7 @@ function _fsSetupPkgsStatus_() {
   
   _status="$(dpkg-query -W --showformat='${Status}\n' "${_pkg}" 2>/dev/null | grep "install ok installed")"
     debug "_status: ${_status}"
-  if [[ ! -z "${_status}" ]]; then
+  if [[ -n "${_status}" ]]; then
     echo 0
   else
     echo 1
@@ -1511,7 +1509,7 @@ function _fsSetupPkgsStatus_() {
 }
 
 function _fsSetupServer_() {
-    debug "function _fsSetupServer_"
+    debug "# function _fsSetupServer_"
   echo
   info 'SETUP SERVER:'
   
@@ -1542,7 +1540,7 @@ function _fsSetupServer_() {
 }
 
 function _fsSetupNtp_() {
-    debug "function _fsSetupNtp_"
+    debug "# function _fsSetupNtp_"
   echo
   info "SETUP NTP:"
   info "(Timezone to UTC)"
@@ -1561,7 +1559,7 @@ function _fsSetupNtp_() {
 }
 
 function _fsSetupNtpCheck_() {
-    debug "function _fsSetupNtpCheck"
+    debug "# function _fsSetupNtpCheck"
   local timentp=""
   local timeutc=""
   local timesyn=""
@@ -1573,7 +1571,7 @@ function _fsSetupNtpCheck_() {
   timesyn="$(timedatectl | grep -o 'System clock synchronized: yes')"
     debug "timesyn: ${timesyn}"
 
-  if [[ ! -z "${timentp}" ]] || [[ ! -z  "${timeutc}" ]] || [[ ! -z  "${timesyn}" ]]; then
+  if [[ -n "${timentp}" ]] || [[ -n  "${timeutc}" ]] || [[ -n  "${timesyn}" ]]; then
     echo 0
   else
     echo 1
@@ -1581,7 +1579,7 @@ function _fsSetupNtpCheck_() {
 }
 
 function _fsSetupFreqtrade_() {
-    debug "function _fsSetupFreqtrade_"
+    debug "# function _fsSetupFreqtrade_"
   local _dir="${FS_DIR}"
   local _docker="freqtradeorg/freqtrade:stable"
   local _dockerYml="${_dir}/${FS_NAME}_setup.yml"
@@ -1618,7 +1616,7 @@ function _fsSetupFreqtrade_() {
   else
     while true; do
       info "Choose a name for your config. For default name press <ENTER>."
-      read -p " (filename) " _configName
+      read -rp " (filename) " _configName
       case ${_configName} in
         "")
           _configName="config"
@@ -1633,7 +1631,7 @@ function _fsSetupFreqtrade_() {
         ;;
       esac
       
-      if [[ ! -z "${_configName}" ]]; then
+      if [[ -n "${_configName}" ]]; then
         info "The config file name will be: ${_configName}.json"
         if [[ "$(_fsCaseConfirmation_ "Is this correct?")" -eq 0 ]]; then
           break
@@ -1646,7 +1644,7 @@ function _fsSetupFreqtrade_() {
     _configFileBackup="${_dirUserData}/${_configName}.bak.json"
 
     if [[ "$(_fsIsFile_ "${_configFile}")" -eq 0 ]]; then
-      warning 'The config "'"$(basename ${_configFile})"'" already exist.'
+      warning "The config already exist: $(basename "${_configFile}")"
       if [[ "$(_fsCaseConfirmation_ "Replace the existing config file?")" -eq 1 ]]; then
         _configName=""
         rm -f "${_dockerYml}"
@@ -1657,7 +1655,7 @@ function _fsSetupFreqtrade_() {
     debug "_configFile: ${_configFile}"
     debug "_configFileTmp: ${_configFileTmp}"
     debug "_configFileBackup: ${_configFileBackup}"
-  if [[ ! -z "${_configName}" ]] && [[ -d "${_dirUserData}" ]]; then
+  if [[ -n "${_configName}" ]] && [[ -d "${_dirUserData}" ]]; then
     _fsSetupFreqtradeYml_
     rm -f "${_configFileTmp}"
     
@@ -1672,7 +1670,7 @@ function _fsSetupFreqtrade_() {
     if [[ "$(_fsCaseConfirmation_ "Enter your exchange api KEY and SECRET now? (recommended)")" -eq 0 ]]; then
       while true; do
         notice "Enter your KEY for exchange api (ENTRY HIDDEN):"
-        read -s _configKey
+        read -rs _configKey
         echo
         case ${_configKey} in 
           "")
@@ -1688,7 +1686,7 @@ function _fsSetupFreqtrade_() {
 
       while true; do
         notice 'Enter your SECRET for exchange api (ENTRY HIDDEN):'
-        read -s _configSecret
+        read -rs _configSecret
         echo
         case ${_configSecret} in 
           "")
@@ -1713,7 +1711,7 @@ function _fsSetupFreqtrade_() {
 }
 
 function _fsSetupFreqtradeYml_() {
-    debug "function _fsSetupFreqtradeYml_"
+    debug "# function _fsSetupFreqtradeYml_"
   local _dir="${FS_DIR}"
   local _dockerYml="${_dir}/${FS_NAME}_setup.yml"
   local _dockerGit="https://raw.githubusercontent.com/freqtrade/freqtrade/stable/docker-compose.yml"
@@ -1726,7 +1724,7 @@ function _fsSetupFreqtradeYml_() {
 }
 
 _fsSetupBinanceProxy_() {
-    debug "function _fsSetupBinanceProxy_"
+    debug "# function _fsSetupBinanceProxy_"
   local _binanceProxy="${FS_BINANCE_PROXY_JSON}"
   local _docker="nightshift2k/binance-proxy:latest"
   local _dockerRepo=""
@@ -1785,9 +1783,10 @@ _fsSetupBinanceProxy_() {
 }
 
 function _fsSetupFrequi_() {
-    debug "function _fsSetupFrequi_"
+    debug "# function _fsSetupFrequi_"
   local _dockerName="${FS_NAME}_frequi"
   local _serverUrl="${FS_SERVER_URL}"
+  local _frequiYml="${FS_FREQUI_YML}"
   local _yesForce="${FS_YES}"
   local _nr=""
   local _setup=1
@@ -1799,6 +1798,7 @@ function _fsSetupFrequi_() {
     info "\"FreqUI\" is active: ${_serverUrl}"
     if [[ "$(_fsCaseConfirmation_ "Skip reconfigure \"FreqUI\" now?")" -eq 0 ]]; then
       _setup=1
+      _fsDockerProjects_ "${_frequiYml}" "compose"
     else
       _setup=0
     fi
@@ -1824,7 +1824,7 @@ function _fsSetupFrequi_() {
       info '   -> Only for local use!'
       
       if [[ "${_yesForce}" -eq 1 ]]; then
-        read -p " (1/2/3) " _nr
+        read -rp " (1/2/3) " _nr
       else
         local _nr="3"
       fi
@@ -1857,7 +1857,7 @@ function _fsSetupFrequi_() {
 }
 
 function _fsSetupNginx_() {
-    debug "function _fsSetupNginx_"
+    debug "# function _fsSetupNginx_"
   local _confPath="/etc/nginx/conf.d"
   local _confPathFrequi="${_confPath}/frequi.conf"
   local _confPathNginx="${_confPath}/default.conf"
@@ -1891,13 +1891,16 @@ function _fsSetupNginx_() {
   [[ "$(_fsIsFile_ "${_confPathNginx}")" -eq 0 ]] && sudo mv "${_confPathNginx}" "${_confPathNginx}.disabled"
 
   sudo rm -f "/etc/nginx/sites-enabled/default"
-  
-  sudo ufw allow "Nginx Full" > /dev/null
+  sudo ufw allow "Nginx Full"
+  sudo ufw allow 9000:9100/tcp
+  sudo ufw allow 9999/tcp
+
+  #sudo ufw allow "Nginx Full" > /dev/null
 }
 
 function _fsSetupNginxRestart_() {
-    debug "function _fsSetupNginxRestart_"
-  if [[ ! -z "$(sudo nginx -t 2>&1 | grep -ow "failed")" ]]; then
+    debug "# function _fsSetupNginxRestart_"
+  if sudo nginx -t 2>&1 | grep -qow "failed"; then
     emergency "Error in nginx config file. For more info enter: nginx -t"
     exit 1
   fi
@@ -1908,7 +1911,7 @@ function _fsSetupNginxRestart_() {
 }
 
 function _fsSetupNginxOpenssl_() {
-    debug "function _fsSetupNginxOpenssl_"
+    debug "# function _fsSetupNginxOpenssl_"
   _fsSetupNginxConfSecure_ "openssl"
 
   sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
@@ -1946,19 +1949,19 @@ function _fsSetupNginxOpenssl_() {
 }
 
 _setupNginxLetsencrypt_() {
-    debug "function _setupNginxLetsencrypt_"
+    debug "# function _setupNginxLetsencrypt_"
   local _domain=""
   local _domainIp=""
   local _serverIp="${FS_SERVER_IP}"
   
   while true; do
-    read -p "Enter your domain (www.example.com): " _domain
+    read -rp "Enter your domain (www.example.com): " _domain
     
     if [[ "${_domain}" = "" ]]; then
       _fsCaseEmpty_
     else
       if [[ "$(_fsCaseConfirmation_ "Is the domain \"${_domain}\" correct?")" -eq 0 ]]; then
-        _domainIp="$(host ${_domain} | awk '/has address/ { print $4 ; exit }')"
+        _domainIp="$(host "${_domain}" | awk '/has address/ { print $4 ; exit }')"
           debug "_domainIp: ${_domainIp}"
         if [[ ! "${_domainIp}" = "${_serverIp}" ]]; then
           warning "\"${_domain}\" does not point to \"${_serverIp}\". Review DNS and try again!"
@@ -1974,7 +1977,7 @@ _setupNginxLetsencrypt_() {
 }
 
 function _fsSetupNginxCertbot_() {
-    debug "function _fsSetupNginxCertbot_"
+    debug "# function _fsSetupNginxCertbot_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
   local _domain="${1}"
@@ -1985,7 +1988,7 @@ function _fsSetupNginxCertbot_() {
 }
 
 function _fsSetupNginxConfSecure_() {
-    debug "function _fsSetupNginxConfSecure_"
+    debug "# function _fsSetupNginxConfSecure_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
 
   local _mode="${1}"
@@ -1995,15 +1998,17 @@ function _fsSetupNginxConfSecure_() {
   local _confPathFrequi="${_confPath}/frequi.conf"
   local _serverName="${FS_SERVER_IP}"
   
-  if [[ ! -z "${_domain}" ]]; then
+  if [[ -n "${_domain}" ]]; then
     _serverName="${_domain}"
   fi
-  
+    debug "_serverName: ${_serverName}"
+
   FS_SERVER_URL="https://${_serverName}"
     debug "_mode: ${_mode}"
+  sudo rm -f "${_confPathFrequi}"
     # thanks: Blood4rc, Hippocritical
   if [[ "${_mode}" = 'openssl' ]]; then
-    printf '%s\n' \  
+    printf "%s\n" \
     "server {" \
     "    listen 80;" \
     "    listen [::]:80;" \
@@ -2013,7 +2018,7 @@ function _fsSetupNginxConfSecure_() {
     "server {" \
     "    listen 443 ssl;" \
     "    listen [::]:443 ssl;" \
-    "    server_name ${server_name};" \
+    "    server_name ${_serverName};" \
     "    " \
     "    include snippets/self-signed.conf;" \
     "    include snippets/ssl-params.conf;" \
@@ -2093,7 +2098,7 @@ function _fsSetupNginxConfSecure_() {
 }
 
 function _fsSetupFrequiJson_() {
-    debug "function _fsSetupFrequiJson_"
+    debug "# function _fsSetupFrequiJson_"
   local _frequiJson="${FS_FREQUI_JSON}"
   local _frequiJwt=""
   local _frequiUsername=""
@@ -2104,14 +2109,14 @@ function _fsSetupFrequiJson_() {
   local _frequiCors="${FS_SERVER_URL}"
   local _yesForce="${FS_YES}"
   local _setup=1
-  
+    debug "_frequiCors: ${_frequiCors}"
   _frequiJwt="$(_fsJsonGet_ "${_frequiJson}" "jwt_secret_key")"
   _frequiUsername="$(_fsJsonGet_ "${_frequiJson}" "username")"
   _frequiPassword="$(_fsJsonGet_ "${_frequiJson}" "password")"
 
   [[ -z "${_frequiJwt}" ]] && _frequiJwt="$(_fsRandomBase64UrlSafe_)"
 
-  if [[ ! -z "${_frequiUsername}" ]] || [[ ! -z "${_frequiPassword}" ]]; then
+  if [[ -n "${_frequiUsername}" ]] || [[ -n "${_frequiPassword}" ]]; then
     warning "Login data for \"FreqUI\" already found."
     
     if [[ "$(_fsCaseConfirmation_ "Skip generating new login data?")" -eq 1 ]]; then
@@ -2136,9 +2141,9 @@ function _fsSetupFrequiJson_() {
     info "Create your login data for \"FreqUI\" now!"
       # create username
     while true; do
-      read -p 'Enter username: ' _frequiUsername
+      read -rp 'Enter username: ' _frequiUsername
         debug "_frequiUsername: ${_frequiUsername}"
-      if [[ ! -z "${_frequiUsername}" ]]; then
+      if [[ -n "${_frequiUsername}" ]]; then
         if [[ "$(_fsCaseConfirmation_ "Is the username \"${_frequiUsername}\" correct?")" -eq 0 ]]; then
           break
         else
@@ -2149,7 +2154,7 @@ function _fsSetupFrequiJson_() {
       # create password - NON VERBOSE
     while true; do
       notice 'Enter password (ENTRY HIDDEN):'
-      read -s _frequiPassword
+      read -rs _frequiPassword
       echo
       case ${_frequiPassword} in 
         "")
@@ -2157,7 +2162,7 @@ function _fsSetupFrequiJson_() {
           ;;
         *)
           notice 'Enter password again: '
-          read -s _frequiPasswordCompare
+          read -r -s _frequiPasswordCompare
           echo
           if [[ ! "${_frequiPassword}" = "${_frequiPasswordCompare}" ]]; then
             warning "The password does not match. Try again!"
@@ -2172,7 +2177,7 @@ function _fsSetupFrequiJson_() {
     done
   fi
     # create frequi json for bots
-  if [[ ! -z "${_frequiUsername}" ]] && [[ ! -z "${_frequiPassword}" ]]; then
+  if [[ -n "${_frequiUsername}" ]] && [[ -n "${_frequiPassword}" ]]; then
     printf '%s\n' \
     "{" \
     "    \"api_server\": {" \
@@ -2182,7 +2187,7 @@ function _fsSetupFrequiJson_() {
     "        \"verbosity\": \"error\"," \
     "        \"enable_openapi\": false," \
     "        \"jwt_secret_key\": \"${_frequiJwt}\"," \
-    "        \"CORS_origins\": [\"${_frequiCors}:9999\"]," \
+    "        \"CORS_origins\": [\"${_frequiCors}\"]," \
     "        \"username\": \"${_frequiUsername}\"," \
     "        \"password\": \"${_frequiPassword}\"" \
     "    }" \
@@ -2194,7 +2199,7 @@ function _fsSetupFrequiJson_() {
 }
 
 function _fsSetupFrequiCompose_() {
-    debug "function _fsSetupFrequiCompose_"
+    debug "# function _fsSetupFrequiCompose_"
   local _serverUrl="${FS_SERVER_URL}"
   local _fsConfig="${FS_CONFIG}"
   local _frequiYml="${FS_FREQUI_YML}"
@@ -2267,11 +2272,11 @@ function _fsSetupFrequiCompose_() {
   "    " \
   "    command: >" \
   "      trade" \
-  "      --logfile /freqtrade/user_data/logs/$(basename ${_frequiServerLog})" \
+  "      --logfile /freqtrade/user_data/logs/$(basename "${_frequiServerLog}")" \
   "      --strategy ${_frequiStrategy}" \
   "      --strategy-path /freqtrade/user_data/strategies/${_frequiStrategy}" \
-  "      --config /freqtrade/user_data/$(basename ${_frequiJson})" \
-  "      --config /freqtrade/user_data/$(basename ${_frequiServerJson})" \
+  "      --config /freqtrade/user_data/$(basename "${_frequiServerJson}")" \
+  "      --config /freqtrade/user_data/$(basename "${_frequiJson}")" \
   > "${_frequiYml}"
 
   _fsFileExist_ "${_frequiYml}"
@@ -2282,7 +2287,7 @@ function _fsSetupFrequiCompose_() {
 }
 
 function _fsSetupExampleBot_() {
-    debug "function _fsSetupExampleBot_"
+    debug "# function _fsSetupExampleBot_"
   local _userData="${FS_DIR_USER_DATA}"
   local _botExampleName="${FS_NAME}_example"
   local _botExampleYml="${FS_DIR}/${_botExampleName}.yml"
@@ -2313,7 +2318,7 @@ function _fsSetupExampleBot_() {
   else
     while true; do
       info "What is the name of your config file? For default name press <ENTER>."
-      read -p " (filename) " _botExampleConfigName
+      read -rp " (filename) " _botExampleConfigName
       case ${_botExampleConfigName} in
         "")
           _botExampleConfigName="config"
@@ -2327,7 +2332,7 @@ function _fsSetupExampleBot_() {
           fi
         ;;
       esac
-      if [[ ! -z "${_botExampleConfigName}" ]]; then
+      if [[ -n "${_botExampleConfigName}" ]]; then
         info "The config file will be: \"${_botExampleConfigName}.json\""
         if [[ "$(_fsCaseConfirmation_ "Is this correct?")" -eq 0 ]]; then
           _botExampleConfig="${_userData}/${_botExampleConfigName}.json"
