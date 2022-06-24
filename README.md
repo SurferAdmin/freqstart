@@ -5,6 +5,11 @@
 
 ### Changelog
 
+`v0.0.8`
+* Improved container strategy update verification routine.
+* Improved "FreqUI" setup and added compose routine if container is running.
+* Cleaned shellcheck warnings and some general improvements.
+
 `v0.0.7`
 * Implemented strategy update check for every container via project config file.
 * Raised countdown to 30s to validate docker container.
