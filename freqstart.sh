@@ -63,7 +63,7 @@ NO_COLOR="${NO_COLOR:-}"  # true = disable color. otherwise autodetected
 
 # FREQSTART - variables
 FS_NAME="freqstart"
-FS_VERSION='v0.0.8'
+FS_VERSION='v0.0.9'
 FS_SYMLINK="/usr/local/bin/${FS_NAME}"
 
 FS_DIR="${__dir}"
@@ -472,8 +472,8 @@ function _fsDedupeArray_() {
   printf '%s\n' "${_uniqueArray[@]}"
 }
 
-function _fsDate_() {
-  date +%y%m%d%H
+function _fsTimestamp_() {
+  date +"%y%m%d%H%M%S"
 }
 
 function _fsRandomHex_() {
@@ -549,6 +549,8 @@ function _fsStrategy_() {
   local _strategyUrls=()
   local _strategyUrlsDeduped=()
   local _strategyUrl
+  local _strategyPath
+  local _strategyPathTmp
   local _fsStrategies="${FS_STRATEGIES}"
   local _strategyJson
 
@@ -606,6 +608,7 @@ function _fsStrategy_() {
         _strategyFile="$(basename "${_strategyUrl}")"
         _strategyFileType="${_strategyFile##*.}"
         _strategyPath="${_strategyDir}/${_strategyFile}"
+        _strategyPathTmp="${_strategyTmp}/${_strategyFile}"
 
         if [[ "${_strategyFileType}" = "py" ]]; then
           _strategyFileTypeName="strategy"
@@ -613,34 +616,31 @@ function _fsStrategy_() {
           _strategyFileTypeName="config"
         fi
 
-        sudo curl -s -L "${_strategyUrl}" -o "${_strategyTmp}/${_strategyFile}"
+        sudo curl -s -L "${_strategyUrl}" -o "${_strategyPathTmp}"
 
         if [[ "$(_fsIsFile_ "${_strategyPath}")" -eq 0 ]]; then
-          if [[ -n "$(cmp --silent "${_strategyUrl}" "${_strategyPath}")" ]]; then
-            cp -a "${_strategyTmp}/${_strategyFile}" "${_strategyPath}"
+            debug "cmp: $(cmp --silent "${_strategyPathTmp}" "${_strategyPath}")"
+          if ! cmp --silent "${_strategyPathTmp}" "${_strategyPath}"; then
+            cp -a "${_strategyPathTmp}" "${_strategyPath}"
             _strategyUpdateCount=$((_strategyUpdateCount+1))
-
-            info "\"${_strategyFile}\" \"${_strategyFileTypeName}\" updated."
-
             _fsFileExist_ "${_strategyPath}"
           fi
         else
-          cp -a "${_strategyTmp}/${_strategyFile}" "${_strategyPath}"
+          cp -a "${_strategyPathTmp}" "${_strategyPath}"
           _strategyUpdateCount=$((_strategyUpdateCount+1))
-          info "\"${_strategyFile}\" \"${_strategyFileTypeName}\" installed."
-
           _fsFileExist_ "${_strategyPath}"
         fi
       fi
     done
 
     sudo rm -rf "${_strategyTmp}"
-
+      debug "_strategyUpdateCount: ${_strategyUpdateCount}"
     if [[ "${_strategyUpdateCount}" -eq 0 ]]; then
-      info "\"${_strategyName}\" already latest version installed."
+      info "Strategy already latest version: ${_strategyName}"
     else
-      notice "\"${_strategyName}\" strategy is installed/updated."
-      _strategyUpdate="$(_fsDate_)"
+      notice "Strategy is updated: ${_strategyName}"
+      _strategyUpdate="$(_fsTimestamp_)"
+        debug "_strategyUpdate: ${_strategyUpdate}"
       _strategyJson=$(jq -n \
         --arg update "${_strategyUpdate}" \
         '$ARGS.named'
@@ -650,7 +650,7 @@ function _fsStrategy_() {
       printf "%s\n" "${_strategyJson}" | jq . > "${_strategyDir}/${_strategyName}.conf.json"
     fi
   else
-    warning "\"${_strategyName}\" strategy not implemented."
+    warning "Strategy not implemented: ${_strategyName}"
   fi
 }
 
@@ -1245,19 +1245,17 @@ function _fsDockerProjects_() {
     _ymlPorts="$(_fsDockerYmlPorts_ "${_projectPath}")"
         debug "_ymlPorts: ${_ymlPorts}"
     [[ "${_ymlImages}" -eq 1 ]] && _error=$((_error+1))
-    #[[ "${_ymlStrategies}" -eq 1 ]] && _error=$((_error+1))
     [[ "${_ymlConfigs}" -eq 1 ]] && _error=$((_error+1))
     [[ "${_ymlPorts}" -eq 1 ]] && _error=$((_error+1))
       debug "_error: ${_error}"
     if [[ "${_error}" -eq 0 ]]; then
-        cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" up --no-start
+        cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" up --no-start --no-recreate
     fi
   elif [[ "${_projectMode}" = "validate" ]]; then
     notice "Validate project: ${_ymlFile}"
-
     _fsCdown_ 30 "for any errors..."
   elif [[ "${_projectMode}" = "kill" ]]; then
-      notice "Kill project: ${_ymlFile}"
+    notice "Kill project: ${_ymlFile}"
   fi
 
   if [[ "${_error}" -eq 0 ]]; then
@@ -1304,13 +1302,12 @@ function _fsDockerProjects_() {
           if [[ -n "${_containerStrategyUpdate}" ]]; then
             if [[ ! "${_containerStrategyUpdate}" = "${_strategyUpdate}" ]]; then
               warning "Strategy is outdated: ${_containerStrategy}"
-              _containerRestart=0
+              if [[ "$(_fsCaseConfirmation_ "Restart \"${_containerName}\" container?")" -eq 0 ]]; then
+                _containerRestart=0
+              fi
             fi
           fi
-
           _containerStrategyUpdate="${_strategyUpdate}"
-        else
-          warning "Cannot verify strategy update: ${_containerStrategy}"
         fi
           debug "_containerStrategyUpdate: ${_containerStrategyUpdate}"
         _containerJsonInner=$(jq -n \
@@ -1324,7 +1321,6 @@ function _fsDockerProjects_() {
           '$ARGS.named'
         )
         _procjectJson[$_containerCount]="${_containerJson}"
-
           # compare container image and latest local image version
         _containerImage="$(sudo docker inspect --format="{{.Config.Image}}" "${_ymlContainer}")"
           debug "_containerImage: ${_containerImage}"
@@ -1333,25 +1329,26 @@ function _fsDockerProjects_() {
         _dockerImageVersion="$(docker inspect --format='{{.Id}}' "${_containerImage}")"
           debug "_dockerImageVersion: ${_dockerImageVersion}"
         if [[ ! "${_containerImageVersion}" = "${_dockerImageVersion}" ]]; then
-          warning "Newer image version found."
-          if [[ "$(_fsCaseConfirmation_ "Restart container?")" -eq 0 ]]; then
+          warning "Docker image version is outdated: ${_containerName}"
+          if [[ "$(_fsCaseConfirmation_ "Restart \"${_containerName}\" container?")" -eq 0 ]]; then
             _containerRestart=0
           fi
         fi
+          # stop container if restart is necessary
         if [[ "${_containerRestart}" -eq 0 ]]; then
           _fsDockerStop_ "${_containerName}"
+          _containerRestart=1
         fi
         _containerCount=$((_containerCount+1))
       elif [[ "${_projectMode}" = "validate" ]]; then
-        _containerRunning="$(docker ps --filter="name=${_containerName}" -q)"
+        _containerRunning="$(_fsDockerPsName_ "${_containerName}")"
           debug "_containerRunning: ${_containerRunning}"
-          # credit: https://serverfault.com/a/935674
-        if [[ -z "${_containerRunning}" ]]; then
-          error "\"${_containerName}\" container is not running."
-          _fsDockerStop_ "${_containerName}"
-        else
+        if [[ "${_containerRunning}" -eq 0 ]]; then
           sudo docker update --restart=on-failure "${_containerName}" >/dev/null
-          info "\"${_containerName}\" container is running."
+          info "Container is running: ${_containerName}"
+        else
+          error "Container is not running: ${_containerName}"
+          _fsDockerStop_ "${_containerName}"
         fi
       elif [[ "${_projectMode}" = "kill" ]]; then
         if [[ "$(_fsCaseConfirmation_ "Kill \"${_containerName}\" container?")" -eq 0 ]]; then
@@ -1367,8 +1364,7 @@ function _fsDockerProjects_() {
       if [[ ${_projectForce} = "force" ]]; then
         cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" up -d --force-recreate
       else
-        echo
-        cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" up -d
+        cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" up -d --no-recreate
       fi
       _fsDockerProjects_ "${_projectPath}" "validate"
     else
