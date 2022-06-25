@@ -3,21 +3,6 @@
 <!-- FREQSTART -->
 # FREQSTART
 
-### Changelog
-
-`v0.0.8`
-* Improved container strategy update verification routine.
-* Improved "FreqUI" setup and added compose routine if container is running.
-* Cleaned shellcheck warnings and some general improvements.
-
-`v0.0.7`
-* Implemented strategy update check for every container via project config file.
-* Raised countdown to 30s to validate docker container.
-
-`v0.0.6`
-* Fixed an error in FreqUI routine with domain configuration.
-* Rewrite project.yml restart to "no" and update restart to "on-failure" after validation.
-
 ### Freqtrade with Docker
 
 Freqstart simplifies the use of Freqtrade with Docker. Including a simple setup guide for Freqtrade,
@@ -113,7 +98,6 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
    freqstart --bot example.yml --kill --yes
    ```
 
-
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 <!-- ROADMAP -->
@@ -121,10 +105,28 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
 
 See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full list of proposed features (and known issues).
 
+### Changelog
+
+`v0.0.9`
+* Fixed error in comparing strategy files.
+* Changed docker container validation routine.
+
+`v0.0.8`
+* Improved container strategy update verification routine.
+* Improved "FreqUI" setup and added compose routine if container is running.
+* Cleaned shellcheck warnings and some general improvements.
+
+`v0.0.7`
+* Implemented strategy update check for every container via project config file.
+* Raised countdown to 30s to validate docker container.
+
+`v0.0.6`
+* Fixed an error in FreqUI routine with domain configuration.
+* Rewrite project.yml restart to "no" and update restart to "on-failure" after validation.
+
 <p align="right">(<a href="#top">back to top</a>)</p>
 
-<!-- Support -->
-
+<!-- SUPPORT -->
 ## Support
 
 Since this is a small project where I taught myself some bash scripts, you are welcome to improve the code. If you just use the script and like it, remember that it took a lot of time, testing and also money for infrastructure. You can contribute by donating to the following wallets. Thank you very much for that!
