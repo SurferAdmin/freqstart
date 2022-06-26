@@ -86,26 +86,27 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
    ```sh
    freqstart --bot example.yml --yes
    ```
-   
-### Auto update
-
-2. Start a `Freqtrade` auto update container
-   ```sh
-   freqstart --bot example.yml --auto
-   ```
-2. Start a `Freqtrade` auto update container, non-interactive
-   ```sh
-   freqstart --bot example.yml --auto --yes
 
 ### Stop
 
-1. Stop a `Freqtrade` container incl. auto update
+1. Stop a `Freqtrade` container and disable autoupdate
    ```sh
    freqstart --bot example.yml --kill
    ```
-2. Stop a `Freqtrade` container incl. auto update, non-interactive 
+2. Stop a `Freqtrade` container and disable autoupdate, non-interactive 
    ```sh
    freqstart --bot example.yml --kill --yes
+   ```
+
+### Autoupdate
+
+1. Start a `Freqtrade` container with autoupdate (image, strategies etc.)
+   ```sh
+   freqstart --bot example.yml --auto
+   ```
+2. Start a `Freqtrade` container with autoupdate (image, strategies etc.), non-interactive
+   ```sh
+   freqstart --bot example.yml --auto --yes
    ```
 
 <p align="right">(<a href="#top">back to top</a>)</p>
