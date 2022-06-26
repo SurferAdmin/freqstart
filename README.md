@@ -107,6 +107,10 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 
 ### Changelog
 
+`v0.1.0`
+* Update container conf strategy update only if container has been restarted.
+* Improved starting routine and check for non-optional bot arguments.
+
 `v0.0.9`
 * Fixed error in comparing strategy files.
 * Changed docker container validation routine.
