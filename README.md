@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART
+# FREQSTART v0.1.1
 
 ### Freqtrade with Docker
 
@@ -89,13 +89,24 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
 
 ### Stop
 
-1. Stop a `Freqtrade` container
+1. Stop a `Freqtrade` container and disable autoupdate
    ```sh
    freqstart --bot example.yml --kill
    ```
-2. Stop a `Freqtrade` container, non-interactive
+2. Stop a `Freqtrade` container and disable autoupdate, non-interactive 
    ```sh
    freqstart --bot example.yml --kill --yes
+   ```
+
+### Autoupdate
+
+1. Start a `Freqtrade` container with autoupdate (image, strategies etc.)
+   ```sh
+   freqstart --bot example.yml --auto
+   ```
+2. Start a `Freqtrade` container with autoupdate (image, strategies etc.), non-interactive
+   ```sh
+   freqstart --bot example.yml --auto --yes
    ```
 
 <p align="right">(<a href="#top">back to top</a>)</p>
@@ -106,6 +117,10 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
 See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full list of proposed features (and known issues).
 
 ### Changelog
+
+`v0.1.1`
+* Automated reissue of letsencrypt cert if used with Nginx proxy for FreqUI.
+* Optional daily auto update for containers incl. implemented strategies with -a argument.
 
 `v0.1.0`
 * Update container conf strategy update only if container has been restarted.
