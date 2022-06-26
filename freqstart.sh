@@ -63,7 +63,7 @@ NO_COLOR="${NO_COLOR:-}"  # true = disable color. otherwise autodetected
 
 # FREQSTART - variables
 FS_NAME="freqstart"
-FS_VERSION='v0.1.0'
+FS_VERSION='v0.1.1'
 FS_SYMLINK="/usr/local/bin/${FS_NAME}"
 
 FS_DIR="${__dir}"
@@ -89,6 +89,7 @@ FS_INODE_SUM="$(ls -ali / | sed '2!d' | awk '{print $1}')"
 FS_HASH="$(xxd -l8 -ps /dev/urandom)"
 
 FS_YES=1
+FS_AUTO=1
 FS_KILL=1
 
 ### Functions
@@ -229,6 +230,60 @@ function _fsFileExist_() {
 		alert "Cannot create file: ${_file}"
     exit 1
   fi
+}
+
+function _fsCrontab_() {
+    debug "# function _fsCrontab_"
+  [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
+
+  local _cronCmd
+  local _cronJob
+
+  _cronCmd="${1}"
+    debug "_cronCmd: ${_cronCmd}"
+  _cronJob="${2} ${_cronCmd}"
+    debug "_cronJob: ${_cronJob}"
+    # credit: https://stackoverflow.com/a/17975418
+  ( crontab -l 2>/dev/null | grep -v -F "${_cronCmd}" || : ; echo "${_cronJob}" ) | crontab -
+
+  if [[ "$(_fsCrontabValidate_ "${_cronCmd}")" -eq 0 ]]; then
+    info "Cron set: ${_cronCmd}"
+  else
+    alert "Cron not set: ${_cronCmd}" && exit 1
+  fi
+}
+
+function _fsCrontabRemove_() {
+    debug "# function _fsCrontabRemove_"
+  [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
+  
+  local _cronCmd
+  
+  _cronCmd="${1}"
+      debug "_cronCmd: ${_cronCmd}"
+    # credit: https://stackoverflow.com/a/17975418
+  if [[ "$(_fsCrontabValidate_ "${_cronCmd}")" -eq 0 ]]; then
+    ( crontab -l 2>/dev/null | grep -v -F "${_cronCmd}" || : ) | crontab -
+
+    if [[ "$(_fsCrontabValidate_ "${_cronCmd}")" -eq 1 ]]; then
+      info "Cron removed: ${_cronCmd}"
+    else
+      alert "Cron not removed: ${_cronCmd}" && exit 1
+    fi
+  else
+    debug "No cron found: ${_cronCmd}"
+  fi
+}
+
+function _fsCrontabValidate_() {
+    debug "# function _fsCrontabValidate_"
+  [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
+  
+  local _cronCmd
+  
+  _cronCmd="${1}"
+
+  crontab -l 2>/dev/null | grep -q "${_cronCmd}"  && echo 0 || echo 1
 }
 
 function _fsIsYml_() {
@@ -640,7 +695,7 @@ function _fsStrategy_() {
     if [[ "${_strategyUpdateCount}" -eq 0 ]]; then
       info "Strategy already latest version: ${_strategyName}"
     else
-      warning "Strategy is updated: ${_strategyName}"
+      warning "Strategy updated: ${_strategyName}"
       _strategyUpdate="$(_fsTimestamp_)"
         debug "_strategyUpdate: ${_strategyUpdate}"
       _strategyJson="$(jq -n \
@@ -1207,12 +1262,19 @@ function _fsDockerProjects_() {
 	local _projectPath="${1}"
 	local _projectMode="${2}" # compose, validate, kill
 	local _projectForce="${3:-}" # optional: force
-	local _ymlFile=""
-	local _ymlFileName=""
-  local _ymlName=""
-  local _ymlContainers=""
-  local _ymlContainer=""
-  local _containerCmd
+	local _projectAuto="${FS_AUTO}"
+  local _projectCronCmd=""
+  local _projectCronUpdate=""
+	local _projectFile=""
+	local _projectFileName=""
+  local _projectName=""
+  local _projectImages=""
+  local _projectStrategies=""
+  local _projectConfigs=""
+  local _projectPorts=""
+  local _projectContainers=""
+  local _projectContainer=""
+  local _containerCmd=""
   local _containerRunning=""
   local _containerRestart=1
   local _containerName=""
@@ -1223,67 +1285,63 @@ function _fsDockerProjects_() {
   local _containerJsonInner=""
   local _containerConfPath=""
   local _containerCount=0
-  local _strategyUpdate
-  local _strategyDir
-  local _strategyPath
-  local _ymlImages
-  local _ymlStrategies=""
-  local _ymlConfigs=""
-  local _ymlPorts=""
-  local _ymlRestarts=""
-  local _ymlRestart=""
+  local _strategyUpdate=""
+  local _strategyDir=""
+  local _strategyPath=""
   local _error=0
 
   _projectPath="$(_fsIsYml_ "${_projectPath}")"
     debug "_projectPath: ${_projectPath}"
   if [[ -n "${_projectPath}" ]]; then
-    _ymlFile="${_projectPath##*/}"
-    _ymlFileName="${_ymlFile%.*}"
-    _ymlName="${_ymlFileName//\-/_}"
-      debug "_ymlName: ${_ymlName}"
-    _ymlContainers=()
-    _containerConfPath="${_projectDir}/${_ymlFileName}.conf.json"
+    _projectFile="${_projectPath##*/}"
+    _projectFileName="${_projectFile%.*}"
+    _projectName="${_projectFileName//\-/_}"
+      debug "_projectName: ${_projectName}"
+    _projectContainers=()
+    _containerConfPath="${_projectDir}/${_projectFileName}.conf.json"
+    _projectCronCmd="freqstart -b ${_projectFile} -y"
+    _projectCronUpdate="0 3 * * *" # update on 3am UTC
 
     if [[ "${_projectMode}" = "compose" ]]; then
-      info "Start project: ${_ymlFile}"
+      info "Start project: ${_projectFile}"
 
       sed -i "s,restart\:.*,restart\: \"no\",g" "${_projectPath}"
 
-      _ymlImages="$(_fsDockerYmlImages_ "${_projectPath}")"
-          debug "_ymlImages: ${_ymlImages}"
-      _ymlStrategies="$(_fsDockerYmlStrategies_ "${_projectPath}")"
-          debug "_ymlStrategies: ${_ymlStrategies}"
-      _ymlConfigs="$(_fsDockerYmlConfigs_ "${_projectPath}")"
-          debug "_ymlConfigs: ${_ymlConfigs}"
-      _ymlPorts="$(_fsDockerYmlPorts_ "${_projectPath}")"
-          debug "_ymlPorts: ${_ymlPorts}"
-      [[ "${_ymlImages}" -eq 1 ]] && _error=$((_error+1))
-      [[ "${_ymlConfigs}" -eq 1 ]] && _error=$((_error+1))
-      [[ "${_ymlPorts}" -eq 1 ]] && _error=$((_error+1))
+      _projectImages="$(_fsDockerYmlImages_ "${_projectPath}")"
+          debug "_projectImages: ${_projectImages}"
+      _projectStrategies="$(_fsDockerYmlStrategies_ "${_projectPath}")"
+          debug "_projectStrategies: ${_projectStrategies}"
+      _projectConfigs="$(_fsDockerYmlConfigs_ "${_projectPath}")"
+          debug "_projectConfigs: ${_projectConfigs}"
+      _projectPorts="$(_fsDockerYmlPorts_ "${_projectPath}")"
+          debug "_projectPorts: ${_projectPorts}"
+      [[ "${_projectImages}" -eq 1 ]] && _error=$((_error+1))
+      [[ "${_projectConfigs}" -eq 1 ]] && _error=$((_error+1))
+      [[ "${_projectPorts}" -eq 1 ]] && _error=$((_error+1))
         debug "_error: ${_error}"
       if [[ "${_error}" -eq 0 ]]; then
-          cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" up --no-start --no-recreate
+          cd "${_projectDir}" && sudo docker-compose -f "${_projectFile}" -p "${_projectName}" up --no-start --no-recreate
       fi
     elif [[ "${_projectMode}" = "validate" ]]; then
-      info "Validate project: ${_ymlFile}"
+      info "Validate project: ${_projectFile}"
       _fsCdown_ 30 "for any errors..."
     elif [[ "${_projectMode}" = "kill" ]]; then
-      info "Kill project: ${_ymlFile}"
+      info "Kill project: ${_projectFile}"
     fi
 
     if [[ "${_error}" -eq 0 ]]; then
       while read -r; do
-        _ymlContainers+=( "$REPLY" )
-      done < <(cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" ps -q)
-        debug "_ymlContainers[@]:"
-        debug "$(printf '%s\n' "${_ymlContainers[@]}")"
-      for _ymlContainer in "${_ymlContainers[@]}"; do
-        _containerName="$(_fsDockerId2Name_ "${_ymlContainer}")"
+        _projectContainers+=( "$REPLY" )
+      done < <(cd "${_projectDir}" && sudo docker-compose -f "${_projectFile}" -p "${_projectName}" ps -q)
+        debug "_projectContainers[@]:"
+        debug "$(printf '%s\n' "${_projectContainers[@]}")"
+      for _projectContainer in "${_projectContainers[@]}"; do
+        _containerName="$(_fsDockerId2Name_ "${_projectContainer}")"
           debug "_containerName: ${_containerName}"
         if [[ "${_projectMode}" = "compose" ]]; then
           info "Validate container: ${_containerName}"
             # get container command
-          _containerCmd="$(sudo docker inspect --format="{{.Config.Cmd}}" "${_ymlContainer}" \
+          _containerCmd="$(sudo docker inspect --format="{{.Config.Cmd}}" "${_projectContainer}" \
           | sed "s,\[, ,g" \
           | sed "s,\], ,g" \
           | sed "s,\",,g" \
@@ -1325,9 +1383,9 @@ function _fsDockerProjects_() {
             fi
           fi
             # compare latest docker image with container image
-          _containerImage="$(sudo docker inspect --format="{{.Config.Image}}" "${_ymlContainer}")"
+          _containerImage="$(sudo docker inspect --format="{{.Config.Image}}" "${_projectContainer}")"
             debug "_containerImage: ${_containerImage}"
-          _containerImageVersion="$(sudo docker inspect --format="{{.Image}}" "${_ymlContainer}")"
+          _containerImageVersion="$(sudo docker inspect --format="{{.Image}}" "${_projectContainer}")"
             debug "_containerImageVersion: ${_containerImageVersion}"
           _dockerImageVersion="$(docker inspect --format='{{.Id}}' "${_containerImage}")"
             debug "_dockerImageVersion: ${_dockerImageVersion}"
@@ -1367,6 +1425,7 @@ function _fsDockerProjects_() {
           else
             error "Container is not running: ${_containerName}"
             _fsDockerStop_ "${_containerName}"
+            _error=$((_error+1))
           fi
         elif [[ "${_projectMode}" = "kill" ]]; then
           if [[ "$(_fsCaseConfirmation_ "Kill \"${_containerName}\" container?")" -eq 0 ]]; then
@@ -1380,17 +1439,27 @@ function _fsDockerProjects_() {
       if [[ "${_error}" -eq 0 ]]; then
           printf "%s\n" "${_procjectJson[@]}" | jq . > "${_containerConfPath}"
         if [[ ${_projectForce} = "force" ]]; then
-          cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" up -d --force-recreate
+          cd "${_projectDir}" && sudo docker-compose -f "${_projectFile}" -p "${_projectName}" up -d --force-recreate
         else
-          cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" up -d --no-recreate
+          cd "${_projectDir}" && sudo docker-compose -f "${_projectFile}" -p "${_projectName}" up -d --no-recreate
         fi
         _fsDockerProjects_ "${_projectPath}" "validate"
       else
-        alert "Too many errors! Cannot start: ${_ymlFile}"
+        alert "Too many errors! Cannot start: ${_projectFile}"
+      fi
+    elif [[ "${_projectMode}" = "validate" ]]; then
+      if [[ "${_projectAuto}" -eq 0 ]]; then
+        if [[ "${_error}" -eq 0 ]]; then
+          _fsCrontab_ "${_projectCronCmd}" "${_projectCronUpdate}"
+        else
+          alert "Not all container running. Cannot set autoupdate for project: ${_projectFile}"
+        fi
       fi
     elif [[ "${_projectMode}" = "kill" ]]; then
-      if (( ${#_ymlContainers[@]} )); then
-        notice "No container running in project: ${_ymlFile}"
+      _fsCrontabRemove_ "${_projectCronCmd}"
+
+      if (( ! ${#_projectContainers[@]} )); then
+        info "No container running in project: ${_ymlFile}"
       fi
     fi
   fi
@@ -1415,7 +1484,7 @@ function _fsSetup_() {
     debug "# function _fsSetup_"
   local _symlink="${FS_SYMLINK}"
   local _symlinkSource="${FS_DIR}/${FS_NAME}.sh"
-  
+
   _fsIntro_
   _fsSetupServer_
   _fsSetupNtp_
@@ -1424,7 +1493,7 @@ function _fsSetup_() {
   _fsSetupFrequi_
   _fsSetupExampleBot_
   _fsStats_
-  
+
 	if [[ "$(_fsIsSymlink_ "${_symlink}")" -eq 1 ]]; then
     sudo rm -f "${_symlink}"
 		sudo ln -sfn "${_symlinkSource}" "${_symlink}"
@@ -1951,6 +2020,8 @@ _setupNginxLetsencrypt_() {
   local _domain=""
   local _domainIp=""
   local _serverIp="${FS_SERVER_IP}"
+  local _cronCmd="/usr/bin/certbot renew --quiet"
+  local _cronUpdate="0 0 * * *"
   
   while true; do
     read -rp "Enter your domain (www.example.com): " _domain
@@ -1966,6 +2037,8 @@ _setupNginxLetsencrypt_() {
         else
           _fsSetupNginxConfSecure_ "letsencrypt" "${_domain}"
           _fsSetupNginxCertbot_ "${_domain}"
+
+          _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
           break
         fi
       fi
@@ -2469,6 +2542,7 @@ function _fsStart_ {
   -b --bot [arg]    Start docker project
   -k --kill         Kill docker project
   -y --yes          Yes on every confirmation
+  -a --auto         Autoupdate docker project
   -n --no-color     Disable color output
   -d --debug        Enables debug mode
   -h --help         This page
@@ -2725,6 +2799,11 @@ fi
 # force yes mode
 if [[ "${arg_y:?}" = "1" ]]; then
   FS_YES=0
+fi
+
+# auto update mode
+if [[ "${arg_a:?}" = "1" ]]; then
+  FS_AUTO=0
 fi
 
 # kill mode
