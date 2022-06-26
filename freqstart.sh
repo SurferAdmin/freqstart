@@ -2851,6 +2851,10 @@ fi
 ### Validation. Error out if the things required for your script are not present
 ##############################################################################
 
+if [[ "${arg_k:?}" = "1" ]] && [[ "${arg_a:?}" = "1" ]]; then
+  help "Option -a or --auto cannot be used with -k or --kill."
+fi
+
 if [[ "${arg_k:?}" = "1" ]]; then
   [[ "${arg_b:-}" ]] || help "Setting an \"example.yml\" file with -b or --bot is required."
 fi
