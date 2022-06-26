@@ -590,127 +590,6 @@ function _fsIsSymlink_() {
   fi
 }
 
-function _fsStrategy_() {
-    debug "# function _fsStrategy_"
-  [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
-
-  local _strategyName="${1}"
-  local _strategyFile
-  local _strategyFileNew
-  local _strategyUpdate
-  local _strategyUpdateCount=0
-  local _strategyFileType
-  local _strategyFileTypeName="unknown"
-  local _strategyTmp="${FS_DIR_TMP}/${_strategyName}_${FS_HASH}"
-  local _strategyDir="${FS_DIR_USER_DATA_STRATEGIES}/${_strategyName}"
-  local _strategyUrls=()
-  local _strategyUrlsDeduped=()
-  local _strategyUrl
-  local _strategyPath
-  local _strategyPathTmp
-  local _fsStrategies="${FS_STRATEGIES}"
-  local _strategyJson
-
-  if [[ "$(_fsIsFile_ "${_fsStrategies}")" -eq 1 ]]; then
-    printf "%s\n" \
-    "{" \
-    "  \"NostalgiaForInfinityX\": [" \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/NostalgiaForInfinityX.py\"," \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-binance.json\"," \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-bybit.json\"," \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-ftx.json\"," \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-gateio.json\"," \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-huobi.json\"," \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-kucoin.json\"," \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-okx.json\"," \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/exampleconfig-rebuy.json\"," \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/exampleconfig.json\"," \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/exampleconfig_secret.json\"," \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-binance-busd.json\"," \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-binance-usdt.json\"," \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-bybit-usdt.json\"," \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-ftx-usdt.json\"," \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-gateio-usdt.json\"," \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-huobi-usdt.json\"," \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-kucoin-usdt.json\"," \
-    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-okx-usdt.json\"" \
-    "  ]," \
-    "  \"DoesNothingStrategy\": [" \
-    "    \"https://raw.githubusercontent.com/freqtrade/freqtrade-strategies/master/user_data/strategies/berlinguyinca/DoesNothingStrategy.py\"" \
-    "  ]" \
-    "}" \
-    > "${_fsStrategies}"
-    
-    _fsFileExist_ "${_fsStrategies}"
-  fi
-  
-  while read -r; do
-  _strategyUrls+=( "$REPLY" )
-  done < <(jq -r ".${_strategyName}[]?" "${_fsStrategies}")
-    debug "_strategyUrls[@]:"
-    debug "$(printf '%s\n' "${_strategyUrls[@]}")"
-  if (( ${#_strategyUrls[@]} )); then
-    while read -r; do
-    _strategyUrlsDeduped+=( "$REPLY" )
-    done < <(_fsDedupeArray_ "${_strategyUrls[@]}")
-  fi
-    debug "_strategyUrlsDeduped[@]:"
-    debug "$(printf '%s\n' "${_strategyUrlsDeduped[@]}")"
-  if (( ${#_strategyUrlsDeduped[@]} )); then
-    sudo mkdir -p "${_strategyTmp}"
-    sudo mkdir -p "${_strategyDir}"
-
-    for _strategyUrl in "${_strategyUrlsDeduped[@]}"; do
-      if [[ "$(_fsIsUrl_ "${_strategyUrl}")" -eq 0 ]]; then
-        _strategyFile="$(basename "${_strategyUrl}")"
-        _strategyFileType="${_strategyFile##*.}"
-        _strategyPath="${_strategyDir}/${_strategyFile}"
-        _strategyPathTmp="${_strategyTmp}/${_strategyFile}"
-
-        if [[ "${_strategyFileType}" = "py" ]]; then
-          _strategyFileTypeName="strategy"
-        elif [[ "${_strategyFileType}" = "json" ]]; then
-          _strategyFileTypeName="config"
-        fi
-
-        sudo curl -s -L "${_strategyUrl}" -o "${_strategyPathTmp}"
-
-        if [[ "$(_fsIsFile_ "${_strategyPath}")" -eq 0 ]]; then
-            debug "cmp: $(cmp --silent "${_strategyPathTmp}" "${_strategyPath}")"
-          if ! cmp --silent "${_strategyPathTmp}" "${_strategyPath}"; then
-            cp -a "${_strategyPathTmp}" "${_strategyPath}"
-            _strategyUpdateCount=$((_strategyUpdateCount+1))
-            _fsFileExist_ "${_strategyPath}"
-          fi
-        else
-          cp -a "${_strategyPathTmp}" "${_strategyPath}"
-          _strategyUpdateCount=$((_strategyUpdateCount+1))
-          _fsFileExist_ "${_strategyPath}"
-        fi
-      fi
-    done
-
-    sudo rm -rf "${_strategyTmp}"
-      debug "_strategyUpdateCount: ${_strategyUpdateCount}"
-    if [[ "${_strategyUpdateCount}" -eq 0 ]]; then
-      info "Strategy already latest version: ${_strategyName}"
-    else
-      warning "Strategy updated: ${_strategyName}"
-      _strategyUpdate="$(_fsTimestamp_)"
-        debug "_strategyUpdate: ${_strategyUpdate}"
-      _strategyJson="$(jq -n \
-        --arg update "${_strategyUpdate}" \
-        '$ARGS.named'
-      )"
-        debug "_strategyJson[@]:"
-        debug "$(printf '%s\n' "${_strategyJson[@]}")"
-      printf "%s\n" "${_strategyJson}" | jq . > "${_strategyDir}/${_strategyName}.conf.json"
-    fi
-  else
-    warning "Strategy not implemented: ${_strategyName}"
-  fi
-}
-
 
 ### FREQSTART - docker
 ##############################################################################
@@ -1186,7 +1065,7 @@ function _fsDockerYmlStrategies_() {
     debug "$(printf '%s\n' "${_strategiesDeduped[@]}")"
   if (( ${#_strategiesDeduped[@]} )); then
     for _strategy in "${_strategiesDeduped[@]}"; do        
-      if [[ "$(_fsStrategy_ "${_strategy}")" -eq 1 ]]; then
+      if [[ "$(_fsDockerStrategy_ "${_strategy}")" -eq 1 ]]; then
         _update=$((_update+1))
       fi
     done
@@ -1299,8 +1178,6 @@ function _fsDockerProjects_() {
       debug "_projectName: ${_projectName}"
     _projectContainers=()
     _containerConfPath="${_projectDir}/${_projectFileName}.conf.json"
-    _projectCronCmd="freqstart -b ${_projectFile} -y"
-    _projectCronUpdate="0 3 * * *" # update on 3am UTC
 
     if [[ "${_projectMode}" = "compose" ]]; then
       info "Start project: ${_projectFile}"
@@ -1324,7 +1201,7 @@ function _fsDockerProjects_() {
       fi
     elif [[ "${_projectMode}" = "validate" ]]; then
       info "Validate project: ${_projectFile}"
-      _fsCdown_ 30 "for any errors..."
+      _fsCdown_ 3 "for any errors..."
     elif [[ "${_projectMode}" = "kill" ]]; then
       info "Kill project: ${_projectFile}"
     fi
@@ -1450,18 +1327,177 @@ function _fsDockerProjects_() {
     elif [[ "${_projectMode}" = "validate" ]]; then
       if [[ "${_projectAuto}" -eq 0 ]]; then
         if [[ "${_error}" -eq 0 ]]; then
-          _fsCrontab_ "${_projectCronCmd}" "${_projectCronUpdate}"
+          _fsDockerAutoupdate_ "${_projectFile}"
         else
-          alert "Not all container running. Cannot set autoupdate for project: ${_projectFile}"
+          alert "Not all container running. Cannot set auto update for project: ${_projectFile}"
         fi
       fi
     elif [[ "${_projectMode}" = "kill" ]]; then
-      _fsCrontabRemove_ "${_projectCronCmd}"
+      _fsDockerAutoupdate_ "${_projectFile}" "remove"
 
       if (( ! ${#_projectContainers[@]} )); then
         info "No container running in project: ${_ymlFile}"
       fi
     fi
+    
+  fi
+}
+
+function _fsDockerStrategy_() {
+    debug "# function _fsDockerStrategy_"
+  [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
+
+  local _strategyName="${1}"
+  local _strategyFile
+  local _strategyFileNew
+  local _strategyUpdate
+  local _strategyUpdateCount=0
+  local _strategyFileType
+  local _strategyFileTypeName="unknown"
+  local _strategyTmp="${FS_DIR_TMP}/${_strategyName}_${FS_HASH}"
+  local _strategyDir="${FS_DIR_USER_DATA_STRATEGIES}/${_strategyName}"
+  local _strategyUrls=()
+  local _strategyUrlsDeduped=()
+  local _strategyUrl
+  local _strategyPath
+  local _strategyPathTmp
+  local _fsStrategies="${FS_STRATEGIES}"
+  local _strategyJson
+
+  if [[ "$(_fsIsFile_ "${_fsStrategies}")" -eq 1 ]]; then
+    printf "%s\n" \
+    "{" \
+    "  \"NostalgiaForInfinityX\": [" \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/NostalgiaForInfinityX.py\"," \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-binance.json\"," \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-bybit.json\"," \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-ftx.json\"," \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-gateio.json\"," \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-huobi.json\"," \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-kucoin.json\"," \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-okx.json\"," \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/exampleconfig-rebuy.json\"," \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/exampleconfig.json\"," \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/exampleconfig_secret.json\"," \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-binance-busd.json\"," \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-binance-usdt.json\"," \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-bybit-usdt.json\"," \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-ftx-usdt.json\"," \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-gateio-usdt.json\"," \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-huobi-usdt.json\"," \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-kucoin-usdt.json\"," \
+    "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-okx-usdt.json\"" \
+    "  ]," \
+    "  \"DoesNothingStrategy\": [" \
+    "    \"https://raw.githubusercontent.com/freqtrade/freqtrade-strategies/master/user_data/strategies/berlinguyinca/DoesNothingStrategy.py\"" \
+    "  ]" \
+    "}" \
+    > "${_fsStrategies}"
+    
+    _fsFileExist_ "${_fsStrategies}"
+  fi
+  
+  while read -r; do
+  _strategyUrls+=( "$REPLY" )
+  done < <(jq -r ".${_strategyName}[]?" "${_fsStrategies}")
+    debug "_strategyUrls[@]:"
+    debug "$(printf '%s\n' "${_strategyUrls[@]}")"
+  if (( ${#_strategyUrls[@]} )); then
+    while read -r; do
+    _strategyUrlsDeduped+=( "$REPLY" )
+    done < <(_fsDedupeArray_ "${_strategyUrls[@]}")
+  fi
+    debug "_strategyUrlsDeduped[@]:"
+    debug "$(printf '%s\n' "${_strategyUrlsDeduped[@]}")"
+  if (( ${#_strategyUrlsDeduped[@]} )); then
+    sudo mkdir -p "${_strategyTmp}"
+    sudo mkdir -p "${_strategyDir}"
+
+    for _strategyUrl in "${_strategyUrlsDeduped[@]}"; do
+      if [[ "$(_fsIsUrl_ "${_strategyUrl}")" -eq 0 ]]; then
+        _strategyFile="$(basename "${_strategyUrl}")"
+        _strategyFileType="${_strategyFile##*.}"
+        _strategyPath="${_strategyDir}/${_strategyFile}"
+        _strategyPathTmp="${_strategyTmp}/${_strategyFile}"
+
+        if [[ "${_strategyFileType}" = "py" ]]; then
+          _strategyFileTypeName="strategy"
+        elif [[ "${_strategyFileType}" = "json" ]]; then
+          _strategyFileTypeName="config"
+        fi
+
+        sudo curl -s -L "${_strategyUrl}" -o "${_strategyPathTmp}"
+
+        if [[ "$(_fsIsFile_ "${_strategyPath}")" -eq 0 ]]; then
+            debug "cmp: $(cmp --silent "${_strategyPathTmp}" "${_strategyPath}")"
+          if ! cmp --silent "${_strategyPathTmp}" "${_strategyPath}"; then
+            cp -a "${_strategyPathTmp}" "${_strategyPath}"
+            _strategyUpdateCount=$((_strategyUpdateCount+1))
+            _fsFileExist_ "${_strategyPath}"
+          fi
+        else
+          cp -a "${_strategyPathTmp}" "${_strategyPath}"
+          _strategyUpdateCount=$((_strategyUpdateCount+1))
+          _fsFileExist_ "${_strategyPath}"
+        fi
+      fi
+    done
+
+    sudo rm -rf "${_strategyTmp}"
+      debug "_strategyUpdateCount: ${_strategyUpdateCount}"
+    if [[ "${_strategyUpdateCount}" -eq 0 ]]; then
+      info "Strategy already latest version: ${_strategyName}"
+    else
+      warning "Strategy updated: ${_strategyName}"
+      _strategyUpdate="$(_fsTimestamp_)"
+        debug "_strategyUpdate: ${_strategyUpdate}"
+      _strategyJson="$(jq -n \
+        --arg update "${_strategyUpdate}" \
+        '$ARGS.named'
+      )"
+        debug "_strategyJson[@]:"
+        debug "$(printf '%s\n' "${_strategyJson[@]}")"
+      printf "%s\n" "${_strategyJson}" | jq . > "${_strategyDir}/${_strategyName}.conf.json"
+    fi
+  else
+    warning "Strategy not implemented: ${_strategyName}"
+  fi
+}
+
+function _fsDockerAutoupdate_() {
+    debug "# function _fsDockerAutoupdate_"
+  [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
+  
+  local _dir="${FS_DIR}"
+  local _file="freqstart.autoupdate.sh"
+  local _path="${_dir}/${_file}"
+  local _cronCmd="${_path}"
+  local _cronUpdate="0 3 * * *" # update on 3am UTC
+  local _projectFile="${1}"
+  local _projectAutoupdate="freqstart -b ${_projectFile} -y"
+  local _projectAutoupdateMode="${2:-}" # optional: remove
+  local _projectAutoupdates=""
+  
+  _projectAutoupdates=()
+  _projectAutoupdates+=("#!/usr/bin/env bash")
+  if [[ "$(_fsIsFile_ "${_path}")" -eq 0 ]]; then
+    while read -r; do
+    _projectAutoupdates+=("$REPLY")
+    done < <(grep -v "${_projectAutoupdate}" "${_path}" | sed "s,#!/usr/bin/env bash,," | sed "/^$/d")
+  fi
+
+  if [[ ! "${_projectAutoupdateMode}" = "remove" ]]; then
+    _projectAutoupdates+=("${_projectAutoupdate}")
+  fi
+    debug "_projectAutoupdates[@]:"
+    debug "$(printf '%s\n' "${_projectAutoupdates[@]}")"
+
+  printf "%s\n" "${_projectAutoupdates[@]}" > "${_path}"
+  sudo chmod +x "${_path}"
+  _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
+    
+  if [[ "${#_projectAutoupdates[@]}" -eq 1 ]]; then
+    _fsCrontabRemove_ "${_cronCmd}"
   fi
 }
 
