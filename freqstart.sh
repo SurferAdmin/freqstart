@@ -63,7 +63,7 @@ NO_COLOR="${NO_COLOR:-}"  # true = disable color. otherwise autodetected
 
 # FREQSTART - variables
 FS_NAME="freqstart"
-FS_VERSION='v0.0.9'
+FS_VERSION='v0.1.0'
 FS_SYMLINK="/usr/local/bin/${FS_NAME}"
 
 FS_DIR="${__dir}"
@@ -89,7 +89,6 @@ FS_INODE_SUM="$(ls -ali / | sed '2!d' | awk '{print $1}')"
 FS_HASH="$(xxd -l8 -ps /dev/urandom)"
 
 FS_YES=1
-FS_SETUP=1
 FS_KILL=1
 
 ### Functions
@@ -227,6 +226,7 @@ function _fsFileExist_() {
   local _file="${1:-}" # optional: path to file
 
 	if [[ "$(_fsIsFile_ "${_file}")" -eq 1 ]]; then
+		alert "Cannot create file: ${_file}"
     exit 1
   fi
 }
@@ -249,14 +249,16 @@ function _fsIsYml_() {
 
 	if [[ -n "${_fileType}" ]]; then
     if [[ "${_fileType}" = 'yml' ]]; then
-      _fsFileExist_ "${_path}"
-
-			echo "${_path}"
+      if [[ "$(_fsIsFile_ "${_path}")" -eq 0 ]]; then
+        echo "${_path}"
+      else
+        error "File not found: ${_file}"
+      fi
     else
-      error "\"${_file}\" is not a \".yml\" file."
+      error "File type is not correct!"
     fi
 	else
-		error "\".yml\" file type is missing."
+		error "File type is missing!"
 	fi
 }
 
@@ -638,13 +640,13 @@ function _fsStrategy_() {
     if [[ "${_strategyUpdateCount}" -eq 0 ]]; then
       info "Strategy already latest version: ${_strategyName}"
     else
-      notice "Strategy is updated: ${_strategyName}"
+      warning "Strategy is updated: ${_strategyName}"
       _strategyUpdate="$(_fsTimestamp_)"
         debug "_strategyUpdate: ${_strategyUpdate}"
-      _strategyJson=$(jq -n \
+      _strategyJson="$(jq -n \
         --arg update "${_strategyUpdate}" \
         '$ARGS.named'
-      )
+      )"
         debug "_strategyJson[@]:"
         debug "$(printf '%s\n' "${_strategyJson[@]}")"
       printf "%s\n" "${_strategyJson}" | jq . > "${_strategyDir}/${_strategyName}.conf.json"
@@ -997,6 +999,9 @@ function _fsDockerYmlImages_() {
 	local _ymlImage=""
 
 	_path="$(_fsIsYml_ "${_path}")"
+    debug "_projectPath: ${_projectPath}"
+  [[ -z "${_projectPath}" ]] && exit 1
+  
     # credit: https://stackoverflow.com/a/39612060
   _ymlImages=()
   while read -r; do
@@ -1034,6 +1039,9 @@ function _fsDockerYmlPorts_() {
 	local _error=0
   
 	_ymlPath="$(_fsIsYml_ "${_ymlPath}")"
+    debug "_projectPath: ${_projectPath}"
+  [[ -z "${_projectPath}" ]] && exit 1
+  
   _ymlFile="${_ymlPath##*/}"
   _ymlFileName="${_ymlFile%.*}"
   _ymlName="${_ymlFileName//-/_}"
@@ -1099,7 +1107,9 @@ function _fsDockerYmlStrategies_() {
   local _update=0
 
 	_ymlPath="$(_fsIsYml_ "${_ymlPath}")"
-
+    debug "_projectPath: ${_projectPath}"
+  [[ -z "${_projectPath}" ]] && exit 1
+  
   _strategies=()
   while read -r; do
     _strategies+=( "$REPLY" )
@@ -1147,7 +1157,9 @@ function _fsDockerYmlConfigs_() {
   local _error=0
 
 	_ymlPath="$(_fsIsYml_ "${_ymlPath}")"
-
+    debug "_projectPath: ${_projectPath}"
+  [[ -z "${_projectPath}" ]] && exit 1
+  
   _configs=()
   while read -r; do
   _configs+=( "$REPLY" )
@@ -1223,156 +1235,163 @@ function _fsDockerProjects_() {
   local _error=0
 
   _projectPath="$(_fsIsYml_ "${_projectPath}")"
-  _ymlFile="${_projectPath##*/}"
-  _ymlFileName="${_ymlFile%.*}"
-  #_ymlName="$(echo "${_ymlFileName}" | sed "s,\-,_,g")"
-  _ymlName="${_ymlFileName//\-/_}"
-    debug "_ymlName: ${_ymlName}"
-  _ymlContainers=()
-  _containerConfPath="${_projectDir}/${_ymlFileName}.conf.json"
+    debug "_projectPath: ${_projectPath}"
+  if [[ -n "${_projectPath}" ]]; then
+    _ymlFile="${_projectPath##*/}"
+    _ymlFileName="${_ymlFile%.*}"
+    _ymlName="${_ymlFileName//\-/_}"
+      debug "_ymlName: ${_ymlName}"
+    _ymlContainers=()
+    _containerConfPath="${_projectDir}/${_ymlFileName}.conf.json"
 
-  if [[ "${_projectMode}" = "compose" ]]; then
-    notice "Starting project: ${_ymlFile}"
+    if [[ "${_projectMode}" = "compose" ]]; then
+      info "Start project: ${_ymlFile}"
 
-    sed -i "s,restart\:.*,restart\: \"no\",g" "${_projectPath}"
+      sed -i "s,restart\:.*,restart\: \"no\",g" "${_projectPath}"
 
-    _ymlImages="$(_fsDockerYmlImages_ "${_projectPath}")"
-        debug "_ymlImages: ${_ymlImages}"
-    _ymlStrategies="$(_fsDockerYmlStrategies_ "${_projectPath}")"
-        debug "_ymlStrategies: ${_ymlStrategies}"
-    _ymlConfigs="$(_fsDockerYmlConfigs_ "${_projectPath}")"
-        debug "_ymlConfigs: ${_ymlConfigs}"
-    _ymlPorts="$(_fsDockerYmlPorts_ "${_projectPath}")"
-        debug "_ymlPorts: ${_ymlPorts}"
-    [[ "${_ymlImages}" -eq 1 ]] && _error=$((_error+1))
-    [[ "${_ymlConfigs}" -eq 1 ]] && _error=$((_error+1))
-    [[ "${_ymlPorts}" -eq 1 ]] && _error=$((_error+1))
-      debug "_error: ${_error}"
-    if [[ "${_error}" -eq 0 ]]; then
-        cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" up --no-start --no-recreate
+      _ymlImages="$(_fsDockerYmlImages_ "${_projectPath}")"
+          debug "_ymlImages: ${_ymlImages}"
+      _ymlStrategies="$(_fsDockerYmlStrategies_ "${_projectPath}")"
+          debug "_ymlStrategies: ${_ymlStrategies}"
+      _ymlConfigs="$(_fsDockerYmlConfigs_ "${_projectPath}")"
+          debug "_ymlConfigs: ${_ymlConfigs}"
+      _ymlPorts="$(_fsDockerYmlPorts_ "${_projectPath}")"
+          debug "_ymlPorts: ${_ymlPorts}"
+      [[ "${_ymlImages}" -eq 1 ]] && _error=$((_error+1))
+      [[ "${_ymlConfigs}" -eq 1 ]] && _error=$((_error+1))
+      [[ "${_ymlPorts}" -eq 1 ]] && _error=$((_error+1))
+        debug "_error: ${_error}"
+      if [[ "${_error}" -eq 0 ]]; then
+          cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" up --no-start --no-recreate
+      fi
+    elif [[ "${_projectMode}" = "validate" ]]; then
+      info "Validate project: ${_ymlFile}"
+      _fsCdown_ 30 "for any errors..."
+    elif [[ "${_projectMode}" = "kill" ]]; then
+      info "Kill project: ${_ymlFile}"
     fi
-  elif [[ "${_projectMode}" = "validate" ]]; then
-    notice "Validate project: ${_ymlFile}"
-    _fsCdown_ 30 "for any errors..."
-  elif [[ "${_projectMode}" = "kill" ]]; then
-    notice "Kill project: ${_ymlFile}"
-  fi
 
-  if [[ "${_error}" -eq 0 ]]; then
-    while read -r; do
-      _ymlContainers+=( "$REPLY" )
-    done < <(cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" ps -q)
-      debug "_ymlContainers[@]:"
-      debug "$(printf '%s\n' "${_ymlContainers[@]}")"
-    for _ymlContainer in "${_ymlContainers[@]}"; do
-      _containerName="$(_fsDockerId2Name_ "${_ymlContainer}")"
-        debug "_containerName: ${_containerName}"
-      if [[ "${_projectMode}" = "compose" ]]; then
-        _containerCmd="$(sudo docker inspect --format="{{.Config.Cmd}}" "${_ymlContainer}" \
-        | sed "s,\[, ,g" \
-        | sed "s,\], ,g" \
-        | sed "s,\",,g" \
-        | sed "s,\=, ,g" \
-        | sed "s,\/freqtrade\/,,g")"
-          debug "_containerCmd: ${_containerCmd}"
-        _containerStrategy=$(echo "${_containerCmd}" | grep -Eo "(\-s|\--strategy) [-A-Za-z0-9_]+ " \
-        | sed "s,\--strategy,," \
-        | sed "s,\s,,g")
-          debug "_containerStrategy: ${_containerStrategy}"
-        _containerStrategyDir=$(echo "${_containerCmd}" | grep -Eo "\--strategy-path [-A-Za-z0-9_/]+ " \
-        | sed "s,\-\-strategy-path,," \
-        | sed "s,\s,,g")
-          debug "_containerStrategyDir: ${_containerStrategyDir}"
-        _strategyPath="${_containerStrategyDir}/${_containerStrategy}.conf.json"
-        if [[ "$(_fsIsFile_ "${_strategyPath}")" -eq 0 ]]; then
-          _strategyUpdate=$(jq -r '.update' < "${_strategyPath}")
-          _strategyUpdate=$(echo "${_strategyUpdate}" | sed "s,null,," | sed "s,\s,,g" | sed "s,\n,,g")
-        else
-          _strategyUpdate=""
-        fi
-          debug "_strategyUpdate: ${_strategyUpdate}"
-        if [[ "$(_fsIsFile_ "${_containerConfPath}")" -eq 0 ]]; then
-          _containerStrategyUpdate=$(jq -r ".${_containerName}[0].strategy_update" < "${_containerConfPath}")
-          _containerStrategyUpdate=$(echo "${_containerStrategyUpdate}" | sed "s,null,," | sed "s,\s,,g" | sed "s,\n,,g")
-        else
-          _containerStrategyUpdate=""
-        fi
-          debug "_containerStrategyUpdate: ${_containerStrategyUpdate}"
-        if [[ -n "${_strategyUpdate}" ]]; then
-          if [[ -n "${_containerStrategyUpdate}" ]]; then
-            if [[ ! "${_containerStrategyUpdate}" = "${_strategyUpdate}" ]]; then
-              warning "Strategy is outdated: ${_containerStrategy}"
-              if [[ "$(_fsCaseConfirmation_ "Restart \"${_containerName}\" container?")" -eq 0 ]]; then
+    if [[ "${_error}" -eq 0 ]]; then
+      while read -r; do
+        _ymlContainers+=( "$REPLY" )
+      done < <(cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" ps -q)
+        debug "_ymlContainers[@]:"
+        debug "$(printf '%s\n' "${_ymlContainers[@]}")"
+      for _ymlContainer in "${_ymlContainers[@]}"; do
+        _containerName="$(_fsDockerId2Name_ "${_ymlContainer}")"
+          debug "_containerName: ${_containerName}"
+        if [[ "${_projectMode}" = "compose" ]]; then
+          info "Validate container: ${_containerName}"
+            # get container command
+          _containerCmd="$(sudo docker inspect --format="{{.Config.Cmd}}" "${_ymlContainer}" \
+          | sed "s,\[, ,g" \
+          | sed "s,\], ,g" \
+          | sed "s,\",,g" \
+          | sed "s,\=, ,g" \
+          | sed "s,\/freqtrade\/,,g")"
+            debug "_containerCmd: ${_containerCmd}"
+            # compare global strategy with container strategy
+          _containerStrategy="$(echo "${_containerCmd}" | grep -Eo "(\-s|\--strategy) [-A-Za-z0-9_]+ " \
+          | sed "s,\--strategy,," \
+          | sed "s,\s,,g")"
+            debug "_containerStrategy: ${_containerStrategy}"
+          _containerStrategyDir="$(echo "${_containerCmd}" | grep -Eo "\--strategy-path [-A-Za-z0-9_/]+ " \
+          | sed "s,\-\-strategy-path,," \
+          | sed "s,\s,,g")"
+            debug "_containerStrategyDir: ${_containerStrategyDir}"
+          _strategyPath="${_containerStrategyDir}/${_containerStrategy}.conf.json"
+          if [[ "$(_fsIsFile_ "${_strategyPath}")" -eq 0 ]]; then
+            _strategyUpdate="$(jq -r '.update' < "${_strategyPath}")"
+            _strategyUpdate="$(echo "${_strategyUpdate}" | sed "s,null,," | sed "s,\s,,g" | sed "s,\n,,g")"
+          else
+            _strategyUpdate=""
+          fi
+            debug "_strategyUpdate: ${_strategyUpdate}"
+          if [[ "$(_fsIsFile_ "${_containerConfPath}")" -eq 0 ]]; then
+            _containerStrategyUpdate="$(jq -r ".${_containerName}[0].strategy_update" < "${_containerConfPath}")"
+            _containerStrategyUpdate="$(echo "${_containerStrategyUpdate}" | sed "s,null,," | sed "s,\s,,g" | sed "s,\n,,g")"
+          else
+            _containerStrategyUpdate=""
+          fi
+            debug "_containerStrategyUpdate: ${_containerStrategyUpdate}"
+          if [[ -n "${_strategyUpdate}" ]]; then
+            if [[ -n "${_containerStrategyUpdate}" ]]; then
+              if [[ ! "${_containerStrategyUpdate}" = "${_strategyUpdate}" ]]; then
+                warning "Strategy is outdated: ${_containerStrategy}"
                 _containerRestart=0
               fi
+            else
+              _containerStrategyUpdate="${_strategyUpdate}"
             fi
           fi
-          _containerStrategyUpdate="${_strategyUpdate}"
-        fi
-          debug "_containerStrategyUpdate: ${_containerStrategyUpdate}"
-        _containerJsonInner=$(jq -n \
-          --arg strategy "${_containerStrategy}" \
-          --arg strategy_path "${_containerStrategyDir}" \
-          --arg strategy_update "${_containerStrategyUpdate}" \
-          '$ARGS.named'
-        )
-        _containerJson=$(jq -n \
-          --argjson "${_containerName}" "[${_containerJsonInner}]" \
-          '$ARGS.named'
-        )
-        _procjectJson[$_containerCount]="${_containerJson}"
-          # compare container image and latest local image version
-        _containerImage="$(sudo docker inspect --format="{{.Config.Image}}" "${_ymlContainer}")"
-          debug "_containerImage: ${_containerImage}"
-        _containerImageVersion="$(sudo docker inspect --format="{{.Image}}" "${_ymlContainer}")"
-          debug "_containerImageVersion: ${_containerImageVersion}"
-        _dockerImageVersion="$(docker inspect --format='{{.Id}}' "${_containerImage}")"
-          debug "_dockerImageVersion: ${_dockerImageVersion}"
-        if [[ ! "${_containerImageVersion}" = "${_dockerImageVersion}" ]]; then
-          warning "Docker image version is outdated: ${_containerName}"
-          if [[ "$(_fsCaseConfirmation_ "Restart \"${_containerName}\" container?")" -eq 0 ]]; then
+            # compare latest docker image with container image
+          _containerImage="$(sudo docker inspect --format="{{.Config.Image}}" "${_ymlContainer}")"
+            debug "_containerImage: ${_containerImage}"
+          _containerImageVersion="$(sudo docker inspect --format="{{.Image}}" "${_ymlContainer}")"
+            debug "_containerImageVersion: ${_containerImageVersion}"
+          _dockerImageVersion="$(docker inspect --format='{{.Id}}' "${_containerImage}")"
+            debug "_dockerImageVersion: ${_dockerImageVersion}"
+          if [[ ! "${_containerImageVersion}" = "${_dockerImageVersion}" ]]; then
+            warning "Docker image version is outdated: ${_containerName}"
             _containerRestart=0
           fi
+            # stop container if restart is necessary
+          if [[ "${_containerRestart}" -eq 0 ]]; then
+            if [[ "$(_fsCaseConfirmation_ "Restart \"${_containerName}\" container?")" -eq 0 ]]; then
+              _containerStrategyUpdate="${_strategyUpdate}"
+              _fsDockerStop_ "${_containerName}"
+            fi
+            _containerRestart=1
+          fi
+            # create project json array
+            debug "_containerStrategyUpdate: ${_containerStrategyUpdate}"
+          _containerJsonInner="$(jq -n \
+            --arg strategy "${_containerStrategy}" \
+            --arg strategy_path "${_containerStrategyDir}" \
+            --arg strategy_update "${_containerStrategyUpdate}" \
+            '$ARGS.named'
+          )"
+          _containerJson="$(jq -n \
+            --argjson "${_containerName}" "[${_containerJsonInner}]" \
+            '$ARGS.named'
+          )"
+          _procjectJson[$_containerCount]="${_containerJson}"
+            # increment container count
+          _containerCount=$((_containerCount+1))
+        elif [[ "${_projectMode}" = "validate" ]]; then
+          _containerRunning="$(_fsDockerPsName_ "${_containerName}")"
+            debug "_containerRunning: ${_containerRunning}"
+          if [[ "${_containerRunning}" -eq 0 ]]; then
+            sudo docker update --restart=on-failure "${_containerName}" >/dev/null
+            info "Container is running: ${_containerName}"
+          else
+            error "Container is not running: ${_containerName}"
+            _fsDockerStop_ "${_containerName}"
+          fi
+        elif [[ "${_projectMode}" = "kill" ]]; then
+          if [[ "$(_fsCaseConfirmation_ "Kill \"${_containerName}\" container?")" -eq 0 ]]; then
+            _fsDockerStop_ "${_containerName}"
+          fi
         fi
-          # stop container if restart is necessary
-        if [[ "${_containerRestart}" -eq 0 ]]; then
-          _fsDockerStop_ "${_containerName}"
-          _containerRestart=1
-        fi
-        _containerCount=$((_containerCount+1))
-      elif [[ "${_projectMode}" = "validate" ]]; then
-        _containerRunning="$(_fsDockerPsName_ "${_containerName}")"
-          debug "_containerRunning: ${_containerRunning}"
-        if [[ "${_containerRunning}" -eq 0 ]]; then
-          sudo docker update --restart=on-failure "${_containerName}" >/dev/null
-          info "Container is running: ${_containerName}"
-        else
-          error "Container is not running: ${_containerName}"
-          _fsDockerStop_ "${_containerName}"
-        fi
-      elif [[ "${_projectMode}" = "kill" ]]; then
-        if [[ "$(_fsCaseConfirmation_ "Kill \"${_containerName}\" container?")" -eq 0 ]]; then
-          _fsDockerStop_ "${_containerName}"
-        fi
-      fi
-    done
-  fi
-  
-  if [[ "${_projectMode}" = "compose" ]]; then
-    if [[ "${_error}" -eq 0 ]]; then
-        printf "%s\n" "${_procjectJson[@]}" | jq . > "${_containerConfPath}"
-      if [[ ${_projectForce} = "force" ]]; then
-        cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" up -d --force-recreate
-      else
-        cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" up -d --no-recreate
-      fi
-      _fsDockerProjects_ "${_projectPath}" "validate"
-    else
-      alert "Too many errors! Cannot start: ${_ymlFile}"
+      done
     fi
-  elif [[ "${_projectMode}" = "kill" ]]; then
-    if (( ${#_ymlContainers[@]} )); then
-      notice "No active projects in: ${_ymlFile}"
+    
+    if [[ "${_projectMode}" = "compose" ]]; then
+      if [[ "${_error}" -eq 0 ]]; then
+          printf "%s\n" "${_procjectJson[@]}" | jq . > "${_containerConfPath}"
+        if [[ ${_projectForce} = "force" ]]; then
+          cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" up -d --force-recreate
+        else
+          cd "${_projectDir}" && sudo docker-compose -f "${_ymlFile}" -p "${_ymlName}" up -d --no-recreate
+        fi
+        _fsDockerProjects_ "${_projectPath}" "validate"
+      else
+        alert "Too many errors! Cannot start: ${_ymlFile}"
+      fi
+    elif [[ "${_projectMode}" = "kill" ]]; then
+      if (( ${#_ymlContainers[@]} )); then
+        notice "No container running in project: ${_ymlFile}"
+      fi
     fi
   fi
 }
@@ -1389,25 +1408,6 @@ function _fsDockerKillContainers_() {
 }
 
 
-### FREQSTART - start
-##############################################################################
-
-function _fsStart_ {
-    debug "# function _fsStart_"
-	local _yml="${1:-}"
-  local _symlink="${FS_SYMLINK}"
-
-    debug "_yml: ${_yml}"
-	if [[ "$(_fsIsSymlink_ "${_symlink}")" -eq 1 ]]; then
-		alert 'Start setup first with: ./'"${FS_NAME}"'.sh --setup' && exit 1
-	elif [[ "${FS_KILL}" -eq 0 ]]; then
-    _fsDockerProjects_ "${_yml}" "kill"
-  else
-    _fsDockerProjects_ "${_yml}" "compose"
-	fi
-}
-
-
 ### FREQSTART - setup
 ##############################################################################
 
@@ -1416,12 +1416,14 @@ function _fsSetup_() {
   local _symlink="${FS_SYMLINK}"
   local _symlinkSource="${FS_DIR}/${FS_NAME}.sh"
   
+  _fsIntro_
   _fsSetupServer_
   _fsSetupNtp_
   _fsSetupFreqtrade_
   _fsSetupBinanceProxy_
   _fsSetupFrequi_
   _fsSetupExampleBot_
+  _fsStats_
   
 	if [[ "$(_fsIsSymlink_ "${_symlink}")" -eq 1 ]]; then
     sudo rm -f "${_symlink}"
@@ -1489,7 +1491,7 @@ function _fsSetupPkgs_() {
 }
 
 function _fsSetupPkgsStatus_() {
-    debug "# function _fsDockerProjects_"
+    debug "# function _fsSetupPkgsStatus_"
   [[ $# == 0 ]] && emergency "Missing required argument to ${FUNCNAME[0]}" && exit 1
   
   local _pkg="${1}"
@@ -2421,6 +2423,35 @@ function _fsSetupExampleBot_() {
   fi
 }
 
+
+### FREQSTART - start
+##############################################################################
+
+function _fsStart_ {
+    debug "# function _fsStart_"
+	local _yml="${1:-}"
+  local _symlink="${FS_SYMLINK}"
+  local _kill="${FS_KILL}"
+
+    debug "_yml: ${_yml}"
+	if [[ "$(_fsIsSymlink_ "${_symlink}")" -eq 1 ]]; then
+		alert 'Start setup first with: ./'"${FS_NAME}"'.sh --setup' && exit 1
+  fi
+  
+  _fsIntro_
+  if [[ -n "${_yml}" ]]; then
+    if [[ "${_kill}" -eq 0 ]]; then
+      _fsDockerProjects_ "${_yml}" "kill"
+    else
+      _fsDockerProjects_ "${_yml}" "compose"
+    fi
+  else
+		alert 'Start bot with: ./'"${FS_NAME}"'.sh --bot example.yml' && exit 1
+  fi
+  _fsStats_
+}
+
+
 ### Parse commandline options
 ##############################################################################
 
@@ -2434,19 +2465,19 @@ function _fsSetupExampleBot_() {
 
 # shellcheck disable=SC2015
 [[ "${__usage+x}" ]] || read -r -d '' __usage <<-'EOF' || true # exits non-zero when EOF encountered
-  -s --setup     Install and update
-  -b --bot  [arg]  Start docker project
-  -k --kill    Kill docker project
-  -y --yes     Yes on every confirmation
-  -n --no-color  Disable color output
-  -d --debug     Enables debug mode
-  -h --help    This page
+  -s --setup        Install and update
+  -b --bot [arg]    Start docker project
+  -k --kill         Kill docker project
+  -y --yes          Yes on every confirmation
+  -n --no-color     Disable color output
+  -d --debug        Enables debug mode
+  -h --help         This page
 EOF
 
 # shellcheck disable=SC2015
 [[ "${__helptext+x}" ]] || read -r -d '' __helptext <<-'EOF' || true # exits non-zero when EOF encountered
- Freqstart simplifies the use of Freqtrade with Docker. Including a simple setup guide for Freqtrade,
- configurations and FreqUI with a secured SSL proxy for IPs and domains. Freqtrade also automatically
+ Freqstart simplifies the use of Freqtrade with Docker. Including a setup guide for Freqtrade,
+ configurations and FreqUI with a secured SSL proxy for IP or domain. Freqtrade automatically
  installs implemented strategies based on Docker Compose files and detects necessary updates.
 EOF
 
@@ -2675,7 +2706,7 @@ if [[ "${arg_d:?}" = "1" ]]; then
   LOG_LEVEL="7"
   # Enable error backtracing
   trap '__b3bp_err_report "${FUNCNAME:-.}" ${LINENO}' ERR
-  # uncomment to remove docker container or images
+  # uncomment to remove docker container or images for debug
   #_fsDockerKillContainers_
   #_fsDockerKillImages_
 fi
@@ -2696,11 +2727,6 @@ if [[ "${arg_y:?}" = "1" ]]; then
   FS_YES=0
 fi
 
-# setup mode
-if [[ "${arg_s:?}" = "1" ]]; then
-  FS_SETUP=0
-fi
-
 # kill mode
 if [[ "${arg_k:?}" = "1" ]]; then
   FS_KILL=0
@@ -2710,13 +2736,9 @@ fi
 ### Validation. Error out if the things required for your script are not present
 ##############################################################################
 
-#[[ "${arg_b:-}" ]] || help "Setting an \"example.yml\" file with -b or --bot is required"
-
 if [[ "${arg_k:?}" = "1" ]]; then
-  [[ "${arg_b:-}" ]] || help "Setting an \"example.yml\" file with -b or --bot is required with -k or --kill"
+  [[ "${arg_b:-}" ]] || help "Setting an \"example.yml\" file with -b or --bot is required."
 fi
-
-#[[ "${LOG_LEVEL:-}" ]] || emergency "Cannot continue without LOG_LEVEL. "
 
 
 ### Runtime
@@ -2725,11 +2747,12 @@ fi
 # restrict script to run only once a time
 _fsScriptLock_
 
-_fsIntro_
-if [[ "${FS_SETUP}" -eq 0 ]]; then
+if [[ "${arg_s:?}" = "1" ]]; then
   _fsSetup_
-else
+elif [[ -n "${arg_b:-}" ]]; then
   _fsStart_ "${arg_b}"
+else
+  help "Help using ${0}"
 fi
-_fsStats_
+
 exit 0
