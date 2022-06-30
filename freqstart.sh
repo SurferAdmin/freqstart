@@ -63,7 +63,7 @@ NO_COLOR="${NO_COLOR:-}"  # true = disable color. otherwise autodetected
 
 # FREQSTART - variables
 FS_NAME="freqstart"
-FS_VERSION='v0.1.1'
+FS_VERSION='v0.1.2'
 FS_SYMLINK="/usr/local/bin/${FS_NAME}"
 
 FS_DIR="${__dir}"
@@ -1201,7 +1201,7 @@ function _fsDockerProjects_() {
       fi
     elif [[ "${_projectMode}" = "validate" ]]; then
       info "Validate project: ${_projectFile}"
-      _fsCdown_ 3 "for any errors..."
+      _fsCdown_ 30 "for any errors..."
     elif [[ "${_projectMode}" = "kill" ]]; then
       info "Kill project: ${_projectFile}"
     fi
@@ -1367,6 +1367,16 @@ function _fsDockerStrategy_() {
   if [[ "$(_fsIsFile_ "${_fsStrategies}")" -eq 1 ]]; then
     printf "%s\n" \
     "{" \
+    "  \"DoesNothingStrategy\": [" \
+    "    \"https://raw.githubusercontent.com/freqtrade/freqtrade-strategies/master/user_data/strategies/berlinguyinca/DoesNothingStrategy.py\"" \
+    "  ]," \
+    "  \"MultiMA_TSL\": [" \
+    "    \"https://raw.githubusercontent.com/stash86/MultiMA_TSL/main/user_data/strategies/MultiMA_TSL.py\"," \
+    "    \"https://raw.githubusercontent.com/stash86/MultiMA_TSL/main/user_data/config.json\"," \
+    "    \"https://raw.githubusercontent.com/stash86/MultiMA_TSL/main/user_data/config-binance.json\"," \
+    "    \"https://raw.githubusercontent.com/stash86/MultiMA_TSL/main/user_data/config-backtest-usdt.json\"," \
+    "    \"https://raw.githubusercontent.com/stash86/MultiMA_TSL/main/user_data/config-backtest-busd.json\"" \
+    "  ]," \
     "  \"NostalgiaForInfinityX\": [" \
     "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/NostalgiaForInfinityX.py\"," \
     "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/blacklist-binance.json\"," \
@@ -1387,9 +1397,6 @@ function _fsDockerStrategy_() {
     "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-huobi-usdt.json\"," \
     "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-kucoin-usdt.json\"," \
     "    \"https://raw.githubusercontent.com/iterativv/NostalgiaForInfinity/main/configs/pairlist-volume-okx-usdt.json\"" \
-    "  ]," \
-    "  \"DoesNothingStrategy\": [" \
-    "    \"https://raw.githubusercontent.com/freqtrade/freqtrade-strategies/master/user_data/strategies/berlinguyinca/DoesNothingStrategy.py\"" \
     "  ]" \
     "}" \
     > "${_fsStrategies}"
