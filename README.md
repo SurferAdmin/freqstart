@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v0.1.1
+# FREQSTART v0.1.2
 
 ### Freqtrade with Docker
 
@@ -23,7 +23,13 @@ If you are not familiar with Freqtrade, please read the complete documentation f
 * `Example Bot` Example bot for Binance with all implemented features and as guidance for ".yml" container.
 * `Strategies` Automated installation of implemented strategies like NostalgiaForInfinity incl. updates.
 
+### Strategies
+
 Help expanding the strategies list and include config files if possible: [freqstart.strategies.json](https://github.com/berndhofer/freqstart/blob/develop/freqstart.strategies.json)
+
+* DoesNothingStrategy (Author: Gert Wohlgemuth)
+* MultiMA_TSL (Author: stash86)
+* NostalgiaForInfinityX (Author: iterativ)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -117,6 +123,10 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
 See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full list of proposed features (and known issues).
 
 ### Changelog
+
+`v0.1.2`
+* Strategy "MultiMA_TSL" added to strategies config.
+* Countdown for validating container is set to 30s again.
 
 `v0.1.1`
 * Automated reissue of letsencrypt cert if used with Nginx proxy for FreqUI.
