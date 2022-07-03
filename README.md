@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v0.1.2
+# FREQSTART v0.1.3
 
 ### Freqtrade with Docker
 
@@ -51,8 +51,6 @@ With many more "QoL" features tailored to harness the power of Freqtrade and com
 `Warning` Freqstart installs server packages and configurations tailored to the needs of Freqtrade. It is recommended to set it up in a new and clean environment!
 
 `Packages` git, curl, jq, docker-ce, chrony, nginx, certbot, python3-certbot-nginx, ufw, openssl
-
-`Template` Freqstart is based on [bash3boilerplate](https://github.com/kvz/bash3boilerplate) template, with the goal to achieve maximum compatibility.
 
 `Freqstart` is beeing developed and testet on Vultr "Tokyo" Server with `Ubuntu 22.04 x64`. Please open any issues with your specific OS.
 
@@ -123,6 +121,10 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
 See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full list of proposed features (and known issues).
 
 ### Changelog
+
+`v0.1.3`
+* Rebuild script without template to remove overhead.
+* Example bot config routine error fixed.
 
 `v0.1.2`
 * Strategy "MultiMA_TSL" added to strategies config.
