@@ -1187,12 +1187,11 @@ _fsSetupBinanceProxy_() {
   local _dockerName
   local _dockerIP
   local _setup=1
-  local _serverUrl="${FS_SERVER_URL}"
   local _serverLan="${FS_SERVER_LAN}"
 
   _dockerName="$(_fsDockerVarsName_ "${_docker}")"
 
-  _fsMsgTitle_ "PROXY FOR BINANCE (Ports: 8090-8091/tcp)"
+  _fsMsgTitle_ "PROXY FOR BINANCE"
 
   if [[ "$(_fsDockerPsName_ "${_dockerName}")" -eq 0 ]]; then
     _fsMsg_ "Is already running."
@@ -1277,11 +1276,11 @@ _fsSetupKucoinProxy_() {
   local _docker="mikekonan/exchange-proxy:latest-amd64"
   local _dockerName
   local _setup=1
-  local _serverUrl="${FS_SERVER_URL}"
+  local _serverLan="${FS_SERVER_LAN}"
 
   _dockerName="$(_fsDockerVarsName_ "${_docker}")"
 
-  _fsMsgTitle_ "PROXY FOR KUCOIN (Ports: 8180/tcp)"
+  _fsMsgTitle_ "PROXY FOR KUCOIN"
 
   if [[ "$(_fsDockerPsName_ "${_dockerName}")" -eq 0 ]]; then
     _fsMsg_ "Is already running."
@@ -1302,8 +1301,8 @@ _fsSetupKucoinProxy_() {
     "            \"timeout\": 60000," \
     "            \"urls\": {" \
     "                \"api\": {" \
-    "                    \"public\": \"${_serverUrl}:8980/kucoin\"," \
-    "                    \"private\": \"${_serverUrl}:8980/kucoin\"" \
+    "                    \"public\": \"http://${_serverLan}:8980/kucoin\"," \
+    "                    \"private\": \"http://${_serverLan}:8980/kucoin\"" \
     "                }" \
     "            }" \
     "        }," \
