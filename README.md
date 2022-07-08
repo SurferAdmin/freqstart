@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v0.1.3
+# FREQSTART v0.1.4
 
 ### Freqtrade with Docker
 
@@ -121,6 +121,20 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
 See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full list of proposed features (and known issues).
 
 ### Changelog
+
+`v0.1.4`
+* Changed docker vars name creation. WARNING: Existing/running containers may not be dedected correctly.
+* Implemented kucoin proxy setup routine incl. reusable config.
+* Rebuild binance proxy routine to docker compose.
+* Fixed unbound variable in strategies check for yml files.
+* Fixed unbound variable in configs check for yml files.
+* Removed docker run function.
+* Added trap ERR and function for handling errors.
+* Fixed FreqUI docker ps check if container is active.
+* Disabled port check for compose force mode.
+* Split FreqUI and Nginx setup routine and made Nginx mandatory.
+* Moved ufw installation from Nginx setup to prerequisites.
+* Added LAN ip proxy forward for binance and kucoin proxies.
 
 `v0.1.3`
 * Rebuild script without template to remove overhead.
