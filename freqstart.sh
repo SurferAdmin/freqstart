@@ -2065,9 +2065,6 @@ _fsIntro_() {
   printf -- '%s\n' \
   "###" \
   "# FREQSTART: ${_fsVersion}" \
-  "# SERVER WAN: ${FS_SERVER_WAN}" \
-  "# SERVER LAN: ${FS_SERVER_LAN}" \
-  "# SERVER URL: ${FS_SERVER_URL}" \
   "###" >&2
 }
 
