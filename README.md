@@ -1,7 +1,9 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v0.1.4
+# FREQSTART v0.1.5
+
+`Warning` Major changes to code in v.0.1.5. Stop containers and run setup again, review project bot files and add network if using proxies!
 
 ### Freqtrade with Docker
 
@@ -113,6 +115,39 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
    freqstart --bot example.yml --auto --yes
    ```
 
+### Example (.yml)
+1. Project file with NostalgiaForInfinityX
+   ```yml
+   version: '3'
+   networks:
+     freqstart:
+       name: freqstart
+   services:
+     example_dryrun: #IMPORTANT: Dont forget to change service name!
+       image: freqtradeorg/freqtrade:stable
+       volumes:
+         - "./user_data:/freqtrade/user_data"
+       ports:
+         - "127.0.0.1:9000:8080" #IMPORTANT: Add localhost ip and choose port between 9000 and 9100 and forward to 8080
+       tty: true
+       command: >
+         trade
+         --dry-run # OPTIONAL: Remove if you want to trade live
+         --dry-run-wallet 1000 # OPTIONAL: Recommended to have a fixed wallet for dryrun
+         --db-url sqlite:////freqtrade/user_data/example_dryrun.sqlite # IMPORTANT: Dont forget to change database name!
+         --logfile /freqtrade/user_data/logs/example_dryrun.log # IMPORTANT: Dont forget to logfile name!
+         --strategy NostalgiaForInfinityX
+         --strategy-path /freqtrade/user_data/strategies/NostalgiaForInfinityX
+         --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/exampleconfig.json
+         --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/pairlist-volume-binance-busd.json
+         --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/blacklist-binance.json
+         --config /freqtrade/user_data/frequi.json # OPTIONAL: If you want to manage bot via FreqUI
+         --config /freqtrade/user_data/binance_proxy.json # OPTIONAL: Recommended if you want to run multiple bots on Binance
+         --config /freqtrade/user_data/kucoin_proxy.json # OPTIONAL: Recommended if you want to run multiple bots on Kucoin
+       networks:
+         - freqstart
+   ```
+
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 <!-- ROADMAP -->
@@ -121,6 +156,17 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
 See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full list of proposed features (and known issues).
 
 ### Changelog
+
+`v0.1.5`
+* Added docker network policy to proxy project files and bot files (Workaraund to use multiple docker project files).
+* Removed example bot routine and added example to readme.
+* Fixed FreqUI container name and restart policy.
+* Update container to restart no before validation instead of manipulating the docker project file.
+* Added remove orphan container to project compose routine.
+* Fixed unbound variable in docker compose. (Thanks: lsiem)
+* Fixed permission error in cleanup routine. (Thanks: lsiem)
+* Added cron remove for letsencrypt cert in the nginx reconfiguration routine.
+* Fixed domain validation error from host command.
 
 `v0.1.4`
 * Changed docker vars name creation. WARNING: Existing/running containers may not be dedected correctly.
