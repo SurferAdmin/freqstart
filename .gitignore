@@ -6,3 +6,5 @@
 *.sqlite
 *.pyc
 *.yml
+*.sqlite-shm
+*.sqlite-wal
