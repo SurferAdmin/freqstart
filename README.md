@@ -133,7 +133,7 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
        command: >
          trade
          --dry-run #OPTIONAL: Remove if you want to trade live
-		 --dry-run-wallet 1000 #OPTIONAL: Recommended to have a fixed wallet for dryrun
+         --dry-run-wallet 1000 #OPTIONAL: Recommended to have a fixed wallet for dryrun
          --db-url sqlite:////freqtrade/user_data/example_dryrun.sqlite #IMPORTANT: Dont forget to change database name!
          --logfile /freqtrade/user_data/logs/example_dryrun.log #IMPORTANT: Dont forget to logfile name!
          --strategy NostalgiaForInfinityX
