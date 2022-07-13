@@ -157,6 +157,11 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 
 ### Changelog
 
+`v0.1.6`
+* Added a function to create files incl. sudo for permission and check if file exist. (Thanks: lsiem)
+* Removed secret and key routine from Freqtrade confing creation (Most of the time the config has to be modified manually anyway).
+* Improved argument check for functions.
+
 `v0.1.5`
 * Added docker network policy to proxy project files and bot files (Workaraund to use multiple docker project files).
 * Removed example bot routine and added example to readme.
