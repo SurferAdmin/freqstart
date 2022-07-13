@@ -22,7 +22,7 @@ set -o nounset
 set -o pipefail
 
 readonly FS_NAME="freqstart"
-readonly FS_VERSION='v0.1.5'
+readonly FS_VERSION='v0.1.6'
 FS_DIR="$(dirname "$(readlink --canonicalize-existing "${0}" 2> /dev/null)")"
 readonly FS_DIR
 readonly FS_FILE="${0##*/}"
@@ -60,7 +60,7 @@ trap '_fsErr_ "${FUNCNAME:-.}" ${LINENO}' ERR
 # DOCKER
 
 _fsDockerVarsPath_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
 	local _docker="${1}"
 	local _dockerDir="${FS_DIR_DOCKER}"
@@ -76,7 +76,7 @@ _fsDockerVarsPath_() {
 }
 
 _fsDockerVarsRepo_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
 	local _docker="${1}"
 	local _dockerRepo="${_docker%:*}"
@@ -85,7 +85,7 @@ _fsDockerVarsRepo_() {
 }
 
 _fsDockerVarsCompare_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
 	local _docker="${1}"
 	local _dockerRepo=''
@@ -114,7 +114,7 @@ _fsDockerVarsCompare_() {
 }
 
 _fsDockerVarsName_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
 	local _docker="${1}"
 	local _dockerRepo=''
@@ -127,7 +127,7 @@ _fsDockerVarsName_() {
 }
 
 _fsDockerVarsTag_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
 	local _docker="${1}"
 	local _dockerTag="${_docker##*:}"
@@ -140,7 +140,7 @@ _fsDockerVarsTag_() {
 }
 
 _fsDockerVersionLocal_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
 	local _dockerRepo="${1}"
 	local _dockerTag="${2}"
@@ -155,7 +155,7 @@ _fsDockerVersionLocal_() {
 }
 
 _fsDockerVersionHub_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
 	local _dockerRepo="${1}"
 	local _dockerTag="${2}"
@@ -192,7 +192,7 @@ _fsDockerVersionHub_() {
 }
 
 _fsDockerImage_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
 	local _dockerImage="${1}"
   local _dockerRepo=''
@@ -272,7 +272,7 @@ _fsDockerImage_() {
 }
 
 _fsDockerImageInstalled_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
 	local _dockerRepo="${1}"
 	local _dockerTag="${2}"
@@ -288,7 +288,7 @@ _fsDockerImageInstalled_() {
 }
 
 _fsDockerPsName_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
   local _dockerName="${1}"
   local _dockerMode="${2:-}" # optional: all
@@ -316,7 +316,7 @@ _fsDockerPsName_() {
 }
 
 _fsDockerId2Name_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
 	local _dockerId="${1}"
 	local _dockerName=''
@@ -328,7 +328,7 @@ _fsDockerId2Name_() {
 }
 
 _fsDockerStop_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
 	local _dockerName="${1}"
 
@@ -342,6 +342,8 @@ _fsDockerStop_() {
 }
 
 _fsDockerProjectImages_() {
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+
 	local _path="${1}"
 	local _ymlImages=''
 	local _ymlImagesDeduped=''
@@ -374,6 +376,8 @@ _fsDockerProjectImages_() {
 }
 
 _fsDockerProjectPorts_() {
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+
 	local _ymlPath="${1}"
 	local _dockerPorts=''
 	local _dockerPort=''
@@ -433,6 +437,8 @@ _fsDockerProjectPorts_() {
 }
 
 _fsDockerProjectStrategies_() {
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+
 	local _ymlPath="${1}"
 	local _strategies=''
 	local _strategiesDeduped=''
@@ -471,6 +477,8 @@ _fsDockerProjectStrategies_() {
 }
 
 _fsDockerProjectConfigs_() {
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+
 	local _ymlPath="${1}"
   local _configs=''
   local _configsDeduped=''
@@ -512,7 +520,7 @@ _fsDockerProjectConfigs_() {
 }
 
 _fsDockerProject_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
 	local _projectPath="${1}"
 	local _projectMode="${2}" # compose, validate, kill
@@ -553,7 +561,6 @@ _fsDockerProject_() {
     _projectFile="${_projectPath##*/}"
     _projectFileName="${_projectFile%.*}"
     _projectName="${_projectFileName//\-/\_}"
-    #_projectName="${FS_NAME}"
     _procjectJson=()
     _projectContainers=()
     _containerConfPath="${FS_DIR}/${_projectFileName}.conf.json"
@@ -726,7 +733,7 @@ _fsDockerProject_() {
     if [[ "${_projectMode}" = "compose" ]]; then
       if [[ "${_error}" -eq 0 ]]; then
         if (( ${#_procjectJson[@]} )); then
-          printf '%s\n' "${_procjectJson[@]}" | jq . > "${_containerConfPath}"
+          printf -- '%s\n' "${_procjectJson[@]}" | jq . | sudo tee "${_containerConfPath}"
         else
           sudo rm -f "${_containerConfPath}"
         fi
@@ -756,7 +763,7 @@ _fsDockerProject_() {
 }
 
 _fsDockerStrategy_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
   local _strategyName="${1}"
   local _strategyFile=''
@@ -773,16 +780,14 @@ _fsDockerStrategy_() {
   local _strategyPath=''
   local _strategyPathTmp=''
   local _strategyJson=''
-
+  
   if [[ "$(_fsFile_ "${FS_STRATEGIES}")" -eq 1 ]]; then
-    printf '%s\n' \
+    _fsFileCreate_ "${FS_STRATEGIES}" \
     "{" \
     "  \"DoesNothingStrategy\": [" \
     "    \"https://raw.githubusercontent.com/freqtrade/freqtrade-strategies/master/user_data/strategies/berlinguyinca/DoesNothingStrategy.py\"" \
     "  ]" \
-    "}" \
-    > "${FS_STRATEGIES}"
-    _fsFileExist_ "${FS_STRATEGIES}"
+    "}"
   fi
   
   _strategyUrls=()
@@ -841,7 +846,7 @@ _fsDockerStrategy_() {
         --arg update "${_strategyUpdate}" \
         '$ARGS.named' \
       )"
-      printf '%s\n' "${_strategyJson}" | jq . > "${_strategyDir}/${_strategyName}.conf.json"
+      printf '%s\n' "${_strategyJson}" | jq . | sudo tee "${_strategyDir}/${_strategyName}.conf.json"
     fi
   else
     _fsMsg_ "[WARNING] Strategy is not implemented: ${_strategyName}"
@@ -849,7 +854,7 @@ _fsDockerStrategy_() {
 }
 
 _fsDockerAutoupdate_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _file="freqstart.autoupdate.sh"
   local _path="${FS_DIR}"'/'"${_file}"
@@ -873,7 +878,7 @@ _fsDockerAutoupdate_() {
     _fsMsg_ "Autoupdate activated for: ${_projectFile}"
   fi
 
-  printf '%s\n' "${_projectAutoupdates[@]}" > "${_path}"
+  printf '%s\n' "${_projectAutoupdates[@]}" | sudo tee "${_path}"
   sudo chmod +x "${_path}"
   _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
     
@@ -918,7 +923,7 @@ _fsSetup_() {
 }
 
 _fsSetupPkgs_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
   local _pkgs=("$@")
   local _pkg=''
@@ -962,7 +967,7 @@ _fsSetupPkgs_() {
 }
 
 _fsSetupPkgsStatus_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _pkg="${1}"
   local _status=''
@@ -1010,7 +1015,7 @@ _fsDockerPrerequisites_() {
 
 _fsSetupNtp_() {
   _fsMsgTitle_ "NTP (Timezone: UTC)"
-
+  
   if [[ "$(_fsSetupNtpCheck_)" = 1 ]]; then
     _fsSetupPkgs_ "chrony"
     
@@ -1028,11 +1033,11 @@ _fsSetupNtpCheck_() {
   local timentp=''
   local timeutc=''
   local timesyn=''
-
+  
   timentp="$(timedatectl | grep -o 'NTP service: active')"
   timeutc="$(timedatectl | grep -o '(UTC, +0000)')"
   timesyn="$(timedatectl | grep -o 'System clock synchronized: yes')"
-
+  
   if [[ -n "${timentp}" ]] || [[ -n  "${timeutc}" ]] || [[ -n  "${timesyn}" ]]; then
     echo 0
   else
@@ -1051,10 +1056,9 @@ _fsSetupFreqtrade_() {
   local _configName=''
   local _configFile=''
   local _configFileTmp=''
-  local _configFileBackup=''
-
+  
   _fsMsgTitle_ "FREQTRADE"
-
+  
   if [[ ! -d "${FS_DIR_USER_DATA}" ]]; then
     _fsSetupFreqtradeYml_
     
@@ -1066,7 +1070,7 @@ _fsSetupFreqtrade_() {
       _fsMsg_ "Directory created: ${FS_DIR_USER_DATA}"
     fi
   fi
-
+  
   if [[ "$(_fsCaseConfirmation_ "Skip creating a config?")" -eq 0 ]]; then
      _fsMsg_ "Skipping..."
   else
@@ -1075,16 +1079,16 @@ _fsSetupFreqtrade_() {
       read -rp " (filename) " _configName
       case ${_configName} in
         "")
-          _configName="config"
-        ;;
+          _configName='config'
+          ;;
         *)
           _configName="${_configName%.*}"
-
+          
           if [[ "$(_fsIsAlphaDash_ "${_configName}")" -eq 1 ]]; then
-            _fsMsg_ "Only alpha-numeric or dash or underscore characters are allowed!"
-            _configName=""
+            _fsMsg_ "Only alpha-numeric, dash and underscore characters are allowed!"
+            _configName=''
           fi
-        ;;
+          ;;
       esac
       
       if [[ -n "${_configName}" ]]; then
@@ -1097,68 +1101,30 @@ _fsSetupFreqtrade_() {
     
     _configFile="${FS_DIR_USER_DATA}/${_configName}.json"
     _configFileTmp="${FS_DIR_USER_DATA}/${_configName}.tmp.json"
-    _configFileBackup="${FS_DIR_USER_DATA}/${_configName}.bak.json"
-
+    
     if [[ "$(_fsFile_ "${_configFile}")" -eq 0 ]]; then
-      _fsMsg_ "The config already exist: $(basename "${_configFile}")"
+      _fsMsg_ "The config file already exist: ${_configFile}"
       if [[ "$(_fsCaseConfirmation_ "Replace the existing config file?")" -eq 1 ]]; then
-        _configName=""
-        rm -f "${_dockerYml}"
+        _configName=''
+        sudo rm -f "${_dockerYml}"
       fi
     fi
-
-    if [[ -n "${_configName}" ]] && [[ -d "${FS_DIR_USER_DATA}" ]]; then
+    
+    if [[ -n "${_configName}" ]]; then
       _fsSetupFreqtradeYml_
-      rm -f "${_configFileTmp}"
       
       cd "${FS_DIR}" && \
       docker-compose --file "$(basename "${_dockerYml}")" \
       run --rm freqtrade new-config --config "$(basename "${FS_DIR_USER_DATA}")/$(basename "${_configFileTmp}")"
       
-      rm -f "${_dockerYml}"
-
-      _fsFileExist_ "${_configFileTmp}"
-
-      if [[ "$(_fsCaseConfirmation_ "Enter your exchange api KEY and SECRET now? (recommended)")" -eq 0 ]]; then
-        while true; do
-          _fsMsg_ "Enter your KEY for exchange api (ENTRY HIDDEN):"
-          read -rs _configKey
-          echo
-          case ${_configKey} in 
-            "")
-              _fsCaseEmpty_
-              ;;
-            *)
-              _fsJsonSet_ "${_configFileTmp}" "key" "${_configKey}"
-              _fsMsg_ "KEY is set in: ${_configFile}"
-              break
-              ;;
-          esac
-        done
-
-        while true; do
-          _fsMsg_ 'Enter your SECRET for exchange api (ENTRY HIDDEN):'
-          read -rs _configSecret
-          echo
-          case ${_configSecret} in 
-            "")
-              _fsCaseEmpty_
-              ;;
-            *)
-              _fsJsonSet_ "${_configFileTmp}" "secret" "${_configSecret}"
-              _fsMsg_ "SECRET is set in: ${_configFile}"
-              break
-              ;;
-          esac
-        done
-      else
-        _fsMsg_ "Enter your exchange api KEY and SECRET to: ${_configFile}"
-      fi
+      sudo rm -f "${_dockerYml}"
       
-      cp -a "${_configFileTmp}" "${_configFile}"
-      cp -a "${_configFileTmp}" "${_configFileBackup}"
-
-      rm -f "${_configFileTmp}"
+      _fsFileExist_ "${_configFileTmp}"
+      
+      sudo cp -a "${_configFileTmp}" "${_configFile}"
+      sudo rm -f "${_configFileTmp}"
+      
+      _fsMsg_ "Enter your exchange api KEY and SECRET to: ${_configFile}"
     fi
   fi
 }
@@ -1196,7 +1162,7 @@ _fsSetupBinanceProxy_() {
 
   if [[ "${_setup}" -eq 0 ]]; then
       # binance proxy project file
-    printf -- '%s\n' \
+    _fsFileCreate_ "${FS_BINANCE_PROXY_YML}" \
     "---" \
     "version: '3'" \
     "networks:" \
@@ -1216,15 +1182,13 @@ _fsSetupBinanceProxy_() {
     "      --port-futures=8991" \
     "      --verbose" \
     "    networks:" \
-    "      - freqstart" \
-    > "${FS_BINANCE_PROXY_YML}"
-    _fsFileExist_ "${FS_BINANCE_PROXY_YML}"
+    "      - freqstart"
 
     sudo ufw allow 8990:8991/tcp
     _fsDockerProject_ "$(basename "${FS_BINANCE_PROXY_YML}")" "compose" "force"
 
       # binance proxy json file
-    printf -- '%s\n' \
+    _fsFileCreate_ "${FS_BINANCE_PROXY_JSON}" \
     "{" \
     "    \"exchange\": {" \
     "        \"name\": \"binance\"," \
@@ -1240,12 +1204,10 @@ _fsSetupBinanceProxy_() {
     "            \"enableRateLimit\": false" \
     "        }" \
     "    }" \
-    "}" \
-    > "${FS_BINANCE_PROXY_JSON}"
-    _fsFileExist_ "${FS_BINANCE_PROXY_JSON}"
-
+    "}"
+    
       # binance proxy futures json file
-    printf -- '%s\n' \
+    _fsFileCreate_ "${FS_BINANCE_PROXY_FUTURES_JSON}" \
     "{" \
     "    \"exchange\": {" \
     "        \"name\": \"binance\"," \
@@ -1261,9 +1223,7 @@ _fsSetupBinanceProxy_() {
     "            \"enableRateLimit\": false" \
     "        }" \
     "    }" \
-    "}" \
-    > "${FS_BINANCE_PROXY_FUTURES_JSON}"
-    _fsFileExist_ "${FS_BINANCE_PROXY_FUTURES_JSON}"
+    "}"
   else
     _fsMsg_ "Skipping..."
   fi
@@ -1276,24 +1236,24 @@ _fsSetupKucoinProxy_() {
   local _docker="mikekonan/exchange-proxy:latest-amd64"
   local _dockerName=''
   local _setup=1
-
+  
   _dockerName="$(_fsDockerVarsName_ "${_docker}")"
-
+  
   _fsMsgTitle_ 'PROXY FOR KUCOIN'
-
+  
   if [[ "$(_fsDockerPsName_ "${_dockerName}")" -eq 0 ]]; then
     _fsMsg_ 'Is already running. (Port: 8980)'
-
+    
     if [[ "$(_fsCaseConfirmation_ "Skip update?")" -eq 1 ]]; then
       _setup=0
     fi
   elif [[ "$(_fsCaseConfirmation_ "Install now?")" -eq 0 ]]; then
     _setup=0
   fi
-
+  
   if [[ "${_setup}" -eq 0 ]]; then
       # kucoin proxy project file
-    printf -- '%s\n' \
+    _fsFileCreate_ "${FS_KUCOIN_PROXY_YML}" \
     "---" \
     "version: '3'" \
     "networks:" \
@@ -1311,15 +1271,13 @@ _fsSetupKucoinProxy_() {
     "      -port 8980" \
     "      -verbose 1" \
     "    networks:" \
-    "      - freqstart" \
-    > "${FS_KUCOIN_PROXY_YML}"
-    _fsFileExist_ "${FS_KUCOIN_PROXY_YML}"
-
+    "      - freqstart"
+    
     sudo ufw allow 8980/tcp
     _fsDockerProject_ "$(basename "${FS_KUCOIN_PROXY_YML}")" "compose" "force"
-
+    
       # kucoin proxy json file
-    printf -- '%s\n' \
+    _fsFileCreate_ "${FS_KUCOIN_PROXY_JSON}" \
     "{" \
     "    \"exchange\": {" \
     "        \"name\": \"kucoin\"," \
@@ -1338,9 +1296,7 @@ _fsSetupKucoinProxy_() {
     "            \"timeout\": 60000" \
     "        }" \
     "    }" \
-    "}" \
-    > "${FS_KUCOIN_PROXY_JSON}"
-    _fsFileExist_ "${FS_KUCOIN_PROXY_JSON}"
+    "}"
   else
     _fsMsg_ "Skipping..."
   fi
@@ -1350,11 +1306,11 @@ _fsSetupKucoinProxy_() {
 
 _fsSetupNginx_() {
   local _cronCmd="/usr/bin/certbot renew --quiet"
-  local _nr=""
+  local _nr=''
   local _setup=1
-
+  
   _fsMsgTitle_ "NGINX (Proxy for FreqUI)"
-
+  
   if [[ "$(_fsSetupNginxCheck_)" -eq 1 ]]; then
     _setup=0
   else
@@ -1364,23 +1320,23 @@ _fsSetupNginx_() {
       _setup=0
     fi
   fi
-
+  
   if [[ "${_setup}" -eq 0 ]];then
     _fsSetupNginxConf_
-
+    
     while true; do
       printf -- '%s\n' \
       "? Secure the connection to FreqUI?" \
       "  1) Yes, I want to use an IP with SSL (openssl)" \
       "  2) Yes, I want to use a domain with SSL (truecrypt)" \
       "  3) No, I dont want to use SSL (not recommended)" >&2
-
+      
       if [[ "${FS_OPTS_YES}" -eq 1 ]]; then
         read -rp "  (1/2/3) " _nr
       else
         local _nr="3"
       fi
-
+      
       case ${_nr} in 
         [1])
           _fsMsg_ "Continuing with 1) ..."
@@ -1401,7 +1357,7 @@ _fsSetupNginx_() {
           ;;
       esac
     done
-
+    
     _fsSetupNginxRestart_
   else
     _fsMsg_ "Skipping..."
@@ -1416,10 +1372,9 @@ _fsSetupNginxConf_() {
   
   _fsJsonSet_ "${FS_CONFIG}" 'server_wan' "${FS_SERVER_WAN}"
   _fsJsonSet_ "${FS_CONFIG}" 'server_url' "${_serverUrl}"
-  
   _fsSetupPkgs_ "nginx"
   
-  printf '%s\n' \
+  _fsFileCreate_ "${_confPathFrequi}" \
   "server {" \
   "    listen 80;" \
   "    server_name ${FS_SERVER_WAN};" \
@@ -1437,14 +1392,12 @@ _fsSetupNginxConf_() {
   "        proxy_set_header X-Real-IP \$remote_addr;" \
   "        proxy_pass http://127.0.0.1:\$server_port;" \
   "    }" \
-  "}" \
-  > "${_confPathFrequi}"
-
-  _fsFileExist_ "${_confPathFrequi}"
+  "}"
+  
   if [[ "$(_fsFile_ "${_confPathNginx}")" -eq 0 ]]; then
     sudo mv "${_confPathNginx}" "${_confPathNginx}.disabled"
   fi
-
+  
   sudo rm -f "/etc/nginx/sites-enabled/default"
 }
 
@@ -1460,7 +1413,7 @@ _fsSetupNginxRestart_() {
   if [[ "$(_fsSetupNginxCheck_)" -eq 1 ]]; then
     _fsMsgExit_ "Error in nginx config file. For more info enter: nginx -t"
   fi
-
+  
   sudo /etc/init.d/nginx stop
   sudo pkill -f nginx & wait $!
   sudo /etc/init.d/nginx start
@@ -1468,20 +1421,19 @@ _fsSetupNginxRestart_() {
 
 _fsSetupNginxOpenssl_() {
   _fsSetupNginxConfSecure_ "openssl"
-
+  
   sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=www.example.com" \
   -keyout /etc/ssl/private/nginx-selfsigned.key \
   -out /etc/ssl/certs/nginx-selfsigned.crt
   
   sudo openssl dhparam -out /etc/nginx/dhparam.pem 4096
-
-  printf '%s\n' \
-  "ssl_certificate /etc/ssl/certs/nginx-selfsigned.crt;" \
-  "ssl_certificate_key /etc/ssl/private/nginx-selfsigned.key;" \
-  > '/etc/nginx/snippets/self-signed.conf'
   
-  printf '%s\n' \
+  _fsFileCreate_ '/etc/nginx/snippets/self-signed.conf' \
+  "ssl_certificate /etc/ssl/certs/nginx-selfsigned.crt;" \
+  "ssl_certificate_key /etc/ssl/private/nginx-selfsigned.key;"
+  
+  _fsFileCreate_ '/etc/nginx/snippets/ssl-params.conf' \
   "ssl_protocols TLSv1.2;" \
   "ssl_prefer_server_ciphers on;" \
   "ssl_dhparam /etc/nginx/dhparam.pem;" \
@@ -1499,8 +1451,7 @@ _fsSetupNginxOpenssl_() {
   "# add_header Strict-Transport-Security \"max-age=63072000; includeSubDomains; preload\";" \
   "add_header X-Frame-Options DENY;" \
   "add_header X-Content-Type-Options nosniff;" \
-  "add_header X-XSS-Protection \"1; mode=block\";" \
-  > '/etc/nginx/snippets/ssl-params.conf'
+  "add_header X-XSS-Protection \"1; mode=block\";"
 }
 
 _setupNginxLetsencrypt_() {
@@ -1508,7 +1459,7 @@ _setupNginxLetsencrypt_() {
   local _serverDomainIp=''
   local _cronCmd="/usr/bin/certbot renew --quiet"
   local _cronUpdate="0 0 * * *"
-
+  
   while true; do
     read -rp "? Enter your domain (www.example.com): " _serverDomain
     
@@ -1524,22 +1475,22 @@ _setupNginxLetsencrypt_() {
           _fsMsg_ "The domain \"${_serverDomain}\" does not point to \"${FS_SERVER_WAN}\". Review DNS and try again!"
         else
           _fsJsonSet_ "${FS_CONFIG}" 'server_domain' "${_serverDomain}"
-
+          
           _fsSetupNginxConfSecure_ "letsencrypt"
           _fsSetupNginxCertbot_
-
+          
           _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
           break
         fi
       fi
-      _serverDomain=""
+      _serverDomain=''
     fi
   done
 }
 
 _fsSetupNginxCertbot_() {
   local _serverDomain=''
-
+  
   _serverDomain="$(_fsJsonGet_ "${FS_CONFIG}" 'server_domain')"
   [[ -z "${_serverDomain}" ]] && _fsMsgExit_ '[FATAL] Domain is not set.'
   
@@ -1549,7 +1500,7 @@ _fsSetupNginxCertbot_() {
 
 _fsSetupNginxConfSecure_() {
   [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-
+  
   local _mode="${1}"
   local _serverDomain=''
   local _serverUrl=''
@@ -1563,13 +1514,13 @@ _fsSetupNginxConfSecure_() {
   else
     _serverUrl='https://'"${FS_SERVER_WAN}"
   fi
- 
+  
   _fsJsonSet_ "${FS_CONFIG}" 'server_url' "${_serverUrl}"
   
   sudo rm -f "${_confPathFrequi}"
     # thanks: Blood4rc, Hippocritical
   if [[ "${_mode}" = 'openssl' ]]; then
-    printf '%s\n' \
+    _fsFileCreate_ "${_confPathFrequi}" \
     "server {" \
     "    listen 80;" \
     "    listen [::]:80;" \
@@ -1602,10 +1553,9 @@ _fsSetupNginxConfSecure_() {
     "        proxy_set_header X-Real-IP \$remote_addr;" \
     "        proxy_pass http://127.0.0.1:\$server_port;" \
     "    }" \
-    "}" \
-    > "${_confPathFrequi}"
+    "}"
   elif [[ "${_mode}" = 'letsencrypt' ]]; then
-    printf '%s\n' \
+    _fsFileCreate_ "${_confPathFrequi}" \
     "server {" \
     "    listen 80;" \
     "    listen [::]:80;   " \
@@ -1647,11 +1597,9 @@ _fsSetupNginxConfSecure_() {
     "        proxy_set_header X-Real-IP \$remote_addr;" \
     "        proxy_pass http://127.0.0.1:\$server_port;" \
     "    }" \
-    "}" \
-    > "${_confPathFrequi}"
+    "}"
   fi
   
-  _fsFileExist_ "${_confPathFrequi}"
   [[ "$(_fsFile_ "${_confPathNginx}")" -eq 0 ]] && sudo mv "${_confPathNginx}" "${_confPathNginx}"'.disabled'
   sudo rm -f /etc/nginx/sites-enabled/default*
 }
@@ -1664,12 +1612,12 @@ _fsSetupFrequi_() {
   local _frequiName="${FS_NAME}"'_frequi'
   local _setup=1
   local _nr=''
-
+  
   _serverUrl="$(_fsJsonGet_ "${FS_CONFIG}" 'server_url')"
   _frequiCors="$(_fsJsonGet_ "${FS_CONFIG}" 'frequi_cors')"
-
+  
   _fsMsgTitle_ "FREQUI"
-
+  
 	if [[ "$(_fsDockerPsName_ "${_frequiName}")" -eq 0 ]]; then
     if [[ -n "${_frequiCors}" ]] && [[ ! "${_serverUrl}" = "${_frequiCors}" ]]; then
       _fsMsg_ "[WARNING] Server URL has changed: ${_frequiCors} -> ${_serverUrl}"
@@ -1686,7 +1634,7 @@ _fsSetupFrequi_() {
       _setup=0
     fi
   fi
-
+  
   if [[ "${_setup}" -eq 0 ]];then
     sudo ufw allow 9000:9100/tcp
     sudo ufw allow 9999/tcp
@@ -1706,14 +1654,14 @@ _fsSetupFrequiJson_() {
   local _frequiTmpPassword=''
   local _frequiCors=''
   local _setup=1
-
+  
   _frequiCors="$(_fsJsonGet_ "${FS_CONFIG}" "frequi_cors")"
   _frequiJwt="$(_fsJsonGet_ "${FS_FREQUI_JSON}" "jwt_secret_key")"
   _frequiUsername="$(_fsJsonGet_ "${FS_FREQUI_JSON}" "username")"
   _frequiPassword="$(_fsJsonGet_ "${FS_FREQUI_JSON}" "password")"
-
+  
   [[ -z "${_frequiJwt}" ]] && _frequiJwt="$(_fsRandomBase64UrlSafe_)"
-
+  
   if [[ -n "${_frequiUsername}" ]] || [[ -n "${_frequiPassword}" ]]; then
     _fsMsg_ "Login data already found."
     
@@ -1726,7 +1674,7 @@ _fsSetupFrequiJson_() {
       
       if [[ "${FS_OPTS_YES}" -eq 0 ]]; then
         _setup=1
-
+        
         _frequiUsername="$(_fsRandomBase64_ 16)"
         _frequiPassword="$(_fsRandomBase64_ 16)"
       fi
@@ -1738,7 +1686,7 @@ _fsSetupFrequiJson_() {
       # create username
     while true; do
       read -rp 'Enter username: ' _frequiUsername
-
+      
       if [[ -n "${_frequiUsername}" ]]; then
         if [[ "$(_fsCaseConfirmation_ "Is the username correct: ${_frequiUsername}")" -eq 0 ]]; then
           break
@@ -1774,7 +1722,7 @@ _fsSetupFrequiJson_() {
   fi
     # create frequi json for bots
   if [[ -n "${_frequiUsername}" ]] && [[ -n "${_frequiPassword}" ]]; then
-    printf '%s\n' \
+    _fsFileCreate_ "${FS_FREQUI_JSON}" \
     "{" \
     "    \"api_server\": {" \
     "        \"enabled\": true," \
@@ -1787,10 +1735,7 @@ _fsSetupFrequiJson_() {
     "        \"username\": \"${_frequiUsername}\"," \
     "        \"password\": \"${_frequiPassword}\"" \
     "    }" \
-    "}" \
-    > "${FS_FREQUI_JSON}"
-
-    _fsFileExist_ "${FS_FREQUI_JSON}"
+    "}"
   else
     _fsMsgExit_ '[FATAL] Passwort or username missing!'
   fi
@@ -1801,8 +1746,8 @@ _fsSetupFrequiCompose_() {
   local _frequiName="${FS_NAME}"'_frequi'
   local _frequiServerLog="${FS_DIR_USER_DATA}"'/logs/'"${_frequiName}"'.log'
   local _docker="freqtradeorg/freqtrade:stable"
-
-  printf '%s\n' \
+  
+  _fsFileCreate_ "${FS_FREQUI_SERVER_JSON}" \
   "{" \
   "    \"max_open_trades\": 1," \
   "    \"stake_currency\": \"BTC\"," \
@@ -1840,11 +1785,9 @@ _fsSetupFrequiCompose_() {
   "    ]," \
   "    \"bot_name\": \"frequi_server\"," \
   "    \"initial_state\": \"running\"" \
-  "}" \
-  > "${FS_FREQUI_SERVER_JSON}"
-  _fsFileExist_ "${FS_FREQUI_SERVER_JSON}"
-
-  printf -- '%s\n' \
+  "}"
+  
+  _fsFileCreate_ "${FS_FREQUI_YML}" \
   "---" \
   "version: '3'" \
   "services:" \
@@ -1863,10 +1806,8 @@ _fsSetupFrequiCompose_() {
   "      --strategy ${_frequiStrategy}" \
   "      --strategy-path /freqtrade/user_data/strategies/${_frequiStrategy}" \
   "      --config /freqtrade/user_data/$(basename "${FS_FREQUI_SERVER_JSON}")" \
-  "      --config /freqtrade/user_data/$(basename "${FS_FREQUI_JSON}")" \
-  > "${FS_FREQUI_YML}"
-  _fsFileExist_ "${FS_FREQUI_YML}"
-
+  "      --config /freqtrade/user_data/$(basename "${FS_FREQUI_JSON}")"
+  
   _fsDockerProject_ "${FS_FREQUI_YML}" "compose" "force"
 }
 
@@ -1877,13 +1818,13 @@ _fsStart_() {
 	local _yml="${1:-}"
   local _symlink="${FS_SYMLINK}"
   local _kill="${FS_OPTS_KILL}"
-
+  
 	if [[ "$(_fsIsSymlink_ "${_symlink}")" -eq 1 ]]; then
 		_fsUsage_ "Start setup first!"
   fi
-
+  
   _fsIntro_
-
+  
   if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ "${FS_OPTS_KILL}" -eq 0 ]]; then
     _fsUsage_ "Option -a or --auto cannot be used with -k or --kill."
   elif [[ -z "${_yml}" ]]; then
@@ -1895,7 +1836,7 @@ _fsStart_() {
       _fsDockerProject_ "${_yml}" "compose"
     fi
   fi
-
+  
   _fsStats_
 }
 
@@ -1907,12 +1848,12 @@ _fsIntro_() {
 	local _serverDomain=''
 	local _serverUrl=''
 	local _frequiCors=''
-
+  
   printf -- '%s\n' \
   "###" \
   "# FREQSTART: ${FS_VERSION}" \
   "###" >&2
-
+  
 	if [[ "$(_fsFile_ "${FS_CONFIG}")" -eq 0 ]]; then
     _serverWan="$(_fsJsonGet_ "${FS_CONFIG}" "server_wan")"
     if [[ -n "${_serverWan}" ]] && [[ ! "${FS_SERVER_WAN}" = "${_serverWan}" ]]; then
@@ -1926,17 +1867,15 @@ _fsIntro_() {
     _serverUrl="$(_fsJsonGet_ "${FS_CONFIG}" "server_url")"
     _frequiCors="$(_fsJsonGet_ "${FS_CONFIG}" "frequi_cors")"
   fi
-
-  printf '%s\n' \
+  
+  _fsFileCreate_ "${FS_CONFIG}" \
   "{" \
   "    \"version\": \"${FS_VERSION}\"," \
   "    \"server_wan\": \"${_serverWan}\"," \
   "    \"server_domain\": \"${_serverDomain}\"," \
   "    \"server_url\": \"${_serverUrl}\"" \
   "    \"frequi_cors\": \"${_frequiCors}\"" \
-  "}" \
-  > "${FS_CONFIG}"
-  _fsFileExist_ "${FS_CONFIG}"
+  "}"
 }
 
 _fsStats_() {
@@ -1949,9 +1888,9 @@ _fsStats_() {
 	_memUsed="$(free -m | awk 'NR==2{print $3}')"
 	_memTotal="$(free -m | awk 'NR==2{print $2}')"
 	_time="$( (time curl -X GET "https://api.binance.com/api/v3/exchangeInfo?symbol=BNBBTC") 2>&1 > /dev/null \
-		| grep -o "real.*s" \
-		| sed "s#real$(echo '\t')##" )"
-
+  | grep -o "real.*s" \
+  | sed "s#real$(echo '\t')##" )"
+  
   printf -- '%s\n' \
 	"###" \
   "# Ping avg. (Binance): ${_ping}ms | Vultr \"Tokyo\" Server avg.: 1.290ms" \
@@ -1964,7 +1903,7 @@ _fsStats_() {
 
 _fsFile_() {
   local _file="${1:-}" # optional: path to file
-
+  
 	if [[ -z "${_file}" ]]; then
     echo 1
   elif [[ -f "${_file}" ]]; then
@@ -1976,7 +1915,7 @@ _fsFile_() {
 
 _fsFileEmpty_() {
   local _file="${1:-}" # optional: path to file
-
+  
 	if [[ -z "${_file}" ]]; then
     echo 1
   elif [[ -s "${_file}" ]]; then
@@ -1988,21 +1927,34 @@ _fsFileEmpty_() {
 
 _fsFileExist_() {
   local _file="${1:-}" # optional: path to file
-
+  
 	if [[ "$(_fsFile_ "${_file}")" -eq 1 ]]; then
 		_fsMsg_ "Cannot create file: ${_file}"
     exit 1
   fi
 }
 
-_fsCrontab_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+_fsFileCreate_() {
+  [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  
+  local _file="${1}"; shift
+  local _array=("${@}")
+  local _fileTmp="${FS_DIR_TMP}"'/'"${_file##*/}"
+  
+  printf -- '%s\n' "${_array[@]}" | sudo tee "${_fileTmp}" >/dev/null
+  
+  sudo cp "${_fileTmp}" "${_file}"
+  _fsFileExist_ "${_file}"
+}
 
+_fsCrontab_() {
+  [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  
   local _cronCmd="${1}"
   local _cronJob="${2} ${_cronCmd}"
     # credit: https://stackoverflow.com/a/17975418
   ( crontab -l 2>/dev/null | grep -v -F "${_cronCmd}" || : ; echo "${_cronJob}" ) | crontab -
-
+  
   if [[ "$(_fsCrontabValidate_ "${_cronCmd}")" -eq 1 ]]; then
     _fsMsgExit_ "Cron not set: ${_cronCmd}"
   fi
@@ -2015,7 +1967,7 @@ _fsCrontabRemove_() {
     # credit: https://stackoverflow.com/a/17975418
   if [[ "$(_fsCrontabValidate_ "${_cronCmd}")" -eq 0 ]]; then
     ( crontab -l 2>/dev/null | grep -v -F "${_cronCmd}" || : ) | crontab -
-
+    
     if [[ "$(_fsCrontabValidate_ "${_cronCmd}")" -eq 0 ]]; then
       _fsMsgExit_ "Cron not removed: ${_cronCmd}"
     fi
@@ -2024,19 +1976,19 @@ _fsCrontabRemove_() {
 
 _fsCrontabValidate_() {
   [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-    
+  
   local _cronCmd="${1}"
-
+  
   crontab -l 2>/dev/null | grep -q "${_cronCmd}"  && echo 0 || echo 1
 }
 
 _fsIsYml_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  
 	local _path="${FS_DIR}/${1##*/}"
 	local _file="${_path##*/}"
 	local _fileType="${_file##*.}"
-
+  
 	if [[ -n "${_fileType}" ]]; then
     if [[ "${_fileType}" = 'yml' ]]; then
       if [[ "$(_fsFile_ "${_path}")" -eq 0 ]]; then
@@ -2053,19 +2005,19 @@ _fsIsYml_() {
 }
 
 _fsJsonGet_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-
+  [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  
   local _jsonFile="${1}"
   local _jsonName="${2}"
   local _jsonValue=''
-
+  
   if [[ "$(_fsFile_ "${_jsonFile}")" -eq 0 ]]; then
     _jsonValue="$(cat "${_jsonFile}" | { grep -o "${_jsonName}\"\?: \"\?.*\"\?" || true; } \
     | sed "s,\",,g" \
     | sed "s,\s,,g" \
     | sed "s#,##g" \
     | sed "s,${_jsonName}:,,")"
-
+    
     if [[ -n "${_jsonValue}" ]]; then
       echo "${_jsonValue}"
     fi
@@ -2073,12 +2025,12 @@ _fsJsonGet_() {
 }
 
 _fsJsonSet_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-
+  [[ $# -lt 3 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  
   local _jsonFile="${1}"
   local _jsonName="${2}"
   local _jsonValue="${3}"
-
+  
   _fsFileExist_ "${_jsonFile}"
   
   if grep -qow "\"${_jsonName}\": \".*\"" "${_jsonFile}"; then
@@ -2095,11 +2047,11 @@ _fsJsonSet_() {
 }
 
 _fsCaseConfirmation_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  
   local _question="${1}"
   local _yesNo=''
-
+  
   if [[ "${FS_OPTS_YES}" -eq 0 ]]; then
     printf -- '%s\n' "? ${_question} (y/n) y" >&2
     echo 0
@@ -2132,13 +2084,13 @@ _fsCaseEmpty_() {
 }
 
 _fsIsUrl_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  
   local _url="${1}"
     # credit: https://stackoverflow.com/a/55267709
   local _regex="^(https?|ftp|file)://[-A-Za-z0-9\+&@#/%?=~_|!:,.;]*[-A-Za-z0-9\+&@#/%=~_|]\.[-A-Za-z0-9\+&@#/%?=~_|!:,.;]*[-A-Za-z0-9\+&@#/%=~_|]$"
   local _status=''
-
+  
   if [[ "${_url}" =~ $_regex ]]; then
       # credit: https://stackoverflow.com/a/41875657
     _status="$(curl -o /dev/null -Isw '%{http_code}' "${_url}")"
@@ -2154,15 +2106,16 @@ _fsIsUrl_() {
 }
 
 _fsCdown_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-
-  _secs="${1}"; shift; _text=("$@")
-
+  [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  
+  local _secs="${1}"; shift
+  local _text="${*}"
+  
   while [[ "${_secs}" -gt -1 ]]; do
     if [[ "${_secs}" -gt 0 ]]; then
-      printf '\r\033[K< Waiting '"${_secs}"' seconds '"${_text[*]}" >&2
+      printf '\r\033[K< Waiting '"${_secs}"' seconds '"${_text}" >&2
       sleep 0.5
-      printf '\r\033[K> Waiting '"${_secs}"' seconds '"${_text[*]}" >&2
+      printf '\r\033[K> Waiting '"${_secs}"' seconds '"${_text}" >&2
       sleep 0.5
     else
       printf '\r\033[K' >&2
@@ -2172,11 +2125,11 @@ _fsCdown_() {
 }
 
 _fsIsAlphaDash_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  
   local _string="${1}"
   local _regex='^[[:alnum:]_-]+$'
-
+  
   if [[ ${_string} =~ $_regex ]]; then
     echo 0
   else
@@ -2185,17 +2138,17 @@ _fsIsAlphaDash_() {
 }
 
 _fsDedupeArray_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  
   declare -A _tmpArray
   declare -a _uniqueArray
   local _i
-
+  
   for _i in "$@"; do
     { [[ -z ${_i} || -n ${_tmpArray[${_i}]:-} ]]; } && continue
     _uniqueArray+=("${_i}") && _tmpArray[${_i}]=x
   done
-
+  
   printf '%s\n' "${_uniqueArray[@]}"
 }
 
@@ -2206,33 +2159,33 @@ _fsTimestamp_() {
 _fsRandomHex_() {
   local _length="${1:-16}"
   local _string=''
-
+  
   _string="$(xxd -l"${_length}" -ps /dev/urandom)"
-
+  
   echo "${_string}"
 }
 
 _fsRandomBase64_() {
   local _length="${1:-24}"
   local _string=''
-
+  
   _string="$(xxd -l"${_length}" -ps /dev/urandom | xxd -r -ps | base64)"
-
+  
   echo "${_string}"
 }
 
 _fsRandomBase64UrlSafe_() {
   local _length="${1:-32}"
   local _string=''
-
+  
   _string="$(xxd -l"${_length}" -ps /dev/urandom | xxd -r -ps | base64 | tr -d = | tr + - | tr / _)"
-
+  
   echo "${_string}"
 }
 
 _fsIsSymlink_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  
 	local _symlink="${1}"
     # credit: https://stackoverflow.com/a/36180056
   if [ -L "${_symlink}" ] ; then
@@ -2283,7 +2236,7 @@ _fsUsage_() {
 
 _fsScriptLock_() {
   local _lockDir="${FS_DIR_TMP}/${FS_NAME}.lock"
-
+  
   if [[ -n "${FS_DIR_TMP}" ]]; then
     if ! sudo mkdir -p "${_lockDir}" 2>/dev/null; then
       _fsMsgExit_ "Unable to acquire script lock: ${_lockDir}"
@@ -2323,19 +2276,19 @@ _fsMsgExit_() {
   
   printf -- '%s\n' \
   "${_msg[*]}" >&2
-
+  
   exit "${_code}"
 }
 
 _fsOptions_() {
   local -r _args=("${@}")
   local _opts
-
+  
   _opts=$(getopt --options b:,s,k,a,y,h --long bot:,setup,kill,auto,yes,help -- "${_args[@]}" 2> /dev/null) || {
     _fsUsage_
     _fsMsgExit_ "parsing options"
   }
-
+  
   eval set -- "${_opts}"
   while true; do
     case "${1}" in
