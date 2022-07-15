@@ -181,7 +181,7 @@ _fsDockerVersionHub_() {
   _acceptML="application/vnd.docker.distribution.manifest.list.v2+json"
   _token="$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${_dockerRepo}:pull" | jq -r '.token')"
 
-  curl -H "Accept: ${_acceptM}" -H "Accept: ${_acceptML}" -H "Authorization: Bearer ${_token}" -o "${_dockerManifest}" \
+  sudo curl -H "Accept: ${_acceptM}" -H "Accept: ${_acceptML}" -H "Authorization: Bearer ${_token}" -o "${_dockerManifest}" \
   -I -s -L "https://registry-1.docker.io/v2/${_dockerRepo}/manifests/${_dockerTag}"
 
   if [[ "$(_fsFile_ "${_dockerManifest}")" -eq 0 ]]; then
@@ -273,7 +273,7 @@ _fsDockerImage_() {
     
     echo "${_dockerVersionLocal}"
   else
-    _fsMsgExit_ "Image not found: ${_dockerRepo}:${_dockerTag}"
+    _fsMsgExit_ "[FATAL] Image not found: ${_dockerRepo}:${_dockerTag}"
   fi
 }
 
@@ -388,6 +388,9 @@ _fsDockerProjectImages_() {
 	local _ymlImages=''
 	local _ymlImagesDeduped=''
 	local _ymlImage=''
+	local _dockerImage=''
+	local _dockerImage=''
+	local _error=0
 
     # credit: https://stackoverflow.com/a/39612060
   _ymlImages=()
@@ -404,12 +407,18 @@ _fsDockerProjectImages_() {
     done < <(_fsDedupeArray_ "${_ymlImages[@]}")
 
     for _ymlImage in "${_ymlImagesDeduped[@]}"; do
-      if [[ -n "$(_fsDockerImage_ "${_ymlImage}")" ]]; then
-        echo 0
-      else
-        echo 1
+      _dockerImage="$(_fsDockerImage_ "${_ymlImage}")"
+      if [[ -z "${_dockerImage}" ]]; then
+        _error=1
+        break
       fi
     done
+    
+    if [[ "${_error}" -eq 1 ]]; then
+      echo 1
+    else
+      echo 0
+    fi
   else
     echo 1
   fi
