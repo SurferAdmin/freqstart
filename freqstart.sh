@@ -938,7 +938,6 @@ _fsSetup_() {
   _fsDockerPrerequisites_
   _fsSetupNtp_
   _fsSetupFreqtrade_
-  _fsSetupNginx_
   _fsSetupFrequi_
   _fsSetupBinanceProxy_
   _fsSetupKucoinProxy_
@@ -971,7 +970,7 @@ _fsUser_() {
   if [[ "${_currentUserId}" -eq 0 ]]; then
     _fsMsg_ "Your are logged in as root."
     
-    if [[ "$(_fsCaseConfirmation_ 'Create a new user and transfer files (recommended)?')" -eq 0 ]]; then
+    if [[ "$(_fsCaseConfirmation_ 'Skip create a new user and transfer files?')" -eq 1 ]]; then
       while true; do
         read -rp 'Enter your new username: ' _newUser
 
@@ -1004,7 +1003,7 @@ _fsUser_() {
         
 				sudo cp -R "${_dir}"/* "${_newPath}"
 				#sudo chown -R "${_newUser}:${_newUser}" "${_newPath}"
-        find "${_newPath}" \( -user "${_currentUser}" -o ! -group "${_currentUser}" \) -print0 | xargs -0 sudo chown "${_newUser}":"${_newUser}" 
+        #find "${_newPath}" \( -user "${_currentUser}" -o ! -group "${_currentUser}" \) -print0 | xargs -0 sudo chown "${_newUser}":"${_newUser}" 
         
         sudo rm -f "${_symlink}"
         sudo rm -rf "${_dir}"
@@ -1184,6 +1183,8 @@ _fsSetupFreqtrade_() {
     else
       _fsMsg_ "Directory created: ${FS_DIR_USER_DATA}"
     fi
+    
+    sudo rm -f "${_dockerYml}"
   fi
   
   if [[ "$(_fsCaseConfirmation_ "Skip creating a config?")" -eq 0 ]]; then
@@ -1414,13 +1415,11 @@ _fsSetupNginx_() {
   local _cronCmd="/usr/bin/certbot renew --quiet"
   local _nr=''
   local _setup=1
-  
-  _fsMsgTitle_ "NGINX (Proxy for FreqUI)"
-  
+    
   if [[ "$(_fsSetupNginxCheck_)" -eq 1 ]]; then
     _setup=0
   else
-    _fsMsg_ "Is already running."
+    _fsMsg_ "Nginx proxy is already running."
     if [[ "$(_fsCaseConfirmation_ "Skip reconfiguration?")" -eq 1 ]]; then
       _fsCrontabRemove_ "${_cronCmd}"
       _setup=0
@@ -1508,7 +1507,9 @@ _fsSetupNginxConf_() {
 }
 
 _fsSetupNginxCheck_() {
-  if sudo nginx -t 2>&1 | grep -qow "failed"; then
+  if [[ "$(_fsSetupPkgsStatus_ 'nginx')" -eq 1 ]]; then
+    echo 1
+  elif sudo nginx -t 2>&1 | grep -qo "failed"; then
     echo 1
   else
     echo 0
@@ -1742,9 +1743,12 @@ _fsSetupFrequi_() {
   fi
   
   if [[ "${_setup}" -eq 0 ]];then
+    _fsSetupNginx_
+    
     sudo ufw allow "Nginx Full"
     sudo ufw allow 9000:9100/tcp
     sudo ufw allow 9999/tcp
+    
     _frequiCors="${_serverUrl}"
     _fsJsonSet_ "${FS_CONFIG}" 'frequi_cors' "${_frequiCors}"
     _fsSetupFrequiJson_
@@ -1776,15 +1780,13 @@ _fsSetupFrequiJson_() {
       _setup=0
     fi
   else
-    if [[ "$(_fsCaseConfirmation_ "Create \"FreqUI\" login data?")" -eq 0 ]]; then
+    if [[ "$(_fsCaseConfirmation_ "Create login data now?")" -eq 0 ]]; then
       _setup=0
-      
-      if [[ "${FS_OPTS_YES}" -eq 0 ]]; then
-        _setup=1
-        
-        _frequiUsername="$(_fsRandomBase64_ 16)"
-        _frequiPassword="$(_fsRandomBase64_ 16)"
-      fi
+    else
+      _setup=1
+      _frequiUsername="$(_fsRandomBase64_ 16)"
+      _frequiPassword="$(_fsRandomBase64_ 16)"
+      _fsMsg_ '[WARNING] Login data created automatically. Edit login data in: '"${FS_FREQUI_JSON}"
     fi
   fi
 
@@ -1827,6 +1829,7 @@ _fsSetupFrequiJson_() {
       esac
     done
   fi
+  
     # create frequi json for bots
   if [[ -n "${_frequiUsername}" ]] && [[ -n "${_frequiPassword}" ]]; then
     _fsFileCreate_ "${FS_FREQUI_JSON}" \
@@ -1897,19 +1900,16 @@ _fsSetupFrequiCompose_() {
   _fsFileCreate_ "${FS_FREQUI_YML}" \
   "---" \
   "version: '3'" \
-  "networks:" \
-  "  freqstart:" \
-  "    external: true" \
-  "    name: freqstart" \
   "services:" \
   "  ${_frequiName}:" \
   "    image: ${_docker}" \
   "    container_name: ${_frequiName}" \
-  "    hostname: ${_frequiName}" \
   "    volumes:" \
   "      - \"./user_data:/freqtrade/user_data\"" \
   "    ports:" \
   "      - \"127.0.0.1:9999:8080\"" \
+  "    expose:" \
+  "      - \"9999\"" \
   "    tty: true" \
   "    command: >" \
   "      trade" \
@@ -1917,9 +1917,7 @@ _fsSetupFrequiCompose_() {
   "      --strategy ${_frequiStrategy}" \
   "      --strategy-path /freqtrade/user_data/strategies/${_frequiStrategy}" \
   "      --config /freqtrade/user_data/$(basename "${FS_FREQUI_SERVER_JSON}")" \
-  "      --config /freqtrade/user_data/$(basename "${FS_FREQUI_JSON}")" \
-  "    networks:" \
-  "      - freqstart"
+  "      --config /freqtrade/user_data/$(basename "${FS_FREQUI_JSON}")"
   
   _fsDockerProject_ "${FS_FREQUI_YML}" "compose" "force"
 }
@@ -2278,28 +2276,33 @@ _fsTimestamp_() {
 }
 
 _fsRandomHex_() {
-  local _length="${1:-16}"
+  local _length="${1}"
   local _string=''
-  
-  _string="$(xxd -l"${_length}" -ps /dev/urandom)"
+
+  [[ -z "${_length}" ]] && _length='16'
+
+  _string="$(xxd -l "${_length}" -ps /dev/urandom)"
   
   echo "${_string}"
 }
 
 _fsRandomBase64_() {
-  local _length="${1:-24}"
+  local _length="${1}"
   local _string=''
   
-  _string="$(xxd -l"${_length}" -ps /dev/urandom | xxd -r -ps | base64)"
+  [[ -z "${_length}" ]] && _length='24'
   
+  _string="$(xxd -l "${_length}" -ps /dev/urandom | xxd -r -ps | base64)"
   echo "${_string}"
 }
 
 _fsRandomBase64UrlSafe_() {
-  local _length="${1:-32}"
+  local _length="${1}"
   local _string=''
   
-  _string="$(xxd -l"${_length}" -ps /dev/urandom | xxd -r -ps | base64 | tr -d = | tr + - | tr / _)"
+  [[ -z "${_length}" ]] && _length='32'
+
+  _string="$(xxd -l "${_length}" -ps /dev/urandom | xxd -r -ps | base64 | tr -d = | tr + - | tr / _)"
   
   echo "${_string}"
 }
@@ -2472,6 +2475,7 @@ _fsOptions_() {
 
 _fsScriptLock_
 _fsOptions_ "${@}"
+sudo chgrp -R docker "${FS_DIR_USER_DATA}"
 
 if [[ "${FS_OPTS_SETUP}" -eq 0 ]]; then
   _fsSetup_
