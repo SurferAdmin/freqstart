@@ -994,9 +994,7 @@ _fsUser_() {
         sudo adduser --gecos "" "${_newUser}"
         sudo usermod -aG sudo "${_newUser}"
         sudo usermod -aG docker "${_newUser}"
-
-        #sudo grep -E --color '${_currentUser}' cat /etc/shadow
-        sudo passwd ${_newUser}
+        sudo passwd "${_newUser}"
           # no password for sudo
         echo "${_newUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers >/dev/null
         
@@ -1028,7 +1026,9 @@ _fsUser_() {
   if [[ "${_logout}" -eq 0 ]]; then
     _fsMsg_ 'You have to log out/in to activate the changes!'
       if [[ "$(_fsCaseConfirmation_ 'Logout now?')" -eq 0 ]]; then
-        sudo exit
+          # may find a more elegant way
+        sudo reboot
+        exit 0
       else
         sudo gpasswd --delete "${_currentUser}" docker
         _fsMsgExit_ '[FATAL] Restart setup to continue!'
@@ -1118,6 +1118,7 @@ _fsDockerPrerequisites_() {
         _fsMsg_ 'Skipping...'
       else
         sudo reboot
+        exit 0
       fi
     else
       _fsMsg_ "A reboot is not required."
