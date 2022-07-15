@@ -655,7 +655,7 @@ _fsDockerProject_() {
           docker network connect bridge "${_containerName}" > /dev/null 2> /dev/null || true
           
             # set restart to no
-          sudo docker update --restart=no "${_containerName}" > /dev/null
+          docker update --restart=no "${_containerName}" > /dev/null
           
             # get container command
           _containerCmd="$(sudo docker inspect --format="{{.Config.Cmd}}" "${_projectContainer}" \
@@ -755,7 +755,7 @@ _fsDockerProject_() {
         elif [[ "${_projectMode}" = "validate" ]]; then
           if [[ "${_containerRunning}" -eq 0 ]]; then
               # set restart to unless-stopped
-            sudo docker update --restart=unless-stopped "${_containerName}" > /dev/null
+            docker update --restart=unless-stopped "${_containerName}" > /dev/null
             _fsMsg_ "[SUCCESS] Container is active: ${_containerName}"' (Restart: '"$(docker inspect --format '{{.HostConfig.RestartPolicy.Name}}' "${_containerName}")"')'
           else
             _fsMsg_ "[ERROR] Container is not active: ${_containerName}"
@@ -1300,7 +1300,7 @@ _fsSetupBinanceProxy_() {
     
     _fsDockerProject_ "$(basename "${FS_BINANCE_PROXY_YML}")" "compose" "force"
     _containerIp="$(_fsDockerProxyIp_ "${_dockerName}")"
-
+    
       # binance proxy json file
     _fsFileCreate_ "${FS_BINANCE_PROXY_JSON}" \
     "{" \
