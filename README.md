@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v0.1.5
+# FREQSTART v0.1.6
 
 `Warning` Major changes to code in v.0.1.6. Stop containers and run setup again, review project bot files and add network if using proxies!
 
@@ -161,6 +161,8 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 * Changed expose to port redirect with localhost ip to proxy project files.
 * Added docker network prune in project compose routine to remove orphaned networks.
 * Added reset mode to stopp and remove all containers, networks and images.
+* Improved check for nginx if is not installed.
+* Fixed login data creation in FreqUI routine when no entries were made.
 
 `v0.1.5`
 * Added docker network policy to proxy project files and bot files (Workaround to use multiple docker project files).
