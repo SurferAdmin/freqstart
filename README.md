@@ -174,6 +174,7 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 * Fixed permission error in cleanup routine. (Thanks: lsiem)
 * Added cron remove for letsencrypt cert in the nginx reconfiguration routine.
 * Fixed domain validation error from host command.
+* File creation routine to create path if it doesnt exist.
 
 `v0.1.4`
 * Changed docker vars name creation. WARNING: Existing/running containers may not be dedected correctly.
