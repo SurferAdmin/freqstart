@@ -8,3 +8,7 @@
 *.yml
 *.sqlite-shm
 *.sqlite-wal
+*.log
+*.ipynb
+user_data/logs/.tmp
+freqstart.autoupdate.sh
