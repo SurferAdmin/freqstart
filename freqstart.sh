@@ -1987,22 +1987,26 @@ _fsIntro_() {
 
 _fsStats_() {
 	local _ping
-	local _memUsed
-	local _memTotal
 	local _time
+	local _memory
+	local _disk
+	local _cpu
     # some handy stats to get you an impression how your server compares to the current possibly best location for binance
 	_ping="$(ping -c 1 -w15 api3.binance.com | awk -F '/' 'END {print $5}')"
-	_memUsed="$(free -m | awk 'NR==2{print $3}')"
-	_memTotal="$(free -m | awk 'NR==2{print $2}')"
 	_time="$( (time curl -X GET "https://api.binance.com/api/v3/exchangeInfo?symbol=BNBBTC") 2>&1 > /dev/null \
   | grep -o "real.*s" \
   | sed "s#real$(echo '\t')##" )"
+  _memory="$(free -m | awk 'NR==2{printf "Memory Usage: %s/%sMB (%.2f%%)\n", $3,$2,$3*100/$2 }')"
+  _disk="$(df -h | awk '$NF=="/"{printf "Disk Usage: %d/%dGB (%s)\n", $3,$2,$5}')"
+  _cpu="$(top -bn1 | grep load | awk '{printf "CPU Load: %.2f\n", $(NF-2)}')"
   
   printf -- '%s\n' \
 	"###" \
   "# Ping avg. (Binance): ${_ping}ms | Vultr \"Tokyo\" Server avg.: 1.290ms" \
 	"# Time to API (Binance): ${_time} | Vultr \"Tokyo\" Server avg.: 0m0.039s" \
-	"# Used memory (Server): ${_memUsed}MB  (max. ${_memTotal}MB)" \
+	"# ${_memory}" \
+	"# ${_disk}" \
+	"# ${_cpu}" \
 	"# Get closer to Binance? Try Vultr \"Tokyo\" Server and get \$100 usage for free:" \
 	"# https://www.vultr.com/?ref=9122650-8H" \
 	"###" >&2
