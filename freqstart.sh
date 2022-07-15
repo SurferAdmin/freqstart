@@ -339,7 +339,7 @@ _fsDockerProxyIp_() {
   local _dockerName="${1}"
   
   _containerIp="$(docker inspect -f '{{ .NetworkSettings.Networks.bridge.IPAddress }}' "${_dockerName}")"
-  
+
   if [[ -n "${_containerIp}" ]]; then
     _fsJsonSet_ "${FS_CONFIG}" "${_dockerName}" "${_containerIp}"
     echo "${_containerIp}"
@@ -357,10 +357,12 @@ _fsDockerProxyIpValidate_() {
   _confIp="$(_fsJsonGet_ "${FS_CONFIG}" "${_dockerName}")"
 
   if [[ -n "${_confIp}" ]]; then
-    _containerIp="$(docker inspect -f '{{ .NetworkSettings.Networks.bridge.IPAddress }}' "${_dockerName}")"
-  
-    if [[ ! "${_confIp}" = "${_containerIp}" ]]; then
-      _fsMsgTitle_ '[WARNING] Proxy IP "'"${_dockerName}"'" has changed ('"${_confIp}"' -> '"${_containerIp}"'). Run setup again!'
+    if [[ "$(_fsDockerPsName_ "${_dockerName}")" -eq 0 ]]; then
+      _containerIp="$(docker inspect -f '{{ .NetworkSettings.Networks.bridge.IPAddress }}' "${_dockerName}")"
+    
+      if [[ ! "${_confIp}" = "${_containerIp}" ]]; then
+        _fsMsgTitle_ '[WARNING] Proxy IP "'"${_dockerName}"'" has changed ('"${_confIp}"' -> '"${_containerIp}"'). Run setup again!'
+      fi
     fi
   fi
 }
@@ -370,9 +372,9 @@ _fsDockerStop_() {
 
 	local _dockerName="${1}"
 
-  sudo docker update --restart=no "${_dockerName}" >/dev/null
-  sudo docker stop "${_dockerName}" >/dev/null
-  sudo docker rm -f "${_dockerName}" >/dev/null
+  sudo docker update --restart=no "${_dockerName}" > /dev/null
+  sudo docker stop "${_dockerName}" > /dev/null
+  sudo docker rm -f "${_dockerName}" > /dev/null
   
   if [[ "$(_fsDockerPsName_ "${_dockerName}" "all")" -eq 0 ]]; then
     _fsMsgExit_ "[FATAL] Cannot remove container: ${_dockerName}"
@@ -610,7 +612,7 @@ _fsDockerProject_() {
       _projectStrategies="$(_fsDockerProjectStrategies_ "${_projectPath}")"
       _projectConfigs="$(_fsDockerProjectConfigs_ "${_projectPath}")"
       
-      yes $'y' | docker network prune >/dev/null || true
+      yes $'y' | docker network prune > /dev/null || true
 
       if [[ "${_projectForce}" = "force" ]]; then
         _projectPorts=0
@@ -650,10 +652,10 @@ _fsDockerProject_() {
           _containerStrategyUpdate=''
           
             # connect container to bridge network
-          docker network connect bridge "${_containerName}"
+          docker network connect bridge "${_containerName}" > /dev/null 2> /dev/null || true
           
             # set restart to no
-          sudo docker update --restart=no "${_containerName}" >/dev/null
+          sudo docker update --restart=no "${_containerName}" > /dev/null
           
             # get container command
           _containerCmd="$(sudo docker inspect --format="{{.Config.Cmd}}" "${_projectContainer}" \
@@ -747,13 +749,13 @@ _fsDockerProject_() {
             _procjectJson[$_containerCount]="${_containerJson}"
           fi
             # start container
-          docker start "${_containerName}" >/dev/null
+          docker start "${_containerName}" > /dev/null
             # increment container count
           _containerCount=$((_containerCount+1))
         elif [[ "${_projectMode}" = "validate" ]]; then
           if [[ "${_containerRunning}" -eq 0 ]]; then
               # set restart to unless-stopped
-            sudo docker update --restart=unless-stopped "${_containerName}" >/dev/null
+            sudo docker update --restart=unless-stopped "${_containerName}" > /dev/null
             _fsMsg_ "[SUCCESS] Container is active: ${_containerName}"' (Restart: '"$(docker inspect --format '{{.HostConfig.RestartPolicy.Name}}' "${_containerName}")"')'
           else
             _fsMsg_ "[ERROR] Container is not active: ${_containerName}"
@@ -779,7 +781,7 @@ _fsDockerProject_() {
     if [[ "${_projectMode}" = "compose" ]]; then
       if [[ "${_error}" -eq 0 ]]; then
         if (( ${#_procjectJson[@]} )); then
-          printf -- '%s\n' "${_procjectJson[@]}" | jq . | sudo tee "${_containerConfPath}" >/dev/null
+          printf -- '%s\n' "${_procjectJson[@]}" | jq . | sudo tee "${_containerConfPath}" > /dev/null
         else
           sudo rm -f "${_containerConfPath}"
         fi
@@ -886,7 +888,7 @@ _fsDockerStrategy_() {
         --arg update "${_strategyUpdate}" \
         '$ARGS.named' \
       )"
-      printf '%s\n' "${_strategyJson}" | jq . | sudo tee "${_strategyDir}/${_strategyName}.conf.json" >/dev/null
+      printf '%s\n' "${_strategyJson}" | jq . | sudo tee "${_strategyDir}/${_strategyName}.conf.json" > /dev/null
     fi
   else
     _fsMsg_ "[WARNING] Strategy is not implemented: ${_strategyName}"
@@ -918,13 +920,19 @@ _fsDockerAutoupdate_() {
     _fsMsg_ "Autoupdate activated for: ${_projectFile}"
   fi
   
-  printf '%s\n' "${_projectAutoupdates[@]}" | sudo tee "${_path}" >/dev/null
+  printf '%s\n' "${_projectAutoupdates[@]}" | sudo tee "${_path}" > /dev/null
   sudo chmod +x "${_path}"
   _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
   
   if [[ "${#_projectAutoupdates[@]}" -eq 1 ]]; then
     _fsCrontabRemove_ "${_cronCmd}"
   fi
+}
+
+_fsDockerPurge_() {
+    sudo docker ps -a -q | xargs -I {} sudo docker rm -f {}
+    sudo docker network prune --force
+    sudo docker image ls -q | xargs -I {} sudo docker image rm -f {}
 }
 
 ###
@@ -988,21 +996,23 @@ _fsUser_() {
       done
       
       if [[ -n "${_newUser}" ]]; then
-        _newPath="/home/${_newUser}/${FS_NAME}"
-
-        sudo adduser --gecos "" "${_newUser}"
+          # credit: https://superuser.com/a/1613980
+        _newPath="$(bash -c "cd ~$(printf %q "${_newUser}") && pwd")"
+        
+        _fsDockerPurge_
+        
+        sudo adduser --gecos "" "${_newUser}" || sudo passwd "${_newUser}"
         sudo usermod -aG sudo "${_newUser}"
         sudo usermod -aG docker "${_newUser}"
-        sudo passwd "${_newUser}"
           # no password for sudo
-        echo "${_newUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers >/dev/null
+        echo "${_newUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
         
         if [[ ! -d "${_newPath}" ]]; then
 					sudo mkdir "${_newPath}"
 				fi
         
 				sudo cp -R "${_dir}"/* "${_newPath}"
-				#sudo chown -R "${_newUser}:${_newUser}" "${_newPath}"
+				sudo chown -R "${_newUser}":"${_newUser}" "${_newPath}"
         #find "${_newPath}" \( -user "${_currentUser}" -o ! -group "${_currentUser}" \) -print0 | xargs -0 sudo chown "${_newUser}":"${_newUser}" 
         
         sudo rm -f "${_symlink}"
@@ -1085,7 +1095,7 @@ _fsSetupPkgsStatus_() {
   local _pkg="${1}"
   local _status=''
   
-  _status="$(dpkg-query -W --showformat='${Status}\n' "${_pkg}" 2>/dev/null | grep "install ok installed")"
+  _status="$(dpkg-query -W --showformat='${Status}\n' "${_pkg}" 2> /dev/null | grep "install ok installed")"
 
   if [[ -n "${_status}" ]]; then
     echo 0
@@ -1284,20 +1294,15 @@ _fsSetupBinanceProxy_() {
     "  ${_dockerName}:" \
     "    image: ${_docker}" \
     "    container_name: ${_dockerName}" \
-    "    ports:" \
-    "      - \"8990-8991\"" \
-    "    expose:" \
-    "      - \"8990-8991\"" \
     "    tty: true" \
     "    command: >" \
     "      --port-spot=8990" \
     "      --port-futures=8991" \
     "      --verbose"
     
-    #sudo ufw allow 8990:8991/tcp
     _fsDockerProject_ "$(basename "${FS_BINANCE_PROXY_YML}")" "compose" "force"
     _containerIp="$(_fsDockerProxyIp_ "${_dockerName}")"
-    
+
       # binance proxy json file
     _fsFileCreate_ "${FS_BINANCE_PROXY_JSON}" \
     "{" \
@@ -1370,16 +1375,11 @@ _fsSetupKucoinProxy_() {
     "  ${_dockerName}:" \
     "    image: ${_docker}" \
     "    container_name: ${_dockerName}" \
-    "    ports:" \
-    "      - \"8980\"" \
-    "    expose:" \
-    "      - \"8980\"" \
     "    tty: true" \
     "    command: >" \
     "      -port 8980" \
     "      -verbose 1"
     
-    #sudo ufw allow 8980/tcp
     _fsDockerProject_ "$(basename "${FS_KUCOIN_PROXY_YML}")" "compose" "force"
     _containerIp="$(_fsDockerProxyIp_ "${_dockerName}")"
     
@@ -1414,19 +1414,7 @@ _fsSetupKucoinProxy_() {
 _fsSetupNginx_() {
   local _cronCmd="/usr/bin/certbot renew --quiet"
   local _nr=''
-  local _setup=1
-    
-  if [[ "$(_fsSetupNginxCheck_)" -eq 1 ]]; then
-    _setup=0
-  else
-    _fsMsg_ "Nginx proxy is already running."
-    if [[ "$(_fsCaseConfirmation_ "Skip reconfiguration?")" -eq 1 ]]; then
-      _fsCrontabRemove_ "${_cronCmd}"
-      _setup=0
-    fi
-  fi
-  
-  if [[ "${_setup}" -eq 0 ]];then
+
     _fsSetupNginxConf_
     
     while true; do
@@ -1464,9 +1452,6 @@ _fsSetupNginx_() {
     done
     
     _fsSetupNginxRestart_
-  else
-    _fsMsg_ "Skipping..."
-  fi
 }
 
 _fsSetupNginxConf_() {
@@ -1481,21 +1466,17 @@ _fsSetupNginxConf_() {
   
   _fsFileCreate_ "${_confPathFrequi}" \
   "server {" \
-  "    listen ${FS_SERVER_WAN}:80;" \
+  "    listen 80;" \
   "    server_name ${FS_SERVER_WAN};" \
   "    location / {" \
-  "        proxy_set_header Host \$host;" \
-  "        proxy_set_header X-Real-IP \$remote_addr;" \
-  "        proxy_pass http://127.0.0.1:9999;" \
+  "        proxy_pass http://0.0.0.0:9999;" \
   "    }" \
   "}" \
   "server {" \
-  "    listen ${FS_SERVER_WAN}:9000-9100;" \
+  "    listen 9000-9100;" \
   "    server_name ${FS_SERVER_WAN};" \
   "    location / {" \
-  "        proxy_set_header Host \$host;" \
-  "        proxy_set_header X-Real-IP \$remote_addr;" \
-  "        proxy_pass http://127.0.0.1:\$server_port;" \
+  "        proxy_pass http://0.0.0.0:\$server_port;" \
   "    }" \
   "}"
   
@@ -1574,7 +1555,7 @@ _setupNginxLetsencrypt_() {
       _fsCaseEmpty_
     else
       if [[ "$(_fsCaseConfirmation_ "Is the domain \"${_serverDomain}\" correct?")" -eq 0 ]]; then
-        if host "${_serverDomain}" 1>/dev/null 2>/dev/null; then
+        if host "${_serverDomain}" 1> /dev/null 2> /dev/null; then
           _serverDomainIp="$(host "${_serverDomain}" | awk '/has address/ { print $4 }')"
         fi
         
@@ -1907,9 +1888,7 @@ _fsSetupFrequiCompose_() {
   "    volumes:" \
   "      - \"./user_data:/freqtrade/user_data\"" \
   "    ports:" \
-  "      - \"127.0.0.1:9999:8080\"" \
-  "    expose:" \
-  "      - \"9999\"" \
+  "      - \"9999:8080\"" \
   "    tty: true" \
   "    command: >" \
   "      trade" \
@@ -2060,7 +2039,7 @@ _fsFileCreate_() {
   local _array=("${@}")
   local _fileTmp="${FS_DIR_TMP}"'/'"${_file##*/}"
   
-  printf -- '%s\n' "${_array[@]}" | sudo tee "${_fileTmp}" >/dev/null
+  printf -- '%s\n' "${_array[@]}" | sudo tee "${_fileTmp}" > /dev/null
   
   sudo cp "${_fileTmp}" "${_file}"
   _fsFileExist_ "${_file}"
@@ -2072,7 +2051,7 @@ _fsCrontab_() {
   local _cronCmd="${1}"
   local _cronJob="${2} ${_cronCmd}"
     # credit: https://stackoverflow.com/a/17975418
-  ( crontab -l 2>/dev/null | grep -v -F "${_cronCmd}" || : ; echo "${_cronJob}" ) | crontab -
+  ( crontab -l 2> /dev/null | grep -v -F "${_cronCmd}" || : ; echo "${_cronJob}" ) | crontab -
   
   if [[ "$(_fsCrontabValidate_ "${_cronCmd}")" -eq 1 ]]; then
     _fsMsgExit_ "Cron not set: ${_cronCmd}"
@@ -2085,7 +2064,7 @@ _fsCrontabRemove_() {
   local _cronCmd="${1}"
     # credit: https://stackoverflow.com/a/17975418
   if [[ "$(_fsCrontabValidate_ "${_cronCmd}")" -eq 0 ]]; then
-    ( crontab -l 2>/dev/null | grep -v -F "${_cronCmd}" || : ) | crontab -
+    ( crontab -l 2> /dev/null | grep -v -F "${_cronCmd}" || : ) | crontab -
     
     if [[ "$(_fsCrontabValidate_ "${_cronCmd}")" -eq 0 ]]; then
       _fsMsgExit_ "Cron not removed: ${_cronCmd}"
@@ -2098,7 +2077,7 @@ _fsCrontabValidate_() {
   
   local _cronCmd="${1}"
   
-  crontab -l 2>/dev/null | grep -q "${_cronCmd}"  && echo 0 || echo 1
+  crontab -l 2> /dev/null | grep -q "${_cronCmd}"  && echo 0 || echo 1
 }
 
 _fsIsYml_() {
@@ -2313,9 +2292,7 @@ _fsReset_() {
   _fsMsgTitle_ '[WARNING] Stopp and remove all containers, networks and images!'
   
   if [[ "$(_fsCaseConfirmation_ "Are you sure you want to continue?")" -eq 0 ]]; then
-    sudo docker ps -a -q | xargs -I {} sudo docker rm -f {}
-    sudo docker network prune
-    sudo docker image ls -q | xargs -I {} sudo docker image rm -f {}
+    _fsDockerPurge_
   fi
 }
 
@@ -2375,7 +2352,7 @@ _fsScriptLock_() {
   local _lockDir="${FS_DIR_TMP}/${FS_NAME}.lock"
   
   if [[ -n "${FS_DIR_TMP}" ]]; then
-    if ! sudo mkdir -p "${_lockDir}" 2>/dev/null; then
+    if ! sudo mkdir -p "${_lockDir}" 2> /dev/null; then
       _fsMsgExit_ "Unable to acquire script lock: ${_lockDir}"
     fi
   else
@@ -2456,8 +2433,7 @@ _fsOptions_() {
         break
         ;;
       --help|-h)
-        _fsUsage_
-        exit 0
+        break
         ;;
       --)
         shift
@@ -2475,7 +2451,6 @@ _fsOptions_() {
 
 _fsScriptLock_
 _fsOptions_ "${@}"
-sudo chgrp -R docker "${FS_DIR_USER_DATA}"
 
 if [[ "${FS_OPTS_SETUP}" -eq 0 ]]; then
   _fsSetup_
