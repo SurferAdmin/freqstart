@@ -3,7 +3,7 @@
 <!-- FREQSTART -->
 # FREQSTART v0.1.5
 
-`Warning` Major changes to code in v.0.1.5. Stop containers and run setup again, review project bot files and add network if using proxies!
+`Warning` Major changes to code in v.0.1.6. Stop containers and run setup again, review project bot files and add network if using proxies!
 
 ### Freqtrade with Docker
 
@@ -119,9 +119,6 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
 1. Project file with NostalgiaForInfinityX
    ```yml
    version: '3'
-   networks:
-     freqstart:
-       name: freqstart
    services:
      example_dryrun: #IMPORTANT: Dont forget to change service name!
        image: freqtradeorg/freqtrade:stable
@@ -144,8 +141,6 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
          --config /freqtrade/user_data/frequi.json # OPTIONAL: If you want to manage bot via FreqUI
          --config /freqtrade/user_data/binance_proxy.json # OPTIONAL: Recommended if you want to run multiple bots on Binance
          --config /freqtrade/user_data/kucoin_proxy.json # OPTIONAL: Recommended if you want to run multiple bots on Kucoin
-       networks:
-         - freqstart
    ```
 
 <p align="right">(<a href="#top">back to top</a>)</p>
@@ -158,12 +153,17 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 ### Changelog
 
 `v0.1.6`
+* Use docker start instead of recreating the project file.
+* Add containers automatically to docker bridge network (No network needed in project file).
 * Added a function to create files incl. sudo for permission and check if file exist. (Thanks: lsiem)
 * Removed secret and key routine from Freqtrade confing creation (Most of the time the config has to be modified manually anyway).
 * Improved argument check for functions.
+* Changed expose to port redirect with localhost ip to proxy project files.
+* Added docker network prune in project compose routine to remove orphaned networks.
+* Added reset mode to stopp and remove all containers, networks and images.
 
 `v0.1.5`
-* Added docker network policy to proxy project files and bot files (Workaraund to use multiple docker project files).
+* Added docker network policy to proxy project files and bot files (Workaround to use multiple docker project files).
 * Removed example bot routine and added example to readme.
 * Fixed FreqUI container name and restart policy.
 * Update container to restart no before validation instead of manipulating the docker project file.
