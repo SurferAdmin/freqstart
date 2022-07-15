@@ -1204,6 +1204,8 @@ _fsSetupFreqtrade_() {
     sudo rm -f "${_dockerYml}"
   fi
   
+  sudo chmod -R g+w "${FS_DIR_USER_DATA}"
+  
   if [[ "$(_fsCaseConfirmation_ "Skip creating a config?")" -eq 0 ]]; then
      _fsMsg_ "Skipping..."
   else
@@ -1473,14 +1475,14 @@ _fsSetupNginxConf_() {
   
   _fsFileCreate_ "${_confPathFrequi}" \
   "server {" \
-  "    listen 80;" \
+  "    listen ${FS_SERVER_WAN}:80;" \
   "    server_name ${FS_SERVER_WAN};" \
   "    location / {" \
   "        proxy_pass http://0.0.0.0:9999;" \
   "    }" \
   "}" \
   "server {" \
-  "    listen 9000-9100;" \
+  "    listen ${FS_SERVER_WAN}:9000-9100;" \
   "    server_name ${FS_SERVER_WAN};" \
   "    location / {" \
   "        proxy_pass http://0.0.0.0:\$server_port;" \
