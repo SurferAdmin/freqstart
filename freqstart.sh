@@ -865,12 +865,12 @@ _fsDockerStrategy_() {
         
         if [[ "$(_fsFile_ "${_strategyPath}")" -eq 0 ]]; then
           if ! cmp --silent "${_strategyPathTmp}" "${_strategyPath}"; then
-            cp -a "${_strategyPathTmp}" "${_strategyPath}"
+            sudo cp -a "${_strategyPathTmp}" "${_strategyPath}"
             _strategyUpdateCount=$((_strategyUpdateCount+1))
             _fsFileExist_ "${_strategyPath}"
           fi
         else
-          cp -a "${_strategyPathTmp}" "${_strategyPath}"
+          sudo cp -a "${_strategyPathTmp}" "${_strategyPath}"
           _strategyUpdateCount=$((_strategyUpdateCount+1))
           _fsFileExist_ "${_strategyPath}"
         fi
@@ -930,9 +930,11 @@ _fsDockerAutoupdate_() {
 }
 
 _fsDockerPurge_() {
-    sudo docker ps -a -q | xargs -I {} sudo docker rm -f {}
-    sudo docker network prune --force
-    sudo docker image ls -q | xargs -I {} sudo docker image rm -f {}
+    if [[ "$(_fsSetupPkgsStatus_ "docker-ce")" -eq 0 ]]; then
+      sudo docker ps -a -q | xargs -I {} sudo docker rm -f {}
+      sudo docker network prune --force
+      sudo docker image ls -q | xargs -I {} sudo docker image rm -f {}
+    fi
 }
 
 ###
@@ -978,7 +980,7 @@ _fsUser_() {
   if [[ "${_currentUserId}" -eq 0 ]]; then
     _fsMsg_ "Your are logged in as root."
     
-    if [[ "$(_fsCaseConfirmation_ 'Skip create a new user and transfer files?')" -eq 1 ]]; then
+    if [[ "$(_fsCaseConfirmation_ 'Skip creating a new user?')" -eq 1 ]]; then
       while true; do
         read -rp 'Enter your new username: ' _newUser
 
@@ -997,8 +999,6 @@ _fsUser_() {
       
       if [[ -n "${_newUser}" ]]; then
           # credit: https://superuser.com/a/1613980
-        _newPath="$(bash -c "cd ~$(printf %q "${_newUser}") && pwd")"
-        
         _fsDockerPurge_
         
         sudo adduser --gecos "" "${_newUser}" || sudo passwd "${_newUser}"
@@ -1007,13 +1007,14 @@ _fsUser_() {
           # no password for sudo
         echo "${_newUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
         
+        _newPath="$(bash -c "cd ~$(printf %q "${_newUser}") && pwd")"'/'"${FS_NAME}"
+        
         if [[ ! -d "${_newPath}" ]]; then
-					sudo mkdir "${_newPath}"
-				fi
+          sudo mkdir "${_newPath}"
+        fi
         
 				sudo cp -R "${_dir}"/* "${_newPath}"
 				sudo chown -R "${_newUser}":"${_newUser}" "${_newPath}"
-        #find "${_newPath}" \( -user "${_currentUser}" -o ! -group "${_currentUser}" \) -print0 | xargs -0 sudo chown "${_newUser}":"${_newUser}" 
         
         sudo rm -f "${_symlink}"
         sudo rm -rf "${_dir}"
@@ -1022,6 +1023,7 @@ _fsUser_() {
           sudo usermod -L "${_currentUser}"
         fi
         
+        _fsMsgTitle_ 'Files can be found in new path: '"${_newPath}"
         _logout=0
       fi
     fi
@@ -1034,14 +1036,10 @@ _fsUser_() {
   
   if [[ "${_logout}" -eq 0 ]]; then
     _fsMsg_ 'You have to log out/in to activate the changes!'
-      if [[ "$(_fsCaseConfirmation_ 'Logout now?')" -eq 0 ]]; then
-          # may find a more elegant way
-        sudo reboot
-        exit 0
-      else
-        sudo gpasswd --delete "${_currentUser}" docker
-        _fsMsgExit_ '[FATAL] Restart setup to continue!'
-      fi
+    _fsCdown_ 5 'to reboot...'
+      # may find a more elegant way
+    sudo reboot
+    exit 0
   fi
 }
 
@@ -2038,10 +2036,16 @@ _fsFileCreate_() {
   local _file="${1}"; shift
   local _array=("${@}")
   local _fileTmp="${FS_DIR_TMP}"'/'"${_file##*/}"
+  local _dir="${_file%/*}"
   
   printf -- '%s\n' "${_array[@]}" | sudo tee "${_fileTmp}" > /dev/null
   
+  if [[ ! -d "${_dir}" ]]; then
+    sudo mkdir -p "${_dir}"
+  fi
+  
   sudo cp "${_fileTmp}" "${_file}"
+  
   _fsFileExist_ "${_file}"
 }
 
