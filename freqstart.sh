@@ -1036,7 +1036,7 @@ _fsUser_() {
         _logout=0
       fi
     fi
-  fi
+  fi  
   
   if ! id -nGz "${_currentUser}" | grep -qzxF "docker"; then
     sudo gpasswd -a "${_currentUser}" docker
@@ -1467,25 +1467,31 @@ _fsSetupNginxConf_() {
   local _confPath="/etc/nginx/conf.d"
   local _confPathFrequi="${_confPath}/frequi.conf"
   local _confPathNginx="${_confPath}/default.conf"
-  local _serverUrl='http://'"${FS_SERVER_WAN}" 
+  local _serverUrl='http://'"${FS_SERVER_WAN}"
   
   _fsJsonSet_ "${FS_CONFIG}" 'server_wan' "${FS_SERVER_WAN}"
   _fsJsonSet_ "${FS_CONFIG}" 'server_url' "${_serverUrl}"
   _fsSetupPkgs_ "nginx"
+    
+
   
   _fsFileCreate_ "${_confPathFrequi}" \
   "server {" \
   "    listen ${FS_SERVER_WAN}:80;" \
   "    server_name ${FS_SERVER_WAN};" \
   "    location / {" \
-  "        proxy_pass http://0.0.0.0:9999;" \
+  "        proxy_set_header Host \$host;" \
+  "        proxy_set_header X-Real-IP \$remote_addr;" \
+  "        proxy_pass http://127.0.0.1:9999;" \
   "    }" \
   "}" \
   "server {" \
   "    listen ${FS_SERVER_WAN}:9000-9100;" \
   "    server_name ${FS_SERVER_WAN};" \
   "    location / {" \
-  "        proxy_pass http://0.0.0.0:\$server_port;" \
+  "        proxy_set_header Host \$host;" \
+  "        proxy_set_header X-Real-IP \$remote_addr;" \
+  "        proxy_pass http://127.0.0.1:\$server_port;" \
   "    }" \
   "}"
   
@@ -1508,12 +1514,13 @@ _fsSetupNginxCheck_() {
 
 _fsSetupNginxRestart_() {
   if [[ "$(_fsSetupNginxCheck_)" -eq 1 ]]; then
-    _fsMsgExit_ "Error in nginx config file. For more info enter: nginx -t"
+    _fsMsgExit_ "Error in nginx config file. For more info enter: sudo nginx -t"
   fi
   
-  sudo /etc/init.d/nginx stop
-  sudo pkill -f nginx & wait $!
-  sudo /etc/init.d/nginx start
+  #sudo nginx -s reload || sudo nginx -s start
+  sudo /etc/init.d/nginx stop > /dev/null
+  sudo pkill -f nginx & wait $! > /dev/null
+  sudo /etc/init.d/nginx start > /dev/null
 }
 
 _fsSetupNginxOpenssl_() {
@@ -1619,14 +1626,12 @@ _fsSetupNginxConfSecure_() {
   if [[ "${_mode}" = 'openssl' ]]; then
     _fsFileCreate_ "${_confPathFrequi}" \
     "server {" \
-    "    listen 80;" \
-    "    listen [::]:80;" \
+    "    listen ${FS_SERVER_WAN}:80;" \
     "    server_name ${FS_SERVER_WAN};" \
     "    return 301 https://\$server_name\$request_uri;" \
     "}" \
     "server {" \
-    "    listen 443 ssl;" \
-    "    listen [::]:443 ssl;" \
+    "    listen ${FS_SERVER_WAN}:443 ssl;" \
     "    server_name ${FS_SERVER_WAN};" \
     "    " \
     "    include snippets/self-signed.conf;" \
@@ -1654,14 +1659,12 @@ _fsSetupNginxConfSecure_() {
   elif [[ "${_mode}" = 'letsencrypt' ]]; then
     _fsFileCreate_ "${_confPathFrequi}" \
     "server {" \
-    "    listen 80;" \
-    "    listen [::]:80;   " \
+    "    listen ${_serverDomain}:80;" \
     "    server_name ${_serverDomain};" \
     "    return 301 https://\$host\$request_uri;" \
     "}" \
     "server {" \
-    "    listen 443 ssl http2;" \
-    "    listen [::]:443 ssl http2;" \
+    "    listen ${_serverDomain}:443 ssl http2;" \
     "    server_name ${_serverDomain};" \
     "    " \
     "    ssl_certificate /etc/letsencrypt/live/${_serverDomain}/fullchain.pem;" \
@@ -1754,12 +1757,14 @@ _fsSetupFrequiJson_() {
   local _frequiTmpUsername=''
   local _frequiTmpPassword=''
   local _frequiCors=''
+  local _serverWan=''
   local _setup=1
   
   _frequiCors="$(_fsJsonGet_ "${FS_CONFIG}" "frequi_cors")"
   _frequiJwt="$(_fsJsonGet_ "${FS_FREQUI_JSON}" "jwt_secret_key")"
   _frequiUsername="$(_fsJsonGet_ "${FS_FREQUI_JSON}" "username")"
   _frequiPassword="$(_fsJsonGet_ "${FS_FREQUI_JSON}" "password")"
+  _serverWan="$(_fsJsonGet_ "${FS_FREQUI_JSON}" "server_wan")"
   
   [[ -z "${_frequiJwt}" ]] && _frequiJwt="$(_fsRandomBase64UrlSafe_ 32)"
   
@@ -1897,7 +1902,7 @@ _fsSetupFrequiCompose_() {
   "    volumes:" \
   "      - \"./user_data:/freqtrade/user_data\"" \
   "    ports:" \
-  "      - \"9999:8080\"" \
+  "      - \"127.0.0.1:9999:9999\"" \
   "    tty: true" \
   "    command: >" \
   "      trade" \
@@ -2371,22 +2376,29 @@ _fsScriptLock_() {
   local _lockDir="${FS_DIR_TMP}/${FS_NAME}.lock"
   
   if [[ -n "${FS_DIR_TMP}" ]]; then
-    if ! sudo mkdir -p "${_lockDir}" 2> /dev/null; then
-      _fsMsgExit_ "Unable to acquire script lock: ${_lockDir}"
+    if [[ -d "${_lockDir}" ]]; then
+        # error 99 to not remove temp dir
+      _fsMsgExit_ "[FATAL] Script is already running!" 99
+    elif ! sudo mkdir -p "${_lockDir}" 2> /dev/null; then
+      _fsMsgExit_ "[FATAL] Unable to acquire script lock: ${_lockDir}"
     fi
   else
-    _fsMsgExit_ "Temporary directory is not defined!"
+    _fsMsgExit_ "[FATAL] Temporary directory is not defined!"
   fi
 }
 
 _fsCleanup_() {
+  local _error="${?}"
+
   trap - ERR EXIT SIGINT SIGTERM
     # thanks: lsiem
-  sudo rm -rf "${FS_DIR_TMP}"
+  if [[ "${_error}" -ne 99 ]]; then
+    sudo rm -rf "${FS_DIR_TMP}"
+  fi
 }
 
 _fsErr_() {
-    local _error=${?}
+    local _error="${?}"
     printf -- '%s\n' "Error in ${FS_FILE} in function ${1} on line ${2}" >&2
     exit ${_error}
 }
