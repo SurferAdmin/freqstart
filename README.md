@@ -164,7 +164,7 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 ### Changelog
 
 `v0.1.6`
-* Use docker start instead of recreating the project file.
+* Use docker start instead of recreating the project file and improved restart routine.
 * Add containers docker network "freqstart_proxy" (No network needed in project file from v0.1.5).
 * Start proxy container with fixed IP in subnet of "freqstart_proxy".
 * Added a function to create files incl. sudo for permission and check if file exist. (Thanks: lsiem)
