@@ -163,6 +163,7 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 * Added reset mode to stopp and remove all containers, networks and images.
 * Improved check for nginx if is not installed.
 * Fixed login data creation in FreqUI routine when no entries were made.
+* Fixed scriptlock and cleanup routine.
 
 `v0.1.5`
 * Added docker network policy to proxy project files and bot files (Workaround to use multiple docker project files).
