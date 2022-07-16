@@ -55,7 +55,8 @@ Freqstart provides an interactive setup guide for server security, Freqtrade inc
 
 `Freqstart` is beeing developed and testet on Vultr "Tokyo" Server with `Ubuntu 22.04 x64`. Please open any issues with your specific OS.
 
-Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/>
+`Performance` If you use more than three bots i recommend at least: AMD High Performance -> Tokyo -> 60GB NVMe/2 vCPUs
+Try Vultr "Tokyo" Server and get $100 usage for free:<br/>
 [https://www.vultr.com/?ref=9122650-8H](https://www.vultr.com/?ref=9122650-8H)
 
 ### Installation
@@ -164,7 +165,8 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 
 `v0.1.6`
 * Use docker start instead of recreating the project file.
-* Add containers automatically to docker bridge network (No network needed in project file from v0.1.5).
+* Add containers docker network "freqstart_proxy" (No network needed in project file from v0.1.5).
+* Start proxy container with fixed IP in subnet of "freqstart_proxy".
 * Added a function to create files incl. sudo for permission and check if file exist. (Thanks: lsiem)
 * Removed secret and key routine from Freqtrade confing creation (Most of the time the config has to be modified manually anyway).
 * Improved argument check for functions.
