@@ -954,7 +954,7 @@ _fsSetup_() {
   
   _fsIntro_
   _fsUser_
-  _fsDockerPrerequisites_
+  #_fsDockerPrerequisites_
   _fsSetupNtp_
   _fsSetupFreqtrade_
   _fsSetupFrequi_
@@ -1081,7 +1081,7 @@ _fsSetupPkgs_() {
       elif [[ "${_pkg}" = 'ufw' ]]; then
           # firewall setup
         sudo apt-get install -y -q ufw
-        sudo ufw logging medium
+        sudo ufw logging medium > /dev/null
         yes $'y' | sudo ufw enable
       else
         sudo apt-get install -y -q "${_pkg}"
@@ -1452,6 +1452,7 @@ _fsSetupNginx_() {
           ;;
         [3])
           _fsMsg_ "Continuing with 3) ..."
+          sudo ufw allow http > /dev/null
           break
           ;;
         *)
@@ -1472,12 +1473,10 @@ _fsSetupNginxConf_() {
   _fsJsonSet_ "${FS_CONFIG}" 'server_wan' "${FS_SERVER_WAN}"
   _fsJsonSet_ "${FS_CONFIG}" 'server_url' "${_serverUrl}"
   _fsSetupPkgs_ "nginx"
-    
-
   
   _fsFileCreate_ "${_confPathFrequi}" \
   "server {" \
-  "    listen ${FS_SERVER_WAN}:80;" \
+  "    listen 80;" \
   "    server_name ${FS_SERVER_WAN};" \
   "    location / {" \
   "        proxy_set_header Host \$host;" \
@@ -1517,7 +1516,6 @@ _fsSetupNginxRestart_() {
     _fsMsgExit_ "Error in nginx config file. For more info enter: sudo nginx -t"
   fi
   
-  #sudo nginx -s reload || sudo nginx -s start
   sudo /etc/init.d/nginx stop > /dev/null
   sudo pkill -f nginx & wait $! > /dev/null
   sudo /etc/init.d/nginx start > /dev/null
@@ -1561,8 +1559,8 @@ _fsSetupNginxOpenssl_() {
 _setupNginxLetsencrypt_() {
   local _serverDomain=''
   local _serverDomainIp=''
-  local _cronCmd="/usr/bin/certbot renew --quiet"
-  local _cronUpdate="0 0 * * *"
+  
+  _fsSetupPkgs_ 'certbot' 'python3-certbot-nginx'
   
   while true; do
     read -rp "? Enter your domain (www.example.com): " _serverDomain
@@ -1579,11 +1577,8 @@ _setupNginxLetsencrypt_() {
           _fsMsg_ "The domain \"${_serverDomain}\" does not point to \"${FS_SERVER_WAN}\". Review DNS and try again!"
         else
           _fsJsonSet_ "${FS_CONFIG}" 'server_domain' "${_serverDomain}"
-          
+
           _fsSetupNginxConfSecure_ "letsencrypt"
-          _fsSetupNginxCertbot_
-          
-          _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
           break
         fi
       fi
@@ -1592,32 +1587,29 @@ _setupNginxLetsencrypt_() {
   done
 }
 
-_fsSetupNginxCertbot_() {
-  local _serverDomain=''
-  
-  _serverDomain="$(_fsJsonGet_ "${FS_CONFIG}" 'server_domain')"
-  [[ -z "${_serverDomain}" ]] && _fsMsgExit_ '[FATAL] Domain is not set.'
-  
-  _fsSetupPkgs_ certbot python3-certbot-nginx
-  sudo certbot --nginx -d "${_serverDomain}"
-}
-
 _fsSetupNginxConfSecure_() {
   [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _mode="${1}"
   local _serverDomain=''
   local _serverUrl=''
+  local _sslCert=''
+  local _sslCertKey=''
   local _confPath="/etc/nginx/conf.d"
-  local _confPathNginx="${_confPath}/default.conf"
   local _confPathFrequi="${_confPath}/frequi.conf"
+  local _cronCmd="/usr/bin/certbot renew --quiet"
+  local _cronUpdate="0 0 * * *"
   
   _serverDomain="$(_fsJsonGet_ "${FS_CONFIG}" 'server_domain')"
+  
   if [[ -n "${_serverDomain}" ]]; then
     _serverUrl='https://'"${_serverDomain}"
   else
     _serverUrl='https://'"${FS_SERVER_WAN}"
   fi
+  
+  _sslCert="/etc/letsencrypt/live/${_serverDomain}/fullchain.pem"
+  _sslCertKey="/etc/letsencrypt/live/${_serverDomain}/privkey.pem"
   
   _fsJsonSet_ "${FS_CONFIG}" 'server_url' "${_serverUrl}"
   
@@ -1626,17 +1618,15 @@ _fsSetupNginxConfSecure_() {
   if [[ "${_mode}" = 'openssl' ]]; then
     _fsFileCreate_ "${_confPathFrequi}" \
     "server {" \
-    "    listen ${FS_SERVER_WAN}:80;" \
+    "    listen 80;" \
     "    server_name ${FS_SERVER_WAN};" \
     "    return 301 https://\$server_name\$request_uri;" \
     "}" \
     "server {" \
     "    listen ${FS_SERVER_WAN}:443 ssl;" \
     "    server_name ${FS_SERVER_WAN};" \
-    "    " \
     "    include snippets/self-signed.conf;" \
     "    include snippets/ssl-params.conf;" \
-    "    " \
     "    location / {" \
     "        proxy_set_header Host \$host;" \
     "        proxy_set_header X-Real-IP \$remote_addr;" \
@@ -1646,10 +1636,8 @@ _fsSetupNginxConfSecure_() {
     "server {" \
     "    listen ${FS_SERVER_WAN}:9000-9100 ssl;" \
     "    server_name ${FS_SERVER_WAN};" \
-    "    " \
     "    include snippets/self-signed.conf;" \
     "    include snippets/ssl-params.conf;" \
-    "    " \
     "    location / {" \
     "        proxy_set_header Host \$host;" \
     "        proxy_set_header X-Real-IP \$remote_addr;" \
@@ -1657,21 +1645,37 @@ _fsSetupNginxConfSecure_() {
     "    }" \
     "}"
   elif [[ "${_mode}" = 'letsencrypt' ]]; then
+      # workaround for missing cert files
+    if [[ "$(_fsFile_ "${_sslCert}")" -eq 1 ]] || [[ "$(_fsFile_ "${_sslCertKey}")" -eq 1 ]]; then
+      _fsFileCreate_ "${_confPathFrequi}" \
+      "server {" \
+      "    listen 80;" \
+      "    server_name ${_serverDomain};" \
+      "    location '/.well-known/acme-challenge' {" \
+      "        default_type \"text/plain\";" \
+      "        root /var/www/html;" \
+      "    }" \
+      "}"
+      _fsSetupNginxRestart_
+    fi
+      # start letsencrypt routine
+    sudo certbot --nginx -d "${_serverDomain}"
+    _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
+    
     _fsFileCreate_ "${_confPathFrequi}" \
     "server {" \
-    "    listen ${_serverDomain}:80;" \
+    "    listen 80;" \
     "    server_name ${_serverDomain};" \
+    "    server_name ${FS_SERVER_WAN};" \
     "    return 301 https://\$host\$request_uri;" \
     "}" \
     "server {" \
     "    listen ${_serverDomain}:443 ssl http2;" \
     "    server_name ${_serverDomain};" \
-    "    " \
     "    ssl_certificate /etc/letsencrypt/live/${_serverDomain}/fullchain.pem;" \
     "    ssl_certificate_key /etc/letsencrypt/live/${_serverDomain}/privkey.pem;" \
     "    include /etc/letsencrypt/options-ssl-nginx.conf;" \
     "    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;" \
-    "    " \
     "    # Required for LE certificate enrollment using certbot" \
     "    location '/.well-known/acme-challenge' {" \
     "        default_type \"text/plain\";" \
@@ -1686,12 +1690,10 @@ _fsSetupNginxConfSecure_() {
     "server {" \
     "    listen ${_serverDomain}:9000-9100 ssl http2;" \
     "    server_name ${_serverDomain};" \
-    "    " \
     "    ssl_certificate /etc/letsencrypt/live/${_serverDomain}/fullchain.pem;" \
     "    ssl_certificate_key /etc/letsencrypt/live/${_serverDomain}/privkey.pem;" \
     "    include /etc/letsencrypt/options-ssl-nginx.conf;" \
     "    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;" \
-    "    " \
     "    location / {" \
     "        proxy_set_header Host \$host;" \
     "        proxy_set_header X-Real-IP \$remote_addr;" \
@@ -1700,8 +1702,8 @@ _fsSetupNginxConfSecure_() {
     "}"
   fi
   
-  [[ "$(_fsFile_ "${_confPathNginx}")" -eq 0 ]] && sudo mv "${_confPathNginx}" "${_confPathNginx}"'.disabled'
-  sudo rm -f /etc/nginx/sites-enabled/default*
+  sudo ufw delete allow http > /dev/null
+  sudo ufw allow https > /dev/null
 }
 
 # FREQUI
@@ -1738,9 +1740,9 @@ _fsSetupFrequi_() {
   if [[ "${_setup}" -eq 0 ]];then
     _fsSetupNginx_
     
-    sudo ufw allow "Nginx Full"
-    sudo ufw allow 9000:9100/tcp
-    sudo ufw allow 9999/tcp
+    sudo ufw allow "Nginx Full" > /dev/null
+    sudo ufw allow 9000:9100/tcp > /dev/null
+    sudo ufw allow 9999/tcp > /dev/null
     
     _frequiCors="${_serverUrl}"
     _fsJsonSet_ "${FS_CONFIG}" 'frequi_cors' "${_frequiCors}"
