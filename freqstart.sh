@@ -709,7 +709,6 @@ _fsDockerProject_() {
               _containerStrategyUpdate="${_strategyUpdate}"
             fi
           fi
-          
             # compare latest docker image with container image
           _containerImage="$(sudo docker inspect --format="{{.Config.Image}}" "${_projectContainer}")"
           _containerImageVersion="$(sudo docker inspect --format="{{.Image}}" "${_projectContainer}")"
@@ -718,18 +717,20 @@ _fsDockerProject_() {
             _fsMsg_ "Image is outdated: ${_containerName}"
             _containerRestart=0
           fi
-          
             # stop container if restart is necessary
           if [[ "${_containerRestart}" -eq 0 ]]; then
             if [[ "$(_fsCaseConfirmation_ "Restart container?")" -eq 0 ]]; then
               if [[ -n "${_strategyUpdate}" ]]; then
                 _containerStrategyUpdate="${_strategyUpdate}"
               fi
-              _fsDockerStop_ "${_containerName}"
+                # start container
+              docker restart "${_containerName}" > /dev/null
             fi
             _containerRestart=1
+          else
+              # start container
+            docker start "${_containerName}" > /dev/null
           fi
-          
             # create project json array
           if [[ -n "${_containerStrategyUpdate}" ]]; then
             _containerJsonInner="$(jq -n \
@@ -744,8 +745,6 @@ _fsDockerProject_() {
             )"
             _procjectJson[$_containerCount]="${_containerJson}"
           fi
-            # start container
-          docker start "${_containerName}" > /dev/null
             # increment container count
           _containerCount=$((_containerCount+1))
         elif [[ "${_projectMode}" = "validate" ]]; then
@@ -1350,7 +1349,7 @@ _fsSetupKucoinProxy_() {
   local _docker="mikekonan/exchange-proxy:latest-amd64"
   local _dockerName="${FS_KUCOIN_PROXY}"
   local _setup=1
-  local _containerIp="${FS_BINANCE_PROXY_IP}"
+  local _containerIp="${FS_KUCOIN_PROXY_IP}"
     
   _fsMsgTitle_ 'PROXY FOR KUCOIN'
   
