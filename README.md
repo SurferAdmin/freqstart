@@ -3,7 +3,7 @@
 <!-- FREQSTART -->
 # FREQSTART v0.1.6
 
-`Warning` Major changes to code in v.0.1.6. Stop containers and run setup again, review project bot files and add network if using proxies!
+`Warning` Major changes to code in v.0.1.6. Stop containers and run setup again, review project files!
 
 ### Freqtrade with Docker
 
@@ -45,8 +45,7 @@ This software is for educational purposes only. Do not risk money which you are 
 <!-- GETTING STARTED -->
 ## Getting Started
 
-Freqstart will install Freqtrade and the necessary NostalgiaForInfinity strategies and configs automatically.
-With many more "QoL" features tailored to harness the power of Freqtrade and community tested extensions.
+Freqstart provides an interactive setup guide for server security, Freqtrade incl. config creation, FreqUI, Binance- & Kucoin-Proxy routines.
 
 ### Prerequisites
 
@@ -178,6 +177,7 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 * Added routine to check for root and suggest creating a user interactively incl. file transfer.
 * Added routine to add current user to docker group.
 * Fixed Nginx/FreqUI routing error (502).
+* Improved Nginx routine for secured domain setup.
 
 `v0.1.5`
 * Added docker network policy to proxy project files and bot files (Workaround to use multiple docker project files).
