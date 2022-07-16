@@ -1,9 +1,9 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v0.1.5
+# FREQSTART v0.1.6
 
-`Warning` Major changes to code in v.0.1.5. Stop containers and run setup again, review project bot files and add network if using proxies!
+`Warning` Major changes to code in v.0.1.6. Stop containers and run setup again, review project files!
 
 ### Freqtrade with Docker
 
@@ -45,8 +45,7 @@ This software is for educational purposes only. Do not risk money which you are 
 <!-- GETTING STARTED -->
 ## Getting Started
 
-Freqstart will install Freqtrade and the necessary NostalgiaForInfinity strategies and configs automatically.
-With many more "QoL" features tailored to harness the power of Freqtrade and community tested extensions.
+Freqstart provides an interactive setup guide for server security, Freqtrade incl. config creation, FreqUI, Binance- & Kucoin-Proxy routines.
 
 ### Prerequisites
 
@@ -56,7 +55,8 @@ With many more "QoL" features tailored to harness the power of Freqtrade and com
 
 `Freqstart` is beeing developed and testet on Vultr "Tokyo" Server with `Ubuntu 22.04 x64`. Please open any issues with your specific OS.
 
-Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/>
+`Performance` If you use more than three bots i recommend at least: AMD High Performance -> Tokyo -> 60GB NVMe/2 vCPUs
+Try Vultr "Tokyo" Server and get $100 usage for free:<br/>
 [https://www.vultr.com/?ref=9122650-8H](https://www.vultr.com/?ref=9122650-8H)
 
 ### Installation
@@ -81,7 +81,7 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
    ```sh
    ./freqstart.sh --setup --yes
    ```
-
+   
 ### Start
 
 1. Start a `Freqtrade` container
@@ -92,7 +92,7 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
    ```sh
    freqstart --bot example.yml --yes
    ```
-
+   
 ### Stop
 
 1. Stop a `Freqtrade` container and disable autoupdate
@@ -103,7 +103,7 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
    ```sh
    freqstart --bot example.yml --kill --yes
    ```
-
+   
 ### Autoupdate
 
 1. Start a `Freqtrade` container with autoupdate (image, strategies etc.)
@@ -114,38 +114,44 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
    ```sh
    freqstart --bot example.yml --auto --yes
    ```
+   
+### Reset (WARNING: Stopp and remove all containers, networks and images!)
 
-### Example (.yml)
-1. Project file with NostalgiaForInfinityX
+   ```sh
+   freqstart --reset
+   ```
+   
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+<!-- EXAMPLE PROJECT -->
+## Example Project (.yml)
+
+### Project file with NostalgiaForInfinityX
+
    ```yml
    version: '3'
-   networks:
-     freqstart:
-       name: freqstart
    services:
-     example_dryrun: #IMPORTANT: Dont forget to change service name!
+     example_dryrun: # IMPORTANT: Dont forget to change service name!
        image: freqtradeorg/freqtrade:stable
        volumes:
          - "./user_data:/freqtrade/user_data"
        ports:
-         - "127.0.0.1:9000:8080" #IMPORTANT: Add localhost ip and choose port between 9000 and 9100 and forward to 8080
+         - "127.0.0.1:9000:9999" # OPTIONAL: Choose port between 9000 and 9100 and forward to 9999 or remove if not using FreqUI.
        tty: true
        command: >
          trade
-         --dry-run # OPTIONAL: Remove if you want to trade live
-         --dry-run-wallet 1000 # OPTIONAL: Recommended to have a fixed wallet for dryrun
-         --db-url sqlite:////freqtrade/user_data/example_dryrun.sqlite # IMPORTANT: Dont forget to change database name!
-         --logfile /freqtrade/user_data/logs/example_dryrun.log # IMPORTANT: Dont forget to logfile name!
+         --dry-run
+         --dry-run-wallet
+         --db-url sqlite:////freqtrade/user_data/example_dryrun.sqlite
+         --logfile /freqtrade/user_data/logs/example_dryrun.log
          --strategy NostalgiaForInfinityX
          --strategy-path /freqtrade/user_data/strategies/NostalgiaForInfinityX
          --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/exampleconfig.json
          --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/pairlist-volume-binance-busd.json
          --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/blacklist-binance.json
-         --config /freqtrade/user_data/frequi.json # OPTIONAL: If you want to manage bot via FreqUI
-         --config /freqtrade/user_data/binance_proxy.json # OPTIONAL: Recommended if you want to run multiple bots on Binance
-         --config /freqtrade/user_data/kucoin_proxy.json # OPTIONAL: Recommended if you want to run multiple bots on Kucoin
-       networks:
-         - freqstart
+         --config /freqtrade/user_data/frequi.json # OPTIONAL: If you want to manage bot via FreqUI.
+         --config /freqtrade/user_data/binance_proxy.json
+         --config /freqtrade/user_data/kucoin_proxy.json
    ```
 
 <p align="right">(<a href="#top">back to top</a>)</p>
@@ -157,8 +163,26 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 
 ### Changelog
 
+`v0.1.6`
+* Use docker start instead of recreating the project file and improved restart routine.
+* Add containers docker network "freqstart_proxy" (No network needed in project file from v0.1.5).
+* Start proxy container with fixed IP in subnet of "freqstart_proxy".
+* Added a function to create files incl. sudo for permission and check if file exist. (Thanks: lsiem)
+* Removed secret and key routine from Freqtrade confing creation (Most of the time the config has to be modified manually anyway).
+* Improved argument check for functions.
+* Changed expose to port redirect with localhost ip to proxy project files.
+* Added docker network prune in project compose routine to remove orphaned networks.
+* Added reset mode to stopp and remove all containers, networks and images.
+* Improved check for nginx if is not installed.
+* Fixed login data creation in FreqUI routine when no entries were made.
+* Fixed scriptlock and cleanup routine.
+* Added routine to check for root and suggest creating a user interactively incl. file transfer.
+* Added routine to add current user to docker group.
+* Fixed Nginx/FreqUI routing error (502).
+* Improved Nginx routine for secured domain setup.
+
 `v0.1.5`
-* Added docker network policy to proxy project files and bot files (Workaraund to use multiple docker project files).
+* Added docker network policy to proxy project files and bot files (Workaround to use multiple docker project files).
 * Removed example bot routine and added example to readme.
 * Fixed FreqUI container name and restart policy.
 * Update container to restart no before validation instead of manipulating the docker project file.
@@ -167,6 +191,7 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 * Fixed permission error in cleanup routine. (Thanks: lsiem)
 * Added cron remove for letsencrypt cert in the nginx reconfiguration routine.
 * Fixed domain validation error from host command.
+* File creation routine to create path if it doesnt exist.
 
 `v0.1.4`
 * Changed docker vars name creation. WARNING: Existing/running containers may not be dedected correctly.
