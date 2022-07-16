@@ -36,11 +36,13 @@ readonly FS_CONFIG="${FS_DIR}/${FS_NAME}.conf.json"
 readonly FS_STRATEGIES="${FS_DIR}/${FS_NAME}.strategies.json"
 
 readonly FS_BINANCE_PROXY='binance_proxy'
+readonly FS_BINANCE_PROXY_IP='172.99.0.200'
 readonly FS_BINANCE_PROXY_JSON="${FS_DIR_USER_DATA}/${FS_BINANCE_PROXY}.json"
 readonly FS_BINANCE_PROXY_FUTURES_JSON="${FS_DIR_USER_DATA}/${FS_BINANCE_PROXY}_futures.json"
 readonly FS_BINANCE_PROXY_YML="${FS_DIR}/${FS_BINANCE_PROXY}.yml"
 
 readonly FS_KUCOIN_PROXY='kucoin_proxy'
+readonly FS_KUCOIN_PROXY_IP='172.99.0.201'
 readonly FS_KUCOIN_PROXY_JSON="${FS_DIR_USER_DATA}/${FS_KUCOIN_PROXY}.json"
 readonly FS_KUCOIN_PROXY_YML="${FS_DIR}/${FS_KUCOIN_PROXY}.yml"
 
@@ -348,25 +350,6 @@ _fsDockerProxyIp_() {
   fi
 }
 
-_fsDockerProxyIpValidate_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-
-  local _dockerName="${1}"
-  local _confIp=''
-  
-  _confIp="$(_fsJsonGet_ "${FS_CONFIG}" "${_dockerName}")"
-
-  if [[ -n "${_confIp}" ]]; then
-    if [[ "$(_fsDockerPsName_ "${_dockerName}")" -eq 0 ]]; then
-      _containerIp="$(docker inspect -f '{{ .NetworkSettings.Networks.bridge.IPAddress }}' "${_dockerName}")"
-    
-      if [[ ! "${_confIp}" = "${_containerIp}" ]]; then
-        _fsMsgTitle_ '[WARNING] Proxy IP "'"${_dockerName}"'" has changed ('"${_confIp}"' -> '"${_containerIp}"'). Run setup again!'
-      fi
-    fi
-  fi
-}
-
 _fsDockerStop_() {
   [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
@@ -621,8 +604,6 @@ _fsDockerProject_() {
       _projectStrategies="$(_fsDockerProjectStrategies_ "${_projectPath}")"
       _projectConfigs="$(_fsDockerProjectConfigs_ "${_projectPath}")"
       
-      yes $'y' | docker network prune > /dev/null || true
-
       if [[ "${_projectForce}" = "force" ]]; then
         _projectPorts=0
       else
@@ -661,7 +642,13 @@ _fsDockerProject_() {
           _containerStrategyUpdate=''
           
             # connect container to bridge network
-          docker network connect bridge "${_containerName}" > /dev/null 2> /dev/null || true
+          if [[ "${_containerName}" = "${FS_BINANCE_PROXY}" ]]; then
+            docker network connect --ip "${FS_BINANCE_PROXY_IP}" freqstart_proxy "${_containerName}"
+          elif [[ "${_containerName}" = "${FS_KUCOIN_PROXY}" ]]; then
+            docker network connect --ip "${FS_KUCOIN_PROXY_IP}" freqstart_proxy "${_containerName}"
+          else
+            docker network connect freqstart_proxy "${_containerName}" > /dev/null 2> /dev/null || true
+          fi
           
             # set restart to no
           docker update --restart=no "${_containerName}" > /dev/null
@@ -794,12 +781,13 @@ _fsDockerProject_() {
         else
           sudo rm -f "${_containerConfPath}"
         fi
-        
         _fsDockerProject_ "${_projectPath}" "validate"
       else
         _fsMsg_ "[ERROR] Cannot start: ${_projectFile}"
       fi
     elif [[ "${_projectMode}" = "validate" ]]; then
+      yes $'y' | docker network prune > /dev/null || true
+      
       if [[ "${FS_OPTS_AUTO}" -eq 0 ]]; then
         _fsDockerAutoupdate_ "${_projectFile}"
       fi
@@ -954,7 +942,7 @@ _fsSetup_() {
   
   _fsIntro_
   _fsUser_
-  #_fsDockerPrerequisites_
+  _fsDockerPrerequisites_
   _fsSetupNtp_
   _fsSetupFreqtrade_
   _fsSetupFrequi_
@@ -1281,7 +1269,7 @@ _fsSetupBinanceProxy_() {
   local _docker="nightshift2k/binance-proxy:latest"
   local _dockerName="${FS_BINANCE_PROXY}"
   local _setup=1
-  local _containerIp=''
+  local _containerIp="${FS_BINANCE_PROXY_IP}"
   
   _fsMsgTitle_ 'PROXY FOR BINANCE'
   
@@ -1295,23 +1283,8 @@ _fsSetupBinanceProxy_() {
   fi
   
   if [[ "${_setup}" -eq 0 ]]; then
-      # binance proxy project file
-    _fsFileCreate_ "${FS_BINANCE_PROXY_YML}" \
-    "---" \
-    "version: '3'" \
-    "services:" \
-    "  ${_dockerName}:" \
-    "    image: ${_docker}" \
-    "    container_name: ${_dockerName}" \
-    "    tty: true" \
-    "    command: >" \
-    "      --port-spot=8990" \
-    "      --port-futures=8991" \
-    "      --verbose"
-    
-    _fsDockerProject_ "$(basename "${FS_BINANCE_PROXY_YML}")" "compose" "force"
-    _containerIp="$(_fsDockerProxyIp_ "${_dockerName}")"
-    
+      # create proxy network
+    docker network create --subnet=172.99.0.0/16 freqstart_proxy 2> /dev/null || true
       # binance proxy json file
     _fsFileCreate_ "${FS_BINANCE_PROXY_JSON}" \
     "{" \
@@ -1349,6 +1322,22 @@ _fsSetupBinanceProxy_() {
     "        }" \
     "    }" \
     "}"
+    
+      # binance proxy project file
+    _fsFileCreate_ "${FS_BINANCE_PROXY_YML}" \
+    "---" \
+    "version: '3'" \
+    "services:" \
+    "  ${_dockerName}:" \
+    "    image: ${_docker}" \
+    "    container_name: ${_dockerName}" \
+    "    tty: true" \
+    "    command: >" \
+    "      --port-spot=8990" \
+    "      --port-futures=8991" \
+    "      --verbose" \
+    
+    _fsDockerProject_ "$(basename "${FS_BINANCE_PROXY_YML}")" "compose" "force"
   else
     _fsMsg_ "Skipping..."
   fi
@@ -1361,7 +1350,7 @@ _fsSetupKucoinProxy_() {
   local _docker="mikekonan/exchange-proxy:latest-amd64"
   local _dockerName="${FS_KUCOIN_PROXY}"
   local _setup=1
-  local _containerIp=''
+  local _containerIp="${FS_BINANCE_PROXY_IP}"
     
   _fsMsgTitle_ 'PROXY FOR KUCOIN'
   
@@ -1376,22 +1365,8 @@ _fsSetupKucoinProxy_() {
   fi
   
   if [[ "${_setup}" -eq 0 ]]; then
-      # kucoin proxy project file
-    _fsFileCreate_ "${FS_KUCOIN_PROXY_YML}" \
-    "---" \
-    "version: '3'" \
-    "services:" \
-    "  ${_dockerName}:" \
-    "    image: ${_docker}" \
-    "    container_name: ${_dockerName}" \
-    "    tty: true" \
-    "    command: >" \
-    "      -port 8980" \
-    "      -verbose 1"
-    
-    _fsDockerProject_ "$(basename "${FS_KUCOIN_PROXY_YML}")" "compose" "force"
-    _containerIp="$(_fsDockerProxyIp_ "${_dockerName}")"
-    
+      # create proxy network
+    docker network create --subnet=172.99.0.0/16 freqstart_proxy 2> /dev/null || true
       # kucoin proxy json file
     _fsFileCreate_ "${FS_KUCOIN_PROXY_JSON}" \
     "{" \
@@ -1413,6 +1388,20 @@ _fsSetupKucoinProxy_() {
     "        }" \
     "    }" \
     "}"
+      # kucoin proxy project file
+    _fsFileCreate_ "${FS_KUCOIN_PROXY_YML}" \
+    "---" \
+    "version: '3'" \
+    "services:" \
+    "  ${_dockerName}:" \
+    "    image: ${_docker}" \
+    "    container_name: ${_dockerName}" \
+    "    tty: true" \
+    "    command: >" \
+    "      -port 8980" \
+    "      -verbose 1"
+    
+    _fsDockerProject_ "$(basename "${FS_KUCOIN_PROXY_YML}")" "compose" "force"
   else
     _fsMsg_ "Skipping..."
   fi
@@ -1476,7 +1465,7 @@ _fsSetupNginxConf_() {
   
   _fsFileCreate_ "${_confPathFrequi}" \
   "server {" \
-  "    listen 80;" \
+  "    listen ${FS_SERVER_WAN}:80;" \
   "    server_name ${FS_SERVER_WAN};" \
   "    location / {" \
   "        proxy_set_header Host \$host;" \
@@ -1560,12 +1549,16 @@ _setupNginxLetsencrypt_() {
   local _serverDomain=''
   local _serverDomainIp=''
   
+  _serverDomain="$(_fsJsonGet_ "${FS_CONFIG}" 'server_domain')"
+  
   _fsSetupPkgs_ 'certbot' 'python3-certbot-nginx'
   
   while true; do
-    read -rp "? Enter your domain (www.example.com): " _serverDomain
+    if [[ -z "${_serverDomain}" ]]; then
+      read -rp "? Enter your domain (www.example.com): " _serverDomain
+    fi
     
-    if [[ "${_serverDomain}" = "" ]]; then
+    if [[ -z "${_serverDomain}" ]]; then
       _fsCaseEmpty_
     else
       if [[ "$(_fsCaseConfirmation_ "Is the domain \"${_serverDomain}\" correct?")" -eq 0 ]]; then
@@ -1618,11 +1611,6 @@ _fsSetupNginxConfSecure_() {
   if [[ "${_mode}" = 'openssl' ]]; then
     _fsFileCreate_ "${_confPathFrequi}" \
     "server {" \
-    "    listen 80;" \
-    "    server_name ${FS_SERVER_WAN};" \
-    "    return 301 https://\$server_name\$request_uri;" \
-    "}" \
-    "server {" \
     "    listen ${FS_SERVER_WAN}:443 ssl;" \
     "    server_name ${FS_SERVER_WAN};" \
     "    include snippets/self-signed.conf;" \
@@ -1664,12 +1652,6 @@ _fsSetupNginxConfSecure_() {
     
     _fsFileCreate_ "${_confPathFrequi}" \
     "server {" \
-    "    listen 80;" \
-    "    server_name ${_serverDomain};" \
-    "    server_name ${FS_SERVER_WAN};" \
-    "    return 301 https://\$host\$request_uri;" \
-    "}" \
-    "server {" \
     "    listen ${_serverDomain}:443 ssl http2;" \
     "    server_name ${_serverDomain};" \
     "    ssl_certificate /etc/letsencrypt/live/${_serverDomain}/fullchain.pem;" \
@@ -1703,6 +1685,7 @@ _fsSetupNginxConfSecure_() {
   fi
   
   sudo ufw delete allow http > /dev/null
+  sudo ufw deny http > /dev/null
   sudo ufw allow https > /dev/null
 }
 
@@ -1740,7 +1723,6 @@ _fsSetupFrequi_() {
   if [[ "${_setup}" -eq 0 ]];then
     _fsSetupNginx_
     
-    sudo ufw allow "Nginx Full" > /dev/null
     sudo ufw allow 9000:9100/tcp > /dev/null
     sudo ufw allow 9999/tcp > /dev/null
     
@@ -1970,14 +1952,9 @@ _fsIntro_() {
       _serverWan="${FS_SERVER_WAN}"
     fi
     
-    _fsDockerProxyIpValidate_ "${FS_BINANCE_PROXY}"
-    _fsDockerProxyIpValidate_ "${FS_KUCOIN_PROXY}"
-    
     _serverDomain="$(_fsJsonGet_ "${FS_CONFIG}" "server_domain")"
     _serverUrl="$(_fsJsonGet_ "${FS_CONFIG}" "server_url")"
     _frequiCors="$(_fsJsonGet_ "${FS_CONFIG}" "frequi_cors")"
-    _binanceProxy="$(_fsJsonGet_ "${FS_CONFIG}" "${FS_BINANCE_PROXY}")"
-    _kucoinProxy="$(_fsJsonGet_ "${FS_CONFIG}" "${FS_KUCOIN_PROXY}")"
   fi
   
   _fsFileCreate_ "${FS_CONFIG}" \
@@ -1986,9 +1963,7 @@ _fsIntro_() {
   "    \"server_wan\": \"${_serverWan}\"," \
   "    \"server_domain\": \"${_serverDomain}\"," \
   "    \"server_url\": \"${_serverUrl}\"," \
-  "    \"frequi_cors\": \"${_frequiCors}\"," \
-  "    \"${FS_BINANCE_PROXY}\": \"${_binanceProxy}\"," \
-  "    \"${FS_KUCOIN_PROXY}\": \"${_kucoinProxy}\"" \
+  "    \"frequi_cors\": \"${_frequiCors}\"" \
   "}"
 }
 
@@ -2344,7 +2319,7 @@ _fsIsSymlink_() {
 }
 
 _fsUsage_() {
-  local _msg="${1:-}"
+  local _msg="${1}"
   
   if [[ -n "${_msg}" ]]; then
     printf -- '%s\n' \
@@ -2380,7 +2355,7 @@ _fsScriptLock_() {
   if [[ -n "${FS_DIR_TMP}" ]]; then
     if [[ -d "${_lockDir}" ]]; then
         # error 99 to not remove temp dir
-      _fsMsgExit_ "[FATAL] Script is already running!" 99
+      _fsMsgExit_ "[FATAL] Script is already running! Delete folder if this is an error: sudo rm -rf ${FS_DIR_TMP}" 99
     elif ! sudo mkdir -p "${_lockDir}" 2> /dev/null; then
       _fsMsgExit_ "[FATAL] Unable to acquire script lock: ${_lockDir}"
     fi
@@ -2391,7 +2366,7 @@ _fsScriptLock_() {
 
 _fsCleanup_() {
   local _error="${?}"
-
+  _fsMsg_ 'Cleanup...'
   trap - ERR EXIT SIGINT SIGTERM
     # thanks: lsiem
   if [[ "${_error}" -ne 99 ]]; then
