@@ -22,7 +22,7 @@ set -o nounset
 set -o pipefail
 
 readonly FS_NAME="freqstart"
-readonly FS_VERSION='v0.1.6'
+readonly FS_VERSION='v0.1.7'
 FS_DIR="$(dirname "$(readlink --canonicalize-existing "${0}" 2> /dev/null)")"
 readonly FS_DIR
 readonly FS_FILE="${0##*/}"
@@ -641,7 +641,8 @@ _fsDockerProject_() {
           _strategyUpdate=''
           _containerStrategyUpdate=''
           
-            # connect container to bridge network
+            # connect container to proxy network
+          docker network create --subnet=172.99.0.0/16 freqstart_proxy 2> /dev/null || true
           if [[ "${_containerName}" = "${FS_BINANCE_PROXY}" ]]; then
             docker network connect --ip "${FS_BINANCE_PROXY_IP}" freqstart_proxy "${_containerName}"
           elif [[ "${_containerName}" = "${FS_KUCOIN_PROXY}" ]]; then
@@ -1282,8 +1283,6 @@ _fsSetupBinanceProxy_() {
   fi
   
   if [[ "${_setup}" -eq 0 ]]; then
-      # create proxy network
-    docker network create --subnet=172.99.0.0/16 freqstart_proxy 2> /dev/null || true
       # binance proxy json file
     _fsFileCreate_ "${FS_BINANCE_PROXY_JSON}" \
     "{" \
@@ -1364,8 +1363,6 @@ _fsSetupKucoinProxy_() {
   fi
   
   if [[ "${_setup}" -eq 0 ]]; then
-      # create proxy network
-    docker network create --subnet=172.99.0.0/16 freqstart_proxy 2> /dev/null || true
       # kucoin proxy json file
     _fsFileCreate_ "${FS_KUCOIN_PROXY_JSON}" \
     "{" \
@@ -1580,7 +1577,7 @@ _setupNginxLetsencrypt_() {
 }
 
 _fsSetupNginxConfSecure_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _mode="${1}"
   local _serverDomain=''
@@ -2059,7 +2056,7 @@ _fsCrontab_() {
 }
 
 _fsCrontabRemove_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _cronCmd="${1}"
     # credit: https://stackoverflow.com/a/17975418
@@ -2073,7 +2070,7 @@ _fsCrontabRemove_() {
 }
 
 _fsCrontabValidate_() {
-  [[ $# == 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _cronCmd="${1}"
   
@@ -2255,10 +2252,8 @@ _fsTimestamp_() {
 }
 
 _fsRandomHex_() {
-  local _length="${1}"
+  local _length="${1:-16}"
   local _string=''
-
-  [[ -z "${_length}" ]] && _length='16'
 
   _string="$(xxd -l "${_length}" -ps /dev/urandom)"
   
@@ -2266,21 +2261,17 @@ _fsRandomHex_() {
 }
 
 _fsRandomBase64_() {
-  local _length="${1}"
+  local _length="${1:-24}"
   local _string=''
-  
-  [[ -z "${_length}" ]] && _length='24'
-  
+    
   _string="$(xxd -l "${_length}" -ps /dev/urandom | xxd -r -ps | base64)"
   echo "${_string}"
 }
 
 _fsRandomBase64UrlSafe_() {
-  local _length="${1}"
+  local _length="${1:-32}"
   local _string=''
   
-  [[ -z "${_length}" ]] && _length='32'
-
   _string="$(xxd -l "${_length}" -ps /dev/urandom | xxd -r -ps | base64 | tr -d = | tr + - | tr / _)"
   
   echo "${_string}"
@@ -2318,7 +2309,7 @@ _fsIsSymlink_() {
 }
 
 _fsUsage_() {
-  local _msg="${1}"
+  local _msg="${1:-}"
   
   if [[ -n "${_msg}" ]]; then
     printf -- '%s\n' \

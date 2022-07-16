@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v0.1.6
+# FREQSTART v0.1.7
 
 `Warning` Major changes to code in v.0.1.6. Stop containers and run setup again, review project files!
 
@@ -162,6 +162,11 @@ Try Vultr "Tokyo" Server and get $100 usage for free:<br/>
 See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full list of proposed features (and known issues).
 
 ### Changelog
+
+`v0.1.7`
+* Fixed unbound variable in help function.
+* Improved some function argument checks.
+* Moved creation of docker proxy network to project routine.
 
 `v0.1.6`
 * Use docker start instead of recreating the project file and improved restart routine.
