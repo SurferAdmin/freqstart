@@ -121,8 +121,13 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
    freqstart --reset
    ```
    
-### Example (.yml)
-1. Project file with NostalgiaForInfinityX
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+<!-- EXAMPLE PROJECT -->
+## Example Project (.yml)
+
+### Project file with NostalgiaForInfinityX
+
    ```yml
    version: '3'
    services:
@@ -135,18 +140,18 @@ Get closer to Binance? Try Vultr "Tokyo" Server and get $100 usage for free:<br/
        tty: true
        command: >
          trade
-         --dry-run # OPTIONAL: Remove if you want to trade live.
-         --dry-run-wallet 1000 # OPTIONAL: Recommended to have a fixed wallet for dryrun.
-         --db-url sqlite:////freqtrade/user_data/example_dryrun.sqlite # IMPORTANT: Dont forget to change database name!
-         --logfile /freqtrade/user_data/logs/example_dryrun.log # IMPORTANT: Dont forget to logfile name!
+         --dry-run
+         --dry-run-wallet
+         --db-url sqlite:////freqtrade/user_data/example_dryrun.sqlite
+         --logfile /freqtrade/user_data/logs/example_dryrun.log
          --strategy NostalgiaForInfinityX
          --strategy-path /freqtrade/user_data/strategies/NostalgiaForInfinityX
          --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/exampleconfig.json
          --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/pairlist-volume-binance-busd.json
          --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/blacklist-binance.json
          --config /freqtrade/user_data/frequi.json # OPTIONAL: If you want to manage bot via FreqUI.
-         --config /freqtrade/user_data/binance_proxy.json # OPTIONAL: Recommended if you want to run multiple bots on Binance
-         --config /freqtrade/user_data/kucoin_proxy.json # OPTIONAL: Recommended if you want to run multiple bots on Kucoin
+         --config /freqtrade/user_data/binance_proxy.json
+         --config /freqtrade/user_data/kucoin_proxy.json
    ```
 
 <p align="right">(<a href="#top">back to top</a>)</p>
