@@ -183,8 +183,10 @@ _fsDockerVersionHub_() {
     # credit: https://stackoverflow.com/a/64309017
   _acceptM="application/vnd.docker.distribution.manifest.v2+json"
   _acceptML="application/vnd.docker.distribution.manifest.list.v2+json"
-  _token="$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${_dockerRepo}:pull" | jq -r '.token')"
-
+  _token="$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${_dockerRepo}:pull" | jq -r '.token' || true)"
+  
+  [[ -z "${_token}" ]] && _fsMsgExit_ '[FATA] Cannot reach docker hub!'
+  
   sudo curl -H "Accept: ${_acceptM}" -H "Accept: ${_acceptML}" -H "Authorization: Bearer ${_token}" -o "${_dockerManifest}" \
   -I -s -L "https://registry-1.docker.io/v2/${_dockerRepo}/manifests/${_dockerTag}"
 
@@ -711,16 +713,12 @@ _fsDockerProject_() {
           _strategyPath="${_containerStrategyDir}/${_containerStrategy}.conf.json"
           
           if [[ "$(_fsFileEmpty_ "${_strategyPath}")" -eq 0 ]]; then
-            #_strategyUpdate="$(jq '.update // empty' < "${_strategyPath}")"
-            #_strategyUpdate="$(echo "${_strategyUpdate}" | sed -e 's,",,g' | sed -e 's,\\n,,g')"
             _strategyUpdate="$(_fsValueGet_ "${_strategyPath}" '.update')"
           else
             _strategyUpdate=""
           fi
           
           if [[ "$(_fsFileEmpty_ "${_containerConfPath}")" -eq 0 ]]; then
-            #_containerStrategyUpdate="$(jq '.'"${_containerName}"'[0].strategy_update // empty' < "${_containerConfPath}")"
-            #_containerStrategyUpdate="$(echo "${_containerStrategyUpdate}" | sed -e 's,",,g' | sed -e 's,\\n,,g')"
             _containerStrategyUpdate="$(_fsValueGet_ "${_containerConfPath}" '.'"${_containerName}"'.strategy_update')"
           else
             _containerStrategyUpdate=""
