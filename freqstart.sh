@@ -70,15 +70,15 @@ trap '_fsErr_ "${FUNCNAME:-.}" ${LINENO}' ERR
 _fsDockerVarsPath_() {
   [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
-	local _docker="${1}"
-	local _dockerDir="${FS_DIR_DOCKER}"
-	local _dockerName=''
+  local _docker="${1}"
+  local _dockerDir="${FS_DIR_DOCKER}"
+  local _dockerName=''
   local _dockerTag=''
-	local _dockerPath=''
+  local _dockerPath=''
 
-	_dockerName="$(_fsDockerVarsName_ "${_docker}")"
-	_dockerTag="$(_fsDockerVarsTag_ "${_docker}")"
-	_dockerPath="${_dockerDir}/${_dockerName}_${_dockerTag}.docker"
+  _dockerName="$(_fsDockerVarsName_ "${_docker}")"
+  _dockerTag="$(_fsDockerVarsTag_ "${_docker}")"
+  _dockerPath="${_dockerDir}/${_dockerName}_${_dockerTag}.docker"
 
 	echo "${_dockerPath}"
 }
@@ -86,8 +86,8 @@ _fsDockerVarsPath_() {
 _fsDockerVarsRepo_() {
   [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
-	local _docker="${1}"
-	local _dockerRepo="${_docker%:*}"
+  local _docker="${1}"
+  local _dockerRepo="${_docker%:*}"
 	
 	echo "${_dockerRepo}"
 }
@@ -95,11 +95,11 @@ _fsDockerVarsRepo_() {
 _fsDockerVarsCompare_() {
   [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
-	local _docker="${1}"
-	local _dockerRepo=''
-	local _dockerTag=''
-	local _dockerVersionLocal=''
-	local _dockerVersionHub=''
+  local _docker="${1}"
+  local _dockerRepo=''
+  local _dockerTag=''
+  local _dockerVersionLocal=''
+  local _dockerVersionHub=''
 
   _dockerRepo="$(_fsDockerVarsRepo_ "${_docker}")"
 	_dockerTag="$(_fsDockerVarsTag_ "${_docker}")"
@@ -150,9 +150,9 @@ _fsDockerVarsTag_() {
 _fsDockerVersionLocal_() {
   [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
-	local _dockerRepo="${1}"
-	local _dockerTag="${2}"
-	local _dockerVersionLocal=''
+  local _dockerRepo="${1}"
+  local _dockerTag="${2}"
+  local _dockerVersionLocal=''
   
 	if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" -eq 0 ]]; then
 		_dockerVersionLocal="$(docker inspect --format='{{index .RepoDigests 0}}' "${_dockerRepo}:${_dockerTag}" \
@@ -165,10 +165,10 @@ _fsDockerVersionLocal_() {
 _fsDockerVersionHub_() {
   [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
-	local _dockerRepo="${1}"
-	local _dockerTag="${2}"
-	local _dockerName=''
-	local _dockerManifest=''
+  local _dockerRepo="${1}"
+  local _dockerTag="${2}"
+  local _dockerName=''
+  local _dockerManifest=''
   local _acceptM=''
   local _acceptML=''
   local _token=''
@@ -218,11 +218,11 @@ _fsDockerImage_() {
   _dockerPath="$(_fsDockerVarsPath_ "${_dockerImage}")"
 
   if [[ "${_dockerCompare}" -eq 0 ]]; then
-      # equal
+      # docker hub image version is equal
     _fsMsg_ "Image is installed: ${_dockerRepo}:${_dockerTag}"
     _dockerStatus=0
   elif [[ "${_dockerCompare}" -eq 1 ]]; then
-      # greater
+      # docker hub image version is greater
     _dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerRepo}" "${_dockerTag}")"
 
     if [[ -n "${_dockerVersionLocal}" ]]; then
@@ -249,11 +249,11 @@ _fsDockerImage_() {
       fi
     fi
   elif [[ "${_dockerCompare}" -eq 2 ]]; then
-      # unknown
-      # if docker is not reachable try to load local backup
+      # docker hub image version is unknown
     if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" -eq 0 ]]; then
       _dockerStatus=0
     elif [[ "$(_fsFile_ "${_dockerPath}")" -eq 0 ]]; then
+        # if docker is not reachable try to load local backup
       sudo docker load -i "${_dockerPath}"
 
       if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" -eq 0 ]]; then
@@ -511,11 +511,11 @@ _fsDockerProjectStrategies_() {
 _fsDockerProjectConfigs_() {
   [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
-	local _ymlPath="${1}"
+  local _ymlPath="${1}"
   local _configs=''
   local _configsDeduped=''
-	local _config=''
-	local _configNew=''
+  local _config=''
+  local _configNew=''
   local _error=0
   
   _configs=()
@@ -554,13 +554,13 @@ _fsDockerProjectConfigs_() {
 _fsDockerProject_() {
   [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
-	local _projectPath="${1}"
-	local _projectMode="${2}" # compose, validate, kill
-	local _projectForce="${3:-}" # optional: force
+  local _projectPath="${1}"
+  local _projectMode="${2}" # compose, validate, kill
+  local _projectForce="${3:-}" # optional: force
   local _projectCronCmd=''
   local _projectCronUpdate=''
-	local _projectFile=''
-	local _projectFileName=''
+  local _projectFile=''
+  local _projectFileName=''
   local _projectName=''
   local _projectImages=''
   local _projectStrategies=''
@@ -651,7 +651,7 @@ _fsDockerProject_() {
             docker network connect freqstart_proxy "${_containerName}" > /dev/null 2> /dev/null || true
           fi
           
-            # set restart to no
+            # set restart to no to filter faulty containers
           docker update --restart=no "${_containerName}" > /dev/null
           
             # get container command
@@ -820,6 +820,7 @@ _fsDockerStrategy_() {
   local _strategyPathTmp=''
   local _strategyJson=''
   
+    # create the only necessary strategy for proxies if file doesnt exist or use strategies file from git or create your own.
   if [[ "$(_fsFile_ "${FS_STRATEGIES}")" -eq 1 ]]; then
     _fsFileCreate_ "${FS_STRATEGIES}" \
     "{" \
@@ -861,6 +862,7 @@ _fsDockerStrategy_() {
         sudo curl -s -L "${_strategyUrl}" -o "${_strategyPathTmp}"
         
         if [[ "$(_fsFile_ "${_strategyPath}")" -eq 0 ]]; then
+            # only update file if it is different
           if ! cmp --silent "${_strategyPathTmp}" "${_strategyPath}"; then
             sudo cp -a "${_strategyPathTmp}" "${_strategyPath}"
             _strategyUpdateCount=$((_strategyUpdateCount+1))
@@ -897,12 +899,12 @@ _fsDockerAutoupdate_() {
   
   local _file="freqstart.autoupdate.sh"
   local _path="${FS_DIR}"'/'"${_file}"
-  local _cronCmd="${_path}"
-  local _cronUpdate="0 3 * * *" # update on 3am UTC
   local _projectFile="${1}"
   local _projectAutoupdate='freqstart -b '"${_projectFile}"' -y'
   local _projectAutoupdateMode="${2:-}" # optional: remove
   local _projectAutoupdates=""
+  local _cronCmd="${_path}"
+  local _cronUpdate="0 3 * * *" # update on 3am UTC
   
   _projectAutoupdates=()
   _projectAutoupdates+=("#!/usr/bin/env bash")
@@ -939,7 +941,7 @@ _fsDockerPurge_() {
 
 _fsSetup_() {
   local _symlinkSource="${FS_DIR}/${FS_NAME}.sh"
-  
+
   _fsIntro_
   _fsUser_
   _fsDockerPrerequisites_
@@ -959,6 +961,8 @@ _fsSetup_() {
 		_fsMsgExit_ "Cannot create symlink: ${FS_SYMLINK}"
 	fi
 }
+
+# USER
 
 _fsUser_() {
   local	_currentUser=''
@@ -995,9 +999,9 @@ _fsUser_() {
       done
       
       if [[ -n "${_newUser}" ]]; then
-          # credit: https://superuser.com/a/1613980
+          # stop everything on current user
         _fsDockerPurge_
-        
+          # credit: https://superuser.com/a/1613980
         sudo adduser --gecos "" "${_newUser}" || sudo passwd "${_newUser}"
         sudo usermod -aG sudo "${_newUser}"
         sudo usermod -aG docker "${_newUser}"
@@ -1033,12 +1037,14 @@ _fsUser_() {
   
   if [[ "${_logout}" -eq 0 ]]; then
     _fsMsg_ 'You have to log out/in to activate the changes!'
-    _fsCdown_ 5 'to reboot...'
-      # may find a more elegant way
+    _fsCdown_ 10 'to reboot...'
+      # may find a more elegant way but it does its job
     sudo reboot
     exit 0
   fi
 }
+
+# PACKAGES
 
 _fsSetupPkgs_() {
   [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
@@ -1268,9 +1274,9 @@ _fsSetupFreqtradeYml_() {
 _fsSetupBinanceProxy_() {
   local _docker="nightshift2k/binance-proxy:latest"
   local _dockerName="${FS_BINANCE_PROXY}"
-  local _setup=1
   local _containerIp="${FS_BINANCE_PROXY_IP}"
-  
+  local _setup=1
+
   _fsMsgTitle_ 'PROXY FOR BINANCE'
   
   if [[ "$(_fsDockerPsName_ "${_dockerName}")" -eq 0 ]]; then
@@ -1347,9 +1353,9 @@ _fsSetupBinanceProxy_() {
 _fsSetupKucoinProxy_() {
   local _docker="mikekonan/exchange-proxy:latest-amd64"
   local _dockerName="${FS_KUCOIN_PROXY}"
-  local _setup=1
   local _containerIp="${FS_KUCOIN_PROXY_IP}"
-    
+  local _setup=1
+
   _fsMsgTitle_ 'PROXY FOR KUCOIN'
   
   if [[ "$(_fsDockerPsName_ "${_dockerName}")" -eq 0 ]]; then
@@ -1384,6 +1390,7 @@ _fsSetupKucoinProxy_() {
     "        }" \
     "    }" \
     "}"
+    
       # kucoin proxy project file
     _fsFileCreate_ "${FS_KUCOIN_PROXY_YML}" \
     "---" \
@@ -1629,7 +1636,7 @@ _fsSetupNginxConfSecure_() {
     "    }" \
     "}"
   elif [[ "${_mode}" = 'letsencrypt' ]]; then
-      # workaround for missing cert files
+      # workaround for first setup while missing cert files
     if [[ "$(_fsFile_ "${_sslCert}")" -eq 1 ]] || [[ "$(_fsFile_ "${_sslCertKey}")" -eq 1 ]]; then
       _fsFileCreate_ "${_confPathFrequi}" \
       "server {" \
@@ -1644,6 +1651,7 @@ _fsSetupNginxConfSecure_() {
     fi
       # start letsencrypt routine
     sudo certbot --nginx -d "${_serverDomain}"
+      # add cron to automatically renew cert file
     _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
     
     _fsFileCreate_ "${_confPathFrequi}" \
@@ -1688,27 +1696,19 @@ _fsSetupNginxConfSecure_() {
 # FREQUI
 
 _fsSetupFrequi_() {
-  local _serverUrl=''
-  local _frequiCors=''
   local _frequiName="${FS_NAME}"'_frequi'
+  local _serverUrl=''
   local _setup=1
   local _nr=''
   
-  _serverUrl="$(_fsJsonGet_ "${FS_CONFIG}" 'server_url')"
-  _frequiCors="$(_fsJsonGet_ "${FS_CONFIG}" 'frequi_cors')"
-  
+  _serverUrl="$(_fsJsonGet_ "${FS_CONFIG}" "server_url")"
+
   _fsMsgTitle_ "FREQUI"
   
 	if [[ "$(_fsDockerPsName_ "${_frequiName}")" -eq 0 ]]; then
-    if [[ -n "${_frequiCors}" ]] && [[ ! "${_serverUrl}" = "${_frequiCors}" ]]; then
-      _fsMsg_ "[WARNING] Server URL has changed: ${_frequiCors} -> ${_serverUrl}"
-      _fsMsg_ "Update installation..."
+    _fsMsg_ "Is active: ${_serverUrl}"
+    if [[ "$(_fsCaseConfirmation_ "Skip update?")" -eq 1 ]]; then
       _setup=0
-    else
-      _fsMsg_ "Is active: ${_frequiCors}"
-      if [[ "$(_fsCaseConfirmation_ "Skip update?")" -eq 1 ]]; then
-        _setup=0
-      fi
     fi
   else
     if [[ "$(_fsCaseConfirmation_ "Install now?")" -eq 0 ]]; then
@@ -1718,12 +1718,10 @@ _fsSetupFrequi_() {
   
   if [[ "${_setup}" -eq 0 ]];then
     _fsSetupNginx_
-    
+
     sudo ufw allow 9000:9100/tcp > /dev/null
     sudo ufw allow 9999/tcp > /dev/null
-    
-    _frequiCors="${_serverUrl}"
-    _fsJsonSet_ "${FS_CONFIG}" 'frequi_cors' "${_frequiCors}"
+
     _fsSetupFrequiJson_
     _fsSetupFrequiCompose_
   fi
@@ -1736,16 +1734,16 @@ _fsSetupFrequiJson_() {
   local _frequiPasswordCompare=''
   local _frequiTmpUsername=''
   local _frequiTmpPassword=''
-  local _frequiCors=''
+  local _serverUrl=''
   local _serverWan=''
   local _setup=1
   
-  _frequiCors="$(_fsJsonGet_ "${FS_CONFIG}" "frequi_cors")"
   _frequiJwt="$(_fsJsonGet_ "${FS_FREQUI_JSON}" "jwt_secret_key")"
   _frequiUsername="$(_fsJsonGet_ "${FS_FREQUI_JSON}" "username")"
   _frequiPassword="$(_fsJsonGet_ "${FS_FREQUI_JSON}" "password")"
   _serverWan="$(_fsJsonGet_ "${FS_FREQUI_JSON}" "server_wan")"
-  
+  _serverUrl="$(_fsJsonGet_ "${FS_CONFIG}" "server_url")"
+
   [[ -z "${_frequiJwt}" ]] && _frequiJwt="$(_fsRandomBase64UrlSafe_ 32)"
   
   if [[ -n "${_frequiUsername}" ]] || [[ -n "${_frequiPassword}" ]]; then
@@ -1816,7 +1814,7 @@ _fsSetupFrequiJson_() {
     "        \"verbosity\": \"error\"," \
     "        \"enable_openapi\": false," \
     "        \"jwt_secret_key\": \"${_frequiJwt}\"," \
-    "        \"CORS_origins\": [\"${_frequiCors}\"]," \
+    "        \"CORS_origins\": [\"${_serverUrl}\"]," \
     "        \"username\": \"${_frequiUsername}\"," \
     "        \"password\": \"${_frequiPassword}\"" \
     "    }" \
@@ -1931,9 +1929,6 @@ _fsIntro_() {
 	local _serverWan=''
 	local _serverDomain=''
 	local _serverUrl=''
-	local _frequiCors=''
-	local _binanceProxy=''
-	local _kucoinProxy=''
   
   printf -- '%s\n' \
   "###" \
@@ -1950,7 +1945,6 @@ _fsIntro_() {
     
     _serverDomain="$(_fsJsonGet_ "${FS_CONFIG}" "server_domain")"
     _serverUrl="$(_fsJsonGet_ "${FS_CONFIG}" "server_url")"
-    _frequiCors="$(_fsJsonGet_ "${FS_CONFIG}" "frequi_cors")"
   fi
   
   _fsFileCreate_ "${FS_CONFIG}" \
@@ -1959,7 +1953,6 @@ _fsIntro_() {
   "    \"server_wan\": \"${_serverWan}\"," \
   "    \"server_domain\": \"${_serverDomain}\"," \
   "    \"server_url\": \"${_serverUrl}\"," \
-  "    \"frequi_cors\": \"${_frequiCors}\"" \
   "}"
 }
 
