@@ -22,7 +22,7 @@ set -o nounset
 set -o pipefail
 
 readonly FS_NAME="freqstart"
-readonly FS_VERSION='v0.1.7'
+readonly FS_VERSION='v0.1.8'
 FS_DIR="$(dirname "$(readlink --canonicalize-existing "${0}" 2> /dev/null)")"
 readonly FS_DIR
 readonly FS_FILE="${0##*/}"
@@ -642,11 +642,11 @@ _fsDockerProject_() {
           _containerStrategyUpdate=''
           
             # connect container to proxy network
-          docker network create --subnet=172.99.0.0/16 freqstart_proxy 2> /dev/null || true
+          docker network create --subnet=172.99.0.0/16 freqstart_proxy > /dev/null 2> /dev/null || true
           if [[ "${_containerName}" = "${FS_BINANCE_PROXY}" ]]; then
-            docker network connect --ip "${FS_BINANCE_PROXY_IP}" freqstart_proxy "${_containerName}"
+            docker network connect --ip "${FS_BINANCE_PROXY_IP}" freqstart_proxy "${_containerName}" > /dev/null 2> /dev/null || true
           elif [[ "${_containerName}" = "${FS_KUCOIN_PROXY}" ]]; then
-            docker network connect --ip "${FS_KUCOIN_PROXY_IP}" freqstart_proxy "${_containerName}"
+            docker network connect --ip "${FS_KUCOIN_PROXY_IP}" freqstart_proxy "${_containerName}" > /dev/null 2> /dev/null || true
           else
             docker network connect freqstart_proxy "${_containerName}" > /dev/null 2> /dev/null || true
           fi
