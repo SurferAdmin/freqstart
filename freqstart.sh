@@ -184,9 +184,11 @@ _fsDockerVersionHub_() {
   _acceptM="application/vnd.docker.distribution.manifest.v2+json"
   _acceptML="application/vnd.docker.distribution.manifest.list.v2+json"
   _token="$(curl --connect-timeout 10 -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${_dockerRepo}:pull" | jq -r '.token' || true)"
-    
-  sudo curl --connect-timeout 10 -H "Accept: ${_acceptM}" -H "Accept: ${_acceptML}" -H "Authorization: Bearer ${_token}" -o "${_dockerManifest}" \
-  -I -s -L "https://registry-1.docker.io/v2/${_dockerRepo}/manifests/${_dockerTag}" || true
+
+  if [[ -n "${_token}" ]]; then
+    sudo curl --connect-timeout 10 -H "Accept: ${_acceptM}" -H "Accept: ${_acceptML}" -H "Authorization: Bearer ${_token}" -o "${_dockerManifest}" \
+    -I -s -L "https://registry-1.docker.io/v2/${_dockerRepo}/manifests/${_dockerTag}" || true
+  fi
 
   if [[ "$(_fsFile_ "${_dockerManifest}")" -eq 0 ]]; then
     _status="$(grep -o "200 OK" "${_dockerManifest}")"
@@ -198,6 +200,8 @@ _fsDockerVersionHub_() {
         echo "${_dockerVersionHub}"
       fi
     fi
+  else
+    _fsMsg_ '[WARNING] Cannot connect to docker hub.'
   fi
 }
 
@@ -889,7 +893,7 @@ _fsDockerStrategy_() {
           _strategyFileTypeName="config"
         fi
         
-        sudo curl -s -L "${_strategyUrl}" -o "${_strategyPathTmp}"
+        sudo curl --connect-timeout 10 -s -L "${_strategyUrl}" -o "${_strategyPathTmp}"
         
         if [[ "$(_fsFile_ "${_strategyPath}")" -eq 0 ]]; then
             # only update file if it is different
@@ -903,6 +907,8 @@ _fsDockerStrategy_() {
           _strategyUpdateCount=$((_strategyUpdateCount+1))
           _fsFileExist_ "${_strategyPath}"
         fi
+      else
+        _fsMsg_ '[WARNING] Cannot connect to strategy url.'
       fi
     done
     
@@ -1091,7 +1097,8 @@ _fsSetupPkgs_() {
       if [[ "${_pkg}" = 'docker-ce' ]]; then
           # docker setup
         mkdir -p "${FS_DIR_DOCKER}"
-        curl -fsSL "https://get.docker.com" -o "${_getDocker}"
+        sudo curl --connect-timeout 10 -fsSL "https://get.docker.com" -o "${_getDocker}"
+        _fsFileExist_ "${_getDocker}"
         sudo chmod +x "${_getDocker}"
         sudo sh "${_getDocker}"
         rm -f "${_getDocker}"
@@ -1295,7 +1302,7 @@ _fsSetupFreqtradeYml_() {
   local _dockerGit="https://raw.githubusercontent.com/freqtrade/freqtrade/stable/docker-compose.yml"
 
   if [[ "$(_fsFile_ "${_dockerYml}")" -eq 1 ]]; then
-    curl -s -L "${_dockerGit}" -o "${_dockerYml}"
+    sudo curl --connect-timeout 10 -s -L "${_dockerGit}" -o "${_dockerYml}"
     _fsFileExist_ "${_dockerYml}"
   fi
 }
@@ -2000,7 +2007,7 @@ _fsStats_() {
 	local _cpu
     # some handy stats to get you an impression how your server compares to the current possibly best location for binance
 	_ping="$(ping -c 1 -w15 api3.binance.com | awk -F '/' 'END {print $5}')"
-	_time="$( (time curl -X GET "https://api.binance.com/api/v3/exchangeInfo?symbol=BNBBTC") 2>&1 > /dev/null \
+	_time="$( (time curl --connect-timeout 10 -X GET "https://api.binance.com/api/v3/exchangeInfo?symbol=BNBBTC") 2>&1 > /dev/null \
   | grep -o "real.*s" \
   | sed "s#real$(echo '\t')##" )"
   _memory="$(free -m | awk 'NR==2{printf "Memory Usage: %s/%sMB (%.2f%%)\n", $3,$2,$3*100/$2 }')"
@@ -2258,7 +2265,7 @@ _fsIsUrl_() {
   
   if [[ "${_url}" =~ $_regex ]]; then
       # credit: https://stackoverflow.com/a/41875657
-    _status="$(curl -o /dev/null -Isw '%{http_code}' "${_url}")"
+    _status="$(curl --connect-timeout 10 -o /dev/null -Isw '%{http_code}' "${_url}")"
 
     if [[ "${_status}" = '200' ]]; then
       echo 0
