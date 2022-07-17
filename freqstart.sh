@@ -212,7 +212,7 @@ _fsDockerImage_() {
   local _dockerPath=''
   local _dockerStatus=2
   local _dockerVersionLocal=''
-
+  
   _dockerRepo="$(_fsDockerVarsRepo_ "${_dockerImage}")"
   _dockerTag="$(_fsDockerVarsTag_ "${_dockerImage}")"
   _dockerName="$(_fsDockerVarsName_ "${_dockerImage}")"
@@ -269,10 +269,12 @@ _fsDockerImage_() {
   if [[ "${_dockerStatus}" -eq 0 ]]; then
     echo "${_dockerVersionLocal}"
   elif [[ "${_dockerStatus}" -eq 1 ]]; then
-    [[ ! -d "${FS_DIR_DOCKER}" ]] && sudo mkdir -p "${FS_DIR_DOCKER}"
+    if [[ ! -d "${FS_DIR_DOCKER}" ]]; then
+      sudo mkdir -p "${FS_DIR_DOCKER}"
+    fi
 
     sudo rm -f "${_dockerPath}"
-    sudo docker save -o "${_dockerPath}" "${_dockerRepo}:${_dockerTag}"
+    docker save -o "${_dockerPath}" "${_dockerRepo}:${_dockerTag}"
     [[ "$(_fsFile_ "${_dockerPath}")" -eq 1 ]] && _fsMsg_ "[WARNING] Cannot create backup for: ${_dockerRepo}:${_dockerTag}"
     
     echo "${_dockerVersionLocal}"
@@ -379,15 +381,14 @@ _fsDockerProjectImages_() {
     for _ymlImage in "${_ymlImagesDeduped[@]}"; do
       _dockerImage="$(_fsDockerImage_ "${_ymlImage}")"
       if [[ -z "${_dockerImage}" ]]; then
-        _error=1
-        break
+        _error=$((_error+1))
       fi
     done
     
-    if [[ "${_error}" -eq 1 ]]; then
-      echo 1
-    else
+    if [[ "${_error}" -eq 0 ]]; then
       echo 0
+    else
+      echo 1
     fi
   else
     echo 1
@@ -466,8 +467,8 @@ _fsDockerProjectStrategies_() {
 	local _strategiesDirDeduped=''
 	local _strategyDir=''
 	local _strategyPath=''
-  local _status=0
-  local _error=1
+	local _strategyPathFound=1
+  local _error=0
   
     # download or update implemented strategies in project file
   _strategies=()
@@ -485,8 +486,7 @@ _fsDockerProjectStrategies_() {
     while read -r; do
       _strategiesDeduped+=( "$REPLY" )
     done < <(_fsDedupeArray_ "${_strategies[@]}")
-
-    # validate optional strategy paths in project file
+      # validate optional strategy paths in project file
     _strategiesDir=()
     while read -r; do
       _strategiesDir+=( "$REPLY" )
@@ -495,8 +495,7 @@ _fsDockerProjectStrategies_() {
     | sed "s,\",,g" \
     | sed "s,\s,,g" \
     | sed "s,\-\-strategy-path,,g" \
-    | sed "s,^/[^/]*,${FS_DIR}," \
-    || true)
+    | sed "s,^/[^/]*,${FS_DIR}," || true)
       # add default strategy path
     _strategiesDir+=( "${FS_DIR_USER_DATA_STRATEGIES}" )
 
@@ -506,36 +505,29 @@ _fsDockerProjectStrategies_() {
     done < <(_fsDedupeArray_ "${_strategiesDir[@]}")
 
     for _strategy in "${_strategiesDeduped[@]}"; do
-      if [[ "$(_fsDockerStrategy_ "${_strategy}")" -eq 1 ]]; then
-        _status=1
-      fi
+      _fsDockerStrategy_ "${_strategy}"
       
       for _strategyDir in "${_strategiesDirDeduped[@]}"; do
         _strategyPath="${_strategyDir}"'/'"${_strategy}"'.py'
         if [[ "$(_fsFile_ "${_strategyPath}")" -eq 0 ]]; then
-          _error=0
+          _strategyPathFound=0
           break
         fi
       done
 
-      if [[ "${_error}" -eq 1 ]]; then
+      if [[ "${_strategyPathFound}" -eq 1 ]]; then
         _fsMsg_ '[ERROR] Strategy file not found: '"${_strategyPath}"
-        readonly _status=2
+        _error=$((_error+1))
       fi
-        # set error to 1 again
-      _error=1
+      
+      _strategyPathFound=1
     done
   fi
 
-  if [[ "${_status}" -eq 2 ]]; then
-      # strategy not found
-    echo 2
-  elif [[ "${_status}" -eq 1 ]]; then
-      # strategy updated
-    echo 1
-  else
-      # strategy is installed
+  if [[ "${_error}" -eq 0 ]]; then
     echo 0
+  else
+    echo 1
   fi
 }
 
@@ -593,10 +585,10 @@ _fsDockerProject_() {
   local _projectFile=''
   local _projectFileName=''
   local _projectName=''
-  local _projectImages=''
-  local _projectStrategies=''
-  local _projectConfigs=''
-  local _projectPorts=''
+  local _projectImages=1
+  local _projectStrategies=1
+  local _projectConfigs=1
+  local _projectPorts=1
   local _projectContainers=''
   local _projectContainer=''
   local _procjectJson=''
@@ -644,7 +636,7 @@ _fsDockerProject_() {
       [[ "${_projectImages}" -eq 1 ]] && _error=$((_error+1))
       [[ "${_projectConfigs}" -eq 1 ]] && _error=$((_error+1))
       [[ "${_projectPorts}" -eq 1 ]] && _error=$((_error+1))
-      [[ "${_projectStrategies}" -eq 2 ]] && _error=$((_error+1))
+      [[ "${_projectStrategies}" -eq 1 ]] && _error=$((_error+1))
 
       if [[ "${_error}" -eq 0 ]]; then
         if [[ "${_projectForce}" = "force" ]]; then
@@ -719,19 +711,23 @@ _fsDockerProject_() {
           _strategyPath="${_containerStrategyDir}/${_containerStrategy}.conf.json"
           
           if [[ "$(_fsFileEmpty_ "${_strategyPath}")" -eq 0 ]]; then
-            _strategyUpdate="$(jq '.update // empty' < "${_strategyPath}")"
-            _strategyUpdate="$(echo "${_strategyUpdate}" | sed -e 's,",,g' | sed -e 's,\\n,,g')"
+            #_strategyUpdate="$(jq '.update // empty' < "${_strategyPath}")"
+            #_strategyUpdate="$(echo "${_strategyUpdate}" | sed -e 's,",,g' | sed -e 's,\\n,,g')"
+            _strategyUpdate="$(_fsValueGet_ "${_strategyPath}" '.update')"
           else
             _strategyUpdate=""
           fi
           
           if [[ "$(_fsFileEmpty_ "${_containerConfPath}")" -eq 0 ]]; then
-            _containerStrategyUpdate="$(jq '.'"${_containerName}"'[0].strategy_update // empty' < "${_containerConfPath}")"
-            _containerStrategyUpdate="$(echo "${_containerStrategyUpdate}" | sed -e 's,",,g' | sed -e 's,\\n,,g')"
+            #_containerStrategyUpdate="$(jq '.'"${_containerName}"'[0].strategy_update // empty' < "${_containerConfPath}")"
+            #_containerStrategyUpdate="$(echo "${_containerStrategyUpdate}" | sed -e 's,",,g' | sed -e 's,\\n,,g')"
+            _containerStrategyUpdate="$(_fsValueGet_ "${_containerConfPath}" '.'"${_containerName}"'.strategy_update')"
           else
             _containerStrategyUpdate=""
           fi
-          
+            _fsMsg_ "_strategyUpdate: ${_strategyUpdate}"
+            _fsMsg_ "_containerStrategyUpdate: ${_containerStrategyUpdate}"
+
           if [[ -n "${_strategyUpdate}" ]]; then
             if [[ -n "${_containerStrategyUpdate}" ]]; then
               if [[ "${_containerRunning}" -eq 0 ]] && [[ ! "${_containerStrategyUpdate}" = "${_strategyUpdate}" ]]; then
@@ -750,19 +746,22 @@ _fsDockerProject_() {
             _fsMsg_ "Image is outdated: ${_containerName}"
             _containerRestart=0
           fi
-            # stop container if restart is necessary
-          if [[ "${_containerRestart}" -eq 0 ]]; then
-            if [[ "$(_fsCaseConfirmation_ "Restart container?")" -eq 0 ]]; then
-              if [[ -n "${_strategyUpdate}" ]]; then
-                _containerStrategyUpdate="${_strategyUpdate}"
-              fi
-                # start container
-              docker restart "${_containerName}" > /dev/null
-            fi
-            _containerRestart=1
-          else
+
+          if [[ "${_containerRunning}" -eq 1 ]]; then
               # start container
             docker start "${_containerName}" > /dev/null
+          else
+              # restart container if necessary
+            if [[ "${_containerRestart}" -eq 0 ]]; then
+              if [[ "$(_fsCaseConfirmation_ "Restart container?")" -eq 0 ]]; then
+                if [[ -n "${_strategyUpdate}" ]]; then
+                  _containerStrategyUpdate="${_strategyUpdate}"
+                fi
+                  # start container
+                docker restart "${_containerName}" > /dev/null
+              fi
+              _containerRestart=1
+            fi
           fi
             # create project json array
           if [[ -n "${_containerStrategyUpdate}" ]]; then
@@ -773,7 +772,7 @@ _fsDockerProject_() {
               '$ARGS.named' \
             )"
             _containerJson="$(jq -n \
-              --argjson "${_containerName}" "[${_containerJsonInner}]" \
+              --argjson "${_containerName}" "${_containerJsonInner}" \
               '$ARGS.named' \
             )"
             _procjectJson[$_containerCount]="${_containerJson}"
