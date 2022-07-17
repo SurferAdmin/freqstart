@@ -168,6 +168,7 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 
 `v0.1.8`
 * Modified proxy network creation to be non-verbose.
+* Removed frequi_cors config parameter since it is deprecated after integrating Nginx into FreqUI routine.
 
 `v0.1.7`
 * Fixed unbound variable in help function.
