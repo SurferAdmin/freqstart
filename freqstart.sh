@@ -108,14 +108,14 @@ _fsDockerVarsCompare_() {
 
 	# compare versions
 	if [[ -z "${_dockerVersionHub}" ]]; then
-    # unkown
+      # unkown
 		echo 2
 	else
 		if [[ "${_dockerVersionHub}" = "${_dockerVersionLocal}" ]]; then
-      # equal
+        # equal
 			echo 0
 		else
-      # greater
+        # greater
 			echo 1
 		fi
 	fi
@@ -158,7 +158,9 @@ _fsDockerVersionLocal_() {
 		_dockerVersionLocal="$(docker inspect --format='{{index .RepoDigests 0}}' "${_dockerRepo}:${_dockerTag}" \
 		| sed 's/.*@//')"
     
-    [[ -n "${_dockerVersionLocal}" ]] && echo "${_dockerVersionLocal}"
+    if [[ -n "${_dockerVersionLocal}" ]]; then
+      echo "${_dockerVersionLocal}"
+    fi
 	fi
 }
 
@@ -190,7 +192,7 @@ _fsDockerVersionHub_() {
     _status="$(grep -o "200 OK" "${_dockerManifest}")"
 
     if [[ -n "${_status}" ]]; then
-      _dockerVersionHub="$(_fsValueGet_ "${_dockerManifest}" "etag")"
+      _dockerVersionHub="$(_fsValueGet_ "${_dockerManifest}" 'etag')"
       
       if [[ -n "${_dockerVersionHub}" ]]; then
         echo "${_dockerVersionHub}"
@@ -230,8 +232,8 @@ _fsDockerImage_() {
       _fsMsg_ "Image update found for: ${_dockerRepo}:${_dockerTag}"
       
       if [[ "$(_fsCaseConfirmation_ "Do you want to update now?")" -eq 0 ]]; then
-        sudo docker pull "${_dockerRepo}:${_dockerTag}"
-        
+        docker pull "${_dockerRepo}"':'"${_dockerTag}"
+
         if [[ "$(_fsDockerVarsCompare_ "${_dockerImage}")" -eq 0 ]]; then
           _fsMsg_ "Updated..."
           _dockerStatus=1
@@ -242,7 +244,7 @@ _fsDockerImage_() {
       fi
     else
         # install from docker hub
-      sudo docker pull "${_dockerRepo}:${_dockerTag}"
+      docker pull "${_dockerRepo}:${_dockerTag}"
       if [[ "$(_fsDockerVarsCompare_ "${_dockerImage}")" -eq 0 ]]; then
         _fsMsg_ "Image installed: ${_dockerRepo}:${_dockerTag}"
         _dockerStatus=1
@@ -254,7 +256,7 @@ _fsDockerImage_() {
       _dockerStatus=0
     elif [[ "$(_fsFile_ "${_dockerPath}")" -eq 0 ]]; then
         # if docker is not reachable try to load local backup
-      sudo docker load -i "${_dockerPath}"
+      docker load -i "${_dockerPath}"
 
       if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" -eq 0 ]]; then
         _dockerStatus=0
@@ -464,6 +466,7 @@ _fsDockerProjectStrategies_() {
 	local _strategiesPathDeduped=''
 	local _strategyPath=''
   local _update=0
+  local _error=1
   
     # download or update implemented strategies in project file
   _strategies=()
@@ -482,37 +485,41 @@ _fsDockerProjectStrategies_() {
       _strategiesDeduped+=( "$REPLY" )
     done < <(_fsDedupeArray_ "${_strategies[@]}")
 
-    for _strategy in "${_strategiesDeduped[@]}"; do        
-      if [[ "$(_fsDockerStrategy_ "${_strategy}")" -eq 1 ]]; then
-        _update=$((_update+1))
-      fi
-    done
-  fi
-  
-  # validate all strategy paths in project file
-  _strategiesPath=()
-  while read -r; do
-    _strategiesPath+=( "$REPLY" )
-  done < <(grep -o "strategy-path" "${_ymlPath}" \
-  | sed "s,\=,,g" \
-  | sed "s,\",,g" \
-  | sed "s,\s,,g" \
-  | sed "s,\-\-strategy-path,,g" || true)
+    # validate optional strategy paths in project file
+    _strategiesPath=()
+    while read -r; do
+      _strategiesPath+=( "$REPLY" )
+    done < <(grep "strategy-path" "${_ymlPath}" \
+    | sed "s,\=,,g" \
+    | sed "s,\",,g" \
+    | sed "s,\s,,g" \
+    | sed "s,\-\-strategy-path,,g" \
+    | sed "s,^/[^/]*,${FS_DIR}," \
+    || true)
+      # add default strategy path
+    _strategiesPath+=( "${FS_DIR_USER_DATA_STRATEGIES}" )
 
-  if (( ${#_strategiesPath[@]} )); then
     _strategiesPathDeduped=()
     while read -r; do
       _strategiesPathDeduped+=( "$REPLY" )
     done < <(_fsDedupeArray_ "${_strategiesPath[@]}")
 
-    for _strategyPath in "${_strategiesPathDeduped[@]}"; do        
-      if [[ "$(_fsFile_ "${_strategyPath}")" -eq 1 ]]; then
-        _fsMsgExit_ '[FATAL] Strategy file not found: '"${_strategyPath}"
+    for _strategy in "${_strategiesDeduped[@]}"; do        
+      if [[ "$(_fsDockerStrategy_ "${_strategy}")" -eq 1 ]]; then
+        _update=$((_update+1))
       fi
+      
+      for _strategyPath in "${_strategiesPathDeduped[@]}"; do
+        if [[ "$(_fsFile_ "${_strategyPath}"'/'"${_strategy}"'.py')" -eq 0 ]]; then
+          _error=0
+        fi
+      done
     done
   fi
 
-  if [[ "${_update}" -eq 0 ]]; then
+  if [[ "${_error}" -eq 1 ]]; then
+  _fsMsgExit_ '[FATAL] Strategy file not found: '"${_strategyPath}"
+  elif [[ "${_update}" -eq 0 ]]; then
     echo 0
   else
     echo 1
@@ -2130,10 +2137,9 @@ _fsValueGet_() {
       | sed "s,\",,g" \
       | sed "s,\s,,g" \
       | sed "s#,##g" \
-      | sed "s#:##g" \
-      | sed "s,${_key},,")"
+      | sed "s,${_key}:,,")"
     fi
-
+    
     if [[ -n "${_value}" ]]; then
       echo "${_value}"
     fi
