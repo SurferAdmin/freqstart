@@ -51,7 +51,7 @@ readonly FS_FREQUI_SERVER_JSON="${FS_DIR_USER_DATA}/frequi_server.json"
 readonly FS_FREQUI_YML="${FS_DIR}/${FS_NAME}_frequi.yml"
 FS_SERVER_WAN="$(hostname -I | awk '{ print $1 }')"
 readonly FS_SERVER_WAN
-FS_HASH="$(xxd -l8 -ps /dev/urandom)"
+FS_HASH="$(xxd -l 8 -ps /dev/urandom)"
 readonly FS_HASH
 
 FS_OPTS_BOT=1
@@ -176,7 +176,7 @@ _fsDockerVersionHub_() {
   local _dockerVersionHub=''
 
 	_dockerName="$(_fsDockerVarsName_ "${_dockerRepo}")"
-	_dockerManifest="${FS_DIR_TMP}/${_dockerName}_${_dockerTag}_${FS_HASH}.json"
+	_dockerManifest="${FS_DIR_TMP}"'/'"${FS_HASH}"'_'"${_dockerName}"'_'"${_dockerTag}"'.md'
 
     # credit: https://stackoverflow.com/a/64309017
   _acceptM="application/vnd.docker.distribution.manifest.v2+json"
@@ -190,7 +190,7 @@ _fsDockerVersionHub_() {
     _status="$(grep -o "200 OK" "${_dockerManifest}")"
 
     if [[ -n "${_status}" ]]; then
-      _dockerVersionHub="$(_fsJsonGet_ "${_dockerManifest}" "etag")"
+      _dockerVersionHub="$(_fsValueGet_ "${_dockerManifest}" "etag")"
       
       if [[ -n "${_dockerVersionHub}" ]]; then
         echo "${_dockerVersionHub}"
@@ -333,21 +333,6 @@ _fsDockerId2Name_() {
 	if [[ -n "${_dockerName}" ]]; then
 		echo "${_dockerName}"
 	fi
-}
-
-_fsDockerProxyIp_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-  
-  local _dockerName="${1}"
-  
-  _containerIp="$(docker inspect -f '{{ .NetworkSettings.Networks.bridge.IPAddress }}' "${_dockerName}")"
-
-  if [[ -n "${_containerIp}" ]]; then
-    _fsJsonSet_ "${FS_CONFIG}" "${_dockerName}" "${_containerIp}"
-    echo "${_containerIp}"
-  else
-    _fsMsgExit_ '[FATAL] Proxy IP for "'"${_dockerName}"'" not found.'
-  fi
 }
 
 _fsDockerStop_() {
@@ -1462,8 +1447,7 @@ _fsSetupNginxConf_() {
   local _confPathNginx="${_confPath}/default.conf"
   local _serverUrl='http://'"${FS_SERVER_WAN}"
   
-  _fsJsonSet_ "${FS_CONFIG}" 'server_wan' "${FS_SERVER_WAN}"
-  _fsJsonSet_ "${FS_CONFIG}" 'server_url' "${_serverUrl}"
+  _fsValueUpdate_ "${FS_CONFIG}" '.server_url' "${_serverUrl}"
   _fsSetupPkgs_ "nginx"
   
   _fsFileCreate_ "${_confPathFrequi}" \
@@ -1552,7 +1536,7 @@ _setupNginxLetsencrypt_() {
   local _serverDomain=''
   local _serverDomainIp=''
   
-  _serverDomain="$(_fsJsonGet_ "${FS_CONFIG}" 'server_domain')"
+  _serverDomain="$(_fsValueGet_ "${FS_CONFIG}" '.server_domain')"
   
   _fsSetupPkgs_ 'certbot' 'python3-certbot-nginx'
   
@@ -1572,7 +1556,7 @@ _setupNginxLetsencrypt_() {
         if [[ ! "${_serverDomainIp}" = "${FS_SERVER_WAN}" ]]; then
           _fsMsg_ "The domain \"${_serverDomain}\" does not point to \"${FS_SERVER_WAN}\". Review DNS and try again!"
         else
-          _fsJsonSet_ "${FS_CONFIG}" 'server_domain' "${_serverDomain}"
+          _fsValueUpdate_ "${FS_CONFIG}" '.server_domain' "${_serverDomain}"
 
           _fsSetupNginxConfSecure_ "letsencrypt"
           break
@@ -1596,7 +1580,7 @@ _fsSetupNginxConfSecure_() {
   local _cronCmd="/usr/bin/certbot renew --quiet"
   local _cronUpdate="0 0 * * *"
   
-  _serverDomain="$(_fsJsonGet_ "${FS_CONFIG}" 'server_domain')"
+  _serverDomain="$(_fsValueGet_ "${FS_CONFIG}" '.server_domain')"
   
   if [[ -n "${_serverDomain}" ]]; then
     _serverUrl='https://'"${_serverDomain}"
@@ -1607,7 +1591,7 @@ _fsSetupNginxConfSecure_() {
   _sslCert="/etc/letsencrypt/live/${_serverDomain}/fullchain.pem"
   _sslCertKey="/etc/letsencrypt/live/${_serverDomain}/privkey.pem"
   
-  _fsJsonSet_ "${FS_CONFIG}" 'server_url' "${_serverUrl}"
+  _fsValueUpdate_ "${FS_CONFIG}" '.server_url' "${_serverUrl}"
   
   sudo rm -f "${_confPathFrequi}"
     # thanks: Blood4rc, Hippocritical
@@ -1701,7 +1685,7 @@ _fsSetupFrequi_() {
   local _setup=1
   local _nr=''
   
-  _serverUrl="$(_fsJsonGet_ "${FS_CONFIG}" "server_url")"
+  _serverUrl="$(_fsValueGet_ "${FS_CONFIG}" ".server_url")"
 
   _fsMsgTitle_ "FREQUI"
   
@@ -1740,11 +1724,11 @@ _fsSetupFrequiJson_() {
   local _serverWan=''
   local _setup=1
   
-  _frequiJwt="$(_fsJsonGet_ "${FS_FREQUI_JSON}" "jwt_secret_key")"
-  _frequiUsername="$(_fsJsonGet_ "${FS_FREQUI_JSON}" "username")"
-  _frequiPassword="$(_fsJsonGet_ "${FS_FREQUI_JSON}" "password")"
-  _serverWan="$(_fsJsonGet_ "${FS_FREQUI_JSON}" "server_wan")"
-  _serverUrl="$(_fsJsonGet_ "${FS_CONFIG}" "server_url")"
+  _frequiJwt="$(_fsValueGet_ "${FS_FREQUI_JSON}" ".api_server.jwt_secret_key")"
+  _frequiUsername="$(_fsValueGet_ "${FS_FREQUI_JSON}" ".api_server.username")"
+  _frequiPassword="$(_fsValueGet_ "${FS_FREQUI_JSON}" ".api_server.password")"
+  _serverWan="$(_fsValueGet_ "${FS_FREQUI_JSON}" ".server_wan")"
+  _serverUrl="$(_fsValueGet_ "${FS_CONFIG}" ".server_url")"
 
     # generate jwt if it is not set in config
   [[ -z "${_frequiJwt}" ]] && _frequiJwt="$(_fsRandomBase64UrlSafe_ 32)"
@@ -1941,15 +1925,15 @@ _fsIntro_() {
   "###" >&2
   
 	if [[ "$(_fsFile_ "${FS_CONFIG}")" -eq 0 ]]; then
-    _serverWan="$(_fsJsonGet_ "${FS_CONFIG}" "server_wan")"
+    _serverWan="$(_fsValueGet_ "${FS_CONFIG}" ".server_wan")"
     if [[ -n "${_serverWan}" ]] && [[ ! "${FS_SERVER_WAN}" = "${_serverWan}" ]]; then
       _fsMsgTitle_ '[WARNING] Server WAN has changed ('"${_serverWan}"' -> '"${FS_SERVER_WAN}"'). Run setup again!'
     else
       _serverWan="${FS_SERVER_WAN}"
     fi
     
-    _serverDomain="$(_fsJsonGet_ "${FS_CONFIG}" "server_domain")"
-    _serverUrl="$(_fsJsonGet_ "${FS_CONFIG}" "server_url")"
+    _serverDomain="$(_fsValueGet_ "${FS_CONFIG}" ".server_domain")"
+    _serverUrl="$(_fsValueGet_ "${FS_CONFIG}" ".server_url")"
   fi
   
   _fsFileCreate_ "${FS_CONFIG}" \
@@ -2024,20 +2008,25 @@ _fsFileExist_() {
 _fsFileCreate_() {
   [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
   
-  local _file="${1}"; shift
+  local _filePath="${1}"; shift
   local _array=("${@}")
-  local _fileTmp="${FS_DIR_TMP}"'/'"${_file##*/}"
-  local _dir="${_file%/*}"
-  
+  local _fileTmp=''
+  local _file="${_filePath##*/}"
+  local _fileDir="${_filePath%/*}"
+  local _fileHash=''
+
+  _fileHash="$(_fsRandomHex_ 8)"
+  _fileTmp="${FS_DIR_TMP}"'/'"${_fileHash}"'_'"${_file}"
+
   printf -- '%s\n' "${_array[@]}" | sudo tee "${_fileTmp}" > /dev/null
   
-  if [[ ! -d "${_dir}" ]]; then
-    sudo mkdir -p "${_dir}"
+  if [[ ! -d "${_fileDir}" ]]; then
+    sudo mkdir -p "${_fileDir}"
   fi
   
-  sudo cp "${_fileTmp}" "${_file}"
+  sudo cp "${_fileTmp}" "${_filePath}"
   
-  _fsFileExist_ "${_file}"
+  _fsFileExist_ "${_filePath}"
 }
 
 _fsCrontab_() {
@@ -2097,45 +2086,82 @@ _fsIsYml_() {
 	fi
 }
 
-_fsJsonGet_() {
+_fsValueGet_() {
   [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
   
-  local _jsonFile="${1}"
-  local _jsonName="${2}"
-  local _jsonValue=''
-  
-  if [[ "$(_fsFile_ "${_jsonFile}")" -eq 0 ]]; then
-    _jsonValue="$(cat "${_jsonFile}" | { grep -o "${_jsonName}\"\?: \"\?.*\"\?" || true; } \
-    | sed "s,\",,g" \
-    | sed "s,\s,,g" \
-    | sed "s#,##g" \
-    | sed "s,${_jsonName}:,,")"
-    
-    if [[ -n "${_jsonValue}" ]]; then
-      echo "${_jsonValue}"
+  local _filePath="${1}"
+  local _fileType="${_filePath##*.}"
+  local _key="${2}"
+  local _value=''
+
+  if [[ "$(_fsFile_ "${_filePath}")" -eq 0 ]]; then
+    if [[ "${_fileType}" = 'json' ]]; then
+        # get value from json
+      _value="$(jq -r "${_key}" "${_filePath}")"
+    else
+        # get value from other filetypes
+      _value="$(cat "${_filePath}" | { grep -o "${_key}\"\?: \"\?.*\"\?" || true; } \
+      | sed "s,\",,g" \
+      | sed "s,\s,,g" \
+      | sed "s#,##g" \
+      | sed "s#:##g" \
+      | sed "s,${_key},,")"
+    fi
+
+    if [[ -n "${_value}" ]]; then
+      echo "${_value}"
     fi
   fi
 }
 
-_fsJsonSet_() {
+_fsValueUpdate_() {
   [[ $# -lt 3 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
   
-  local _jsonFile="${1}"
-  local _jsonName="${2}"
-  local _jsonValue="${3}"
+  local _filePath="${1}"
+  local _file="${_filePath##*/}"
+  local _fileType="${_filePath##*.}"
+  local _fileHash=''
+  local _fileTmp=''
+  local _json=''
+  local _jsonUpdate=''
+  local _key="${2}"
+  local _value="${3}"
+
+  _fsFileExist_ "${_filePath}"
   
-  _fsFileExist_ "${_jsonFile}"
+  _fileHash="$(_fsRandomHex_ 8)"
+  _fileTmp="${FS_DIR_TMP}"'/'"${_fileHash}"'_'"${_file}"
   
-  if grep -qow "\"${_jsonName}\": \".*\"" "${_jsonFile}"; then
-    sudo sed -i "s,\"${_jsonName}\": \".*\",\"${_jsonName}\": \"${_jsonValue}\"," "${_jsonFile}"
-  elif grep -qow "${_jsonName}: \".*\"" "${_jsonFile}"; then
-    sudo sed -i "s,${_jsonName}: \".*\",${_jsonName}: \"${_jsonValue}\"," "${_jsonFile}"
-  #elif [[ -n "$(cat "${_jsonFile}" | grep -o "\"${_jsonName}\": .*")" ]]; then
-  #  sed -i "s,\"${_jsonName}\": .*,\"${_jsonName}\": ${_jsonValue}," "${_jsonFile}"
-  #elif [[ -n "$(cat "${_jsonFile}" | grep -o "${_jsonName}: .*")" ]]; then
-  #  sed -i "s,${_jsonName}: .*,${_jsonName}: ${_jsonValue}," "${_jsonFile}"
+  if [[ "${_fileType}" = 'json' ]]; then
+      # update value for json
+    _json="$(_fsValueGet_ "${_filePath}" '.')"
+      # credit: https://stackoverflow.com/a/24943373
+    _jsonUpdate="$(jq "${_key}"' = $newVal' --arg newVal "${_value}" <<< "${_json}")"
+
+    printf '%s\n' "${_jsonUpdate}" | jq . | sudo tee "${_fileTmp}"
   else
-    _fsMsgExit_ "Cannot find name: ${_jsonName}"
+      # update value for other filetypes
+    sudo cp "${_filePath}" "${_fileTmp}"
+
+    if grep -qow "\"${_key}\": \".*\"" "${_fileTmp}"; then
+        # "key": "value"
+      sudo sed -i "s,\"${_key}\": \".*\",\"${_key}\": \"${_value}\"," "${_fileTmp}"
+    elif grep -qow "\"${_key}\": \".*\"" "${_fileTmp}"; then
+        # "key": value
+      sudo sed -i "s,\"${_key}\": .*,\"${_key}\": ${_value}," "${_fileTmp}"
+    elif grep -qow "${_key}: \".*\"" "${_fileTmp}"; then
+        # key: "value"
+      sudo sed -i "s,${_key}: \".*\",${_key}: \"${_value}\"," "${_fileTmp}"
+    elif grep -qow "${_key}: \".*\"" "${_fileTmp}"; then
+        # key: value
+      sudo sed -i "s,${_key}: .*,${_key}: ${_value}," "${_fileTmp}"
+    else
+      _fsMsgExit_ '[FATAL] Cannot find key "'"${_key}"'" in: '"${_filePath}"
+    fi
+  fi
+    # override file if different
+  if ! cmp --silent "${_fileTmp}" "${_filePath}"; then
+    sudo cp "${_fileTmp}" "${_filePath}"
   fi
 }
 
@@ -2354,10 +2380,10 @@ _fsScriptLock_() {
 
 _fsCleanup_() {
   local _error="${?}"
-  _fsMsg_ 'Cleanup...'
   trap - ERR EXIT SIGINT SIGTERM
-    # thanks: lsiem
   if [[ "${_error}" -ne 99 ]]; then
+    _fsMsg_ 'Cleanup...'
+      # thanks: lsiem
     sudo rm -rf "${FS_DIR_TMP}"
   fi
 }
@@ -2447,7 +2473,7 @@ _fsOptions_() {
 
 _fsScriptLock_
 _fsOptions_ "${@}"
-
+echo "FS_DIR: ${FS_DIR}"
 if [[ "${FS_OPTS_SETUP}" -eq 0 ]]; then
   _fsSetup_
 elif [[ "${FS_OPTS_BOT}" -eq 0 ]]; then
