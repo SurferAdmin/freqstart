@@ -462,10 +462,11 @@ _fsDockerProjectStrategies_() {
 	local _strategies=''
 	local _strategiesDeduped=''
 	local _strategy=''
-	local _strategiesPath=''
-	local _strategiesPathDeduped=''
+	local _strategiesDir=''
+	local _strategiesDirDeduped=''
+	local _strategyDir=''
 	local _strategyPath=''
-  local _update=0
+  local _status=0
   local _error=1
   
     # download or update implemented strategies in project file
@@ -486,9 +487,9 @@ _fsDockerProjectStrategies_() {
     done < <(_fsDedupeArray_ "${_strategies[@]}")
 
     # validate optional strategy paths in project file
-    _strategiesPath=()
+    _strategiesDir=()
     while read -r; do
-      _strategiesPath+=( "$REPLY" )
+      _strategiesDir+=( "$REPLY" )
     done < <(grep "strategy-path" "${_ymlPath}" \
     | sed "s,\=,,g" \
     | sed "s,\",,g" \
@@ -497,32 +498,44 @@ _fsDockerProjectStrategies_() {
     | sed "s,^/[^/]*,${FS_DIR}," \
     || true)
       # add default strategy path
-    _strategiesPath+=( "${FS_DIR_USER_DATA_STRATEGIES}" )
+    _strategiesDir+=( "${FS_DIR_USER_DATA_STRATEGIES}" )
 
-    _strategiesPathDeduped=()
+    _strategiesDirDeduped=()
     while read -r; do
-      _strategiesPathDeduped+=( "$REPLY" )
-    done < <(_fsDedupeArray_ "${_strategiesPath[@]}")
+      _strategiesDirDeduped+=( "$REPLY" )
+    done < <(_fsDedupeArray_ "${_strategiesDir[@]}")
 
-    for _strategy in "${_strategiesDeduped[@]}"; do        
+    for _strategy in "${_strategiesDeduped[@]}"; do
       if [[ "$(_fsDockerStrategy_ "${_strategy}")" -eq 1 ]]; then
-        _update=$((_update+1))
+        _status=1
       fi
       
-      for _strategyPath in "${_strategiesPathDeduped[@]}"; do
-        if [[ "$(_fsFile_ "${_strategyPath}"'/'"${_strategy}"'.py')" -eq 0 ]]; then
+      for _strategyDir in "${_strategiesDirDeduped[@]}"; do
+        _strategyPath="${_strategyDir}"'/'"${_strategy}"'.py'
+        if [[ "$(_fsFile_ "${_strategyPath}")" -eq 0 ]]; then
           _error=0
+          break
         fi
       done
+
+      if [[ "${_error}" -eq 1 ]]; then
+        _fsMsg_ '[ERROR] Strategy file not found: '"${_strategyPath}"
+        readonly _status=2
+      fi
+        # set error to 1 again
+      _error=1
     done
   fi
 
-  if [[ "${_error}" -eq 1 ]]; then
-  _fsMsgExit_ '[FATAL] Strategy file not found: '"${_strategyPath}"
-  elif [[ "${_update}" -eq 0 ]]; then
-    echo 0
-  else
+  if [[ "${_status}" -eq 2 ]]; then
+      # strategy not found
+    echo 2
+  elif [[ "${_status}" -eq 1 ]]; then
+      # strategy updated
     echo 1
+  else
+      # strategy is installed
+    echo 0
   fi
 }
 
@@ -631,6 +644,7 @@ _fsDockerProject_() {
       [[ "${_projectImages}" -eq 1 ]] && _error=$((_error+1))
       [[ "${_projectConfigs}" -eq 1 ]] && _error=$((_error+1))
       [[ "${_projectPorts}" -eq 1 ]] && _error=$((_error+1))
+      [[ "${_projectStrategies}" -eq 2 ]] && _error=$((_error+1))
 
       if [[ "${_error}" -eq 0 ]]; then
         if [[ "${_projectForce}" = "force" ]]; then
@@ -2505,7 +2519,7 @@ _fsOptions_() {
 
 _fsScriptLock_
 _fsOptions_ "${@}"
-echo "FS_DIR: ${FS_DIR}"
+
 if [[ "${FS_OPTS_SETUP}" -eq 0 ]]; then
   _fsSetup_
 elif [[ "${FS_OPTS_BOT}" -eq 0 ]]; then
