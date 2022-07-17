@@ -167,6 +167,7 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 ### Changelog
 
 `v0.1.8`
+* Fixed permission error in docker image routine.
 * Modified proxy network creation to be non-verbose.
 * Removed frequi_cors config parameter since it is deprecated after integrating Nginx into FreqUI routine.
 * Add hash to file creation function.
