@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v0.1.8
+# FREQSTART v0.1.9
 
 `Warning` Major changes to code in v.0.1.6. Stop containers and run setup again, review project files!
 
@@ -165,6 +165,9 @@ Try Vultr "Tokyo" Server and get $100 usage for free:<br/>
 See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full list of proposed features (and known issues).
 
 ### Changelog
+
+`v0.1.9`
+* Minor improvement to docker manifest routine.
 
 `v0.1.8`
 * Fixed permission error in docker image routine.
