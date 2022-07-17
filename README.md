@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v0.1.7
+# FREQSTART v0.1.8
 
 `Warning` Major changes to code in v.0.1.6. Stop containers and run setup again, review project files!
 
@@ -27,11 +27,13 @@ If you are not familiar with Freqtrade, please read the complete documentation f
 
 ### Strategies
 
-Help expanding the strategies list and include config files if possible: [freqstart.strategies.json](https://github.com/berndhofer/freqstart/blob/develop/freqstart.strategies.json)
+The following list is in alphabetical order and does not represent any recommendation:
 
-* DoesNothingStrategy (Author: Gert Wohlgemuth)
-* MultiMA_TSL (Author: stash86)
-* NostalgiaForInfinityX (Author: iterativ)
+* DoesNothingStrategy (Author: Gert Wohlgemuth, https://github.com/freqtrade/freqtrade-strategies)
+* MultiMA_TSL (Author: stash86, https://github.com/stash86/MultiMA_TSL/)
+* NostalgiaForInfinityX (Author: iterativ, https://github.com/iterativv/NostalgiaForInfinity)
+
+Help expanding the strategies list and include config files if possible: [freqstart.strategies.json](https://github.com/berndhofer/freqstart/blob/develop/freqstart.strategies.json)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -56,6 +58,7 @@ Freqstart provides an interactive setup guide for server security, Freqtrade inc
 `Freqstart` is beeing developed and testet on Vultr "Tokyo" Server with `Ubuntu 22.04 x64`. Please open any issues with your specific OS.
 
 `Performance` If you use more than three bots i recommend at least: AMD High Performance -> Tokyo -> 60GB NVMe/2 vCPUs
+
 Try Vultr "Tokyo" Server and get $100 usage for free:<br/>
 [https://www.vultr.com/?ref=9122650-8H](https://www.vultr.com/?ref=9122650-8H)
 
@@ -163,6 +166,15 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 
 ### Changelog
 
+`v0.1.8`
+* Fixed permission error in docker image routine.
+* Modified proxy network creation to be non-verbose.
+* Removed frequi_cors config parameter since it is deprecated after integrating Nginx into FreqUI routine.
+* Add hash to file creation function.
+* Improved value get and update value from json and other files incl. set value in a temporary file.
+* Changend docker manifest tmp filetype.
+* Add validation of strategy path files incl. non-implemented strategies.
+
 `v0.1.7`
 * Fixed unbound variable in help function.
 * Improved some function argument checks.
@@ -172,29 +184,29 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 * Use docker start instead of recreating the project file and improved restart routine.
 * Add containers docker network "freqstart_proxy" (No network needed in project file from v0.1.5).
 * Start proxy container with fixed IP in subnet of "freqstart_proxy".
-* Added a function to create files incl. sudo for permission and check if file exist. (Thanks: lsiem)
+* Created a function to create files incl. sudo for permission and check if file exist. (Thanks: lsiem)
 * Removed secret and key routine from Freqtrade confing creation (Most of the time the config has to be modified manually anyway).
 * Improved argument check for functions.
 * Changed expose to port redirect with localhost ip to proxy project files.
-* Added docker network prune in project compose routine to remove orphaned networks.
-* Added reset mode to stopp and remove all containers, networks and images.
+* Add docker network prune in project compose routine to remove orphaned networks.
+* Add reset mode to stopp and remove all containers, networks and images.
 * Improved check for nginx if is not installed.
 * Fixed login data creation in FreqUI routine when no entries were made.
 * Fixed scriptlock and cleanup routine.
-* Added routine to check for root and suggest creating a user interactively incl. file transfer.
-* Added routine to add current user to docker group.
+* Add routine to check for root and suggest creating a user interactively incl. file transfer.
+* Add routine to add current user to docker group.
 * Fixed Nginx/FreqUI routing error (502).
 * Improved Nginx routine for secured domain setup.
 
 `v0.1.5`
-* Added docker network policy to proxy project files and bot files (Workaround to use multiple docker project files).
-* Removed example bot routine and added example to readme.
+* Add docker network policy to proxy project files and bot files (Workaround to use multiple docker project files).
+* Removed example bot routine and add example to readme.
 * Fixed FreqUI container name and restart policy.
 * Update container to restart no before validation instead of manipulating the docker project file.
-* Added remove orphan container to project compose routine.
+* Add remove orphan container to project compose routine.
 * Fixed unbound variable in docker compose. (Thanks: lsiem)
 * Fixed permission error in cleanup routine. (Thanks: lsiem)
-* Added cron remove for letsencrypt cert in the nginx reconfiguration routine.
+* Add cron remove for letsencrypt cert in the nginx reconfiguration routine.
 * Fixed domain validation error from host command.
 * File creation routine to create path if it doesnt exist.
 
@@ -205,19 +217,19 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 * Fixed unbound variable in strategies check for yml files.
 * Fixed unbound variable in configs check for yml files.
 * Removed docker run function.
-* Added trap ERR and function for handling errors.
+* Add trap ERR and function for handling errors.
 * Fixed FreqUI docker ps check if container is active.
 * Disabled port check for compose force mode.
 * Split FreqUI and Nginx setup routine and made Nginx mandatory.
 * Moved ufw installation from Nginx setup to prerequisites.
-* Added LAN ip proxy forward for binance and kucoin proxies.
+* Add LAN ip proxy forward for binance and kucoin proxies.
 
 `v0.1.3`
 * Rebuild script without template to remove overhead.
 * Example bot config routine error fixed.
 
 `v0.1.2`
-* Strategy "MultiMA_TSL" added to strategies config.
+* Strategy "MultiMA_TSL" add to strategies config.
 * Countdown for validating container is set to 30s again.
 
 `v0.1.1`
