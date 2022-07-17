@@ -22,7 +22,7 @@ set -o nounset
 set -o pipefail
 
 readonly FS_NAME="freqstart"
-readonly FS_VERSION='v0.1.8'
+readonly FS_VERSION='v0.1.9'
 FS_DIR="$(dirname "$(readlink --canonicalize-existing "${0}" 2> /dev/null)")"
 readonly FS_DIR
 readonly FS_FILE="${0##*/}"
@@ -184,11 +184,9 @@ _fsDockerVersionHub_() {
   _acceptM="application/vnd.docker.distribution.manifest.v2+json"
   _acceptML="application/vnd.docker.distribution.manifest.list.v2+json"
   _token="$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${_dockerRepo}:pull" | jq -r '.token' || true)"
-  
-  [[ -z "${_token}" ]] && _fsMsgExit_ '[FATA] Cannot reach docker hub!'
-  
+    
   sudo curl -H "Accept: ${_acceptM}" -H "Accept: ${_acceptML}" -H "Authorization: Bearer ${_token}" -o "${_dockerManifest}" \
-  -I -s -L "https://registry-1.docker.io/v2/${_dockerRepo}/manifests/${_dockerTag}"
+  -I -s -L "https://registry-1.docker.io/v2/${_dockerRepo}/manifests/${_dockerTag}" || true
 
   if [[ "$(_fsFile_ "${_dockerManifest}")" -eq 0 ]]; then
     _status="$(grep -o "200 OK" "${_dockerManifest}")"
@@ -269,8 +267,10 @@ _fsDockerImage_() {
   _dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerRepo}" "${_dockerTag}")"
 
   if [[ "${_dockerStatus}" -eq 0 ]]; then
+      # if latest image is installed
     echo "${_dockerVersionLocal}"
   elif [[ "${_dockerStatus}" -eq 1 ]]; then
+      # if image is updated
     if [[ ! -d "${FS_DIR_DOCKER}" ]]; then
       sudo mkdir -p "${FS_DIR_DOCKER}"
     fi
@@ -281,6 +281,7 @@ _fsDockerImage_() {
     
     echo "${_dockerVersionLocal}"
   else
+      # if image could not be installed
     _fsMsgExit_ "[FATAL] Image not found: ${_dockerRepo}:${_dockerTag}"
   fi
 }
