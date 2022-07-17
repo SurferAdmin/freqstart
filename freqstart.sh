@@ -1718,8 +1718,10 @@ _fsSetupFrequi_() {
   
   if [[ "${_setup}" -eq 0 ]];then
     _fsSetupNginx_
-
+    
+      # allow port range for containers that use frequi
     sudo ufw allow 9000:9100/tcp > /dev/null
+      # allow port for frequi container
     sudo ufw allow 9999/tcp > /dev/null
 
     _fsSetupFrequiJson_
@@ -1744,6 +1746,7 @@ _fsSetupFrequiJson_() {
   _serverWan="$(_fsJsonGet_ "${FS_FREQUI_JSON}" "server_wan")"
   _serverUrl="$(_fsJsonGet_ "${FS_CONFIG}" "server_url")"
 
+    # generate jwt if it is not set in config
   [[ -z "${_frequiJwt}" ]] && _frequiJwt="$(_fsRandomBase64UrlSafe_ 32)"
   
   if [[ -n "${_frequiUsername}" ]] || [[ -n "${_frequiPassword}" ]]; then
@@ -1757,6 +1760,7 @@ _fsSetupFrequiJson_() {
       _setup=0
     else
       _setup=1
+        # generate login data if first time setup is non-interactive
       _frequiUsername="$(_fsRandomBase64_ 16)"
       _frequiPassword="$(_fsRandomBase64_ 16)"
       _fsMsg_ '[WARNING] Login data created automatically. Edit login data in: '"${FS_FREQUI_JSON}"
@@ -1900,7 +1904,8 @@ _fsStart_() {
 	local _yml="${1:-}"
   local _symlink="${FS_SYMLINK}"
   local _kill="${FS_OPTS_KILL}"
-  
+    
+    # check if symlink from setup routine exist
 	if [[ "$(_fsIsSymlink_ "${_symlink}")" -eq 1 ]]; then
 		_fsUsage_ "Start setup first!"
   fi
