@@ -167,7 +167,7 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 ### Changelog
 
 `v0.1.9`
-* Minor improvement to docker manifest routine.
+* Add timeout to curl in functions.
 
 `v0.1.8`
 * Fixed permission error in docker image routine.
