@@ -460,8 +460,12 @@ _fsDockerProjectStrategies_() {
 	local _strategies=''
 	local _strategiesDeduped=''
 	local _strategy=''
+	local _strategiesPath=''
+	local _strategiesPathDeduped=''
+	local _strategyPath=''
   local _update=0
   
+    # download or update implemented strategies in project file
   _strategies=()
   while read -r; do
     _strategies+=( "$REPLY" )
@@ -474,7 +478,6 @@ _fsDockerProjectStrategies_() {
 
   if (( ${#_strategies[@]} )); then
     _strategiesDeduped=()
-
     while read -r; do
       _strategiesDeduped+=( "$REPLY" )
     done < <(_fsDedupeArray_ "${_strategies[@]}")
@@ -482,6 +485,29 @@ _fsDockerProjectStrategies_() {
     for _strategy in "${_strategiesDeduped[@]}"; do        
       if [[ "$(_fsDockerStrategy_ "${_strategy}")" -eq 1 ]]; then
         _update=$((_update+1))
+      fi
+    done
+  fi
+  
+  # validate all strategy paths in project file
+  _strategiesPath=()
+  while read -r; do
+    _strategiesPath+=( "$REPLY" )
+  done < <(grep -o "strategy-path" "${_ymlPath}" \
+  | sed "s,\=,,g" \
+  | sed "s,\",,g" \
+  | sed "s,\s,,g" \
+  | sed "s,\-\-strategy-path,,g" || true)
+
+  if (( ${#_strategiesPath[@]} )); then
+    _strategiesPathDeduped=()
+    while read -r; do
+      _strategiesPathDeduped+=( "$REPLY" )
+    done < <(_fsDedupeArray_ "${_strategiesPath[@]}")
+
+    for _strategyPath in "${_strategiesPathDeduped[@]}"; do        
+      if [[ "$(_fsFile_ "${_strategyPath}")" -eq 1 ]]; then
+        _fsMsgExit_ '[FATAL] Strategy file not found: '"${_strategyPath}"
       fi
     done
   fi
@@ -1941,7 +1967,7 @@ _fsIntro_() {
   "    \"version\": \"${FS_VERSION}\"," \
   "    \"server_wan\": \"${_serverWan}\"," \
   "    \"server_domain\": \"${_serverDomain}\"," \
-  "    \"server_url\": \"${_serverUrl}\"," \
+  "    \"server_url\": \"${_serverUrl}\"" \
   "}"
 }
 
@@ -2097,7 +2123,7 @@ _fsValueGet_() {
   if [[ "$(_fsFile_ "${_filePath}")" -eq 0 ]]; then
     if [[ "${_fileType}" = 'json' ]]; then
         # get value from json
-      _value="$(jq -r "${_key}" "${_filePath}")"
+      _value="$(jq -r "${_key}" "${_filePath}" 2> /dev/null || true)"
     else
         # get value from other filetypes
       _value="$(cat "${_filePath}" | { grep -o "${_key}\"\?: \"\?.*\"\?" || true; } \
@@ -2138,7 +2164,7 @@ _fsValueUpdate_() {
       # credit: https://stackoverflow.com/a/24943373
     _jsonUpdate="$(jq "${_key}"' = $newVal' --arg newVal "${_value}" <<< "${_json}")"
 
-    printf '%s\n' "${_jsonUpdate}" | jq . | sudo tee "${_fileTmp}"
+    printf '%s\n' "${_jsonUpdate}" | jq . | sudo tee "${_fileTmp}" > /dev/null
   else
       # update value for other filetypes
     sudo cp "${_filePath}" "${_fileTmp}"
