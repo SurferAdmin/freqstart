@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v0.1.7
+# FREQSTART v0.1.8
 
 `Warning` Major changes to code in v.0.1.6. Stop containers and run setup again, review project files!
 
@@ -27,11 +27,13 @@ If you are not familiar with Freqtrade, please read the complete documentation f
 
 ### Strategies
 
-Help expanding the strategies list and include config files if possible: [freqstart.strategies.json](https://github.com/berndhofer/freqstart/blob/develop/freqstart.strategies.json)
+The following list is in alphabetical order and does not represent any recommendation:
 
-* DoesNothingStrategy (Author: Gert Wohlgemuth)
-* MultiMA_TSL (Author: stash86)
-* NostalgiaForInfinityX (Author: iterativ)
+* DoesNothingStrategy (Author: Gert Wohlgemuth, https://github.com/freqtrade/freqtrade-strategies)
+* MultiMA_TSL (Author: stash86, https://github.com/stash86/MultiMA_TSL/)
+* NostalgiaForInfinityX (Author: iterativ, https://github.com/iterativv/NostalgiaForInfinity)
+
+Help expanding the strategies list and include config files if possible: [freqstart.strategies.json](https://github.com/berndhofer/freqstart/blob/develop/freqstart.strategies.json)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -56,6 +58,7 @@ Freqstart provides an interactive setup guide for server security, Freqtrade inc
 `Freqstart` is beeing developed and testet on Vultr "Tokyo" Server with `Ubuntu 22.04 x64`. Please open any issues with your specific OS.
 
 `Performance` If you use more than three bots i recommend at least: AMD High Performance -> Tokyo -> 60GB NVMe/2 vCPUs
+
 Try Vultr "Tokyo" Server and get $100 usage for free:<br/>
 [https://www.vultr.com/?ref=9122650-8H](https://www.vultr.com/?ref=9122650-8H)
 
@@ -162,6 +165,9 @@ Try Vultr "Tokyo" Server and get $100 usage for free:<br/>
 See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full list of proposed features (and known issues).
 
 ### Changelog
+
+`v0.1.8`
+* Modified proxy network creation to be non-verbose.
 
 `v0.1.7`
 * Fixed unbound variable in help function.
