@@ -276,7 +276,7 @@ _fsDockerImage_() {
     fi
 
     sudo rm -f "${_dockerPath}"
-    docker save -o "${_dockerPath}" "${_dockerRepo}:${_dockerTag}"
+    docker save -o "${_dockerPath}" "${_dockerRepo}"':'"${_dockerTag}"
     [[ "$(_fsFile_ "${_dockerPath}")" -eq 1 ]] && _fsMsg_ "[WARNING] Cannot create backup for: ${_dockerRepo}:${_dockerTag}"
     
     echo "${_dockerVersionLocal}"
@@ -469,6 +469,7 @@ _fsDockerProjectStrategies_() {
 	local _strategiesDirDeduped=''
 	local _strategyDir=''
 	local _strategyPath=''
+	local _strategyFile=''
 	local _strategyPathFound=1
   local _error=0
   
@@ -511,6 +512,7 @@ _fsDockerProjectStrategies_() {
       
       for _strategyDir in "${_strategiesDirDeduped[@]}"; do
         _strategyPath="${_strategyDir}"'/'"${_strategy}"'.py'
+        _strategyFile="${_strategyPath##*/}"
         if [[ "$(_fsFile_ "${_strategyPath}")" -eq 0 ]]; then
           _strategyPathFound=0
           break
@@ -518,7 +520,7 @@ _fsDockerProjectStrategies_() {
       done
 
       if [[ "${_strategyPathFound}" -eq 1 ]]; then
-        _fsMsg_ '[ERROR] Strategy file not found: '"${_strategyPath}"
+        _fsMsg_ '[ERROR] Strategy file not found: '"${_strategyFile}"
         _error=$((_error+1))
       fi
       
@@ -723,8 +725,6 @@ _fsDockerProject_() {
           else
             _containerStrategyUpdate=""
           fi
-            _fsMsg_ "_strategyUpdate: ${_strategyUpdate}"
-            _fsMsg_ "_containerStrategyUpdate: ${_containerStrategyUpdate}"
 
           if [[ -n "${_strategyUpdate}" ]]; then
             if [[ -n "${_containerStrategyUpdate}" ]]; then
@@ -1034,6 +1034,8 @@ _fsUser_() {
         sudo adduser --gecos "" "${_newUser}" || sudo passwd "${_newUser}"
         sudo usermod -aG sudo "${_newUser}"
         sudo usermod -aG docker "${_newUser}"
+        sudo usermod -aG ubuntu "${_newUser}"
+        
           # no password for sudo
         echo "${_newUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
         
@@ -2141,7 +2143,7 @@ _fsValueGet_() {
   if [[ "$(_fsFile_ "${_filePath}")" -eq 0 ]]; then
     if [[ "${_fileType}" = 'json' ]]; then
         # get value from json
-      _value="$(jq -r "${_key}" "${_filePath}" 2> /dev/null || true)"
+      _value="$(jq -r "${_key}"' // empty' "${_filePath}" 2> /dev/null || true)"
     else
         # get value from other filetypes
       _value="$(cat "${_filePath}" | { grep -o "${_key}\"\?: \"\?.*\"\?" || true; } \
