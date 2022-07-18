@@ -35,16 +35,17 @@ readonly FS_DIR_USER_DATA_LOGS="${FS_DIR_USER_DATA}/logs"
 readonly FS_CONFIG="${FS_DIR}/${FS_NAME}.conf.json"
 readonly FS_STRATEGIES="${FS_DIR}/${FS_NAME}.strategies.json"
 
-readonly FS_BINANCE_PROXY='binance_proxy'
-readonly FS_BINANCE_PROXY_IP='172.99.0.200'
-readonly FS_BINANCE_PROXY_JSON="${FS_DIR_USER_DATA}/${FS_BINANCE_PROXY}.json"
-readonly FS_BINANCE_PROXY_FUTURES_JSON="${FS_DIR_USER_DATA}/${FS_BINANCE_PROXY}_futures.json"
-readonly FS_BINANCE_PROXY_YML="${FS_DIR}/${FS_BINANCE_PROXY}.yml"
-
-readonly FS_KUCOIN_PROXY='kucoin_proxy'
-readonly FS_KUCOIN_PROXY_IP='172.99.0.201'
-readonly FS_KUCOIN_PROXY_JSON="${FS_DIR_USER_DATA}/${FS_KUCOIN_PROXY}.json"
-readonly FS_KUCOIN_PROXY_YML="${FS_DIR}/${FS_KUCOIN_PROXY}.yml"
+readonly FS_PROXY='freqstart_proxy'
+readonly FS_PROXY_SUBNET='172.99.0.0/16'
+readonly FS_PROXY_BINANCE='binance_proxy'
+readonly FS_PROXY_BINANCE_IP='172.99.0.200'
+readonly FS_PROXY_BINANCE_JSON="${FS_DIR_USER_DATA}/${FS_PROXY_BINANCE}.json"
+readonly FS_PROXY_BINANCE_FUTURES_JSON="${FS_DIR_USER_DATA}/${FS_PROXY_BINANCE}_futures.json"
+readonly FS_PROXY_BINANCE_YML="${FS_DIR}/${FS_PROXY_BINANCE}.yml"
+readonly FS_PROXY_KUCOIN='kucoin_proxy'
+readonly FS_PROXY_KUCOIN_IP='172.99.0.201'
+readonly FS_PROXY_KUCOIN_JSON="${FS_DIR_USER_DATA}/${FS_PROXY_KUCOIN}.json"
+readonly FS_PROXY_KUCOIN_YML="${FS_DIR}/${FS_PROXY_KUCOIN}.yml"
 
 readonly FS_FREQUI_JSON="${FS_DIR_USER_DATA}/frequi.json"
 readonly FS_FREQUI_SERVER_JSON="${FS_DIR_USER_DATA}/frequi_server.json"
@@ -675,13 +676,13 @@ _fsDockerProject_() {
           _containerStrategyUpdate=''
           
             # connect container to proxy network
-          docker network create --subnet=172.99.0.0/16 freqstart_proxy > /dev/null 2> /dev/null || true
-          if [[ "${_containerName}" = "${FS_BINANCE_PROXY}" ]]; then
-            docker network connect --ip "${FS_BINANCE_PROXY_IP}" freqstart_proxy "${_containerName}" > /dev/null 2> /dev/null || true
-          elif [[ "${_containerName}" = "${FS_KUCOIN_PROXY}" ]]; then
-            docker network connect --ip "${FS_KUCOIN_PROXY_IP}" freqstart_proxy "${_containerName}" > /dev/null 2> /dev/null || true
+          docker network create --subnet="${FS_PROXY_SUBNET}" "${FS_PROXY}" > /dev/null 2> /dev/null || true
+          if [[ "${_containerName}" = "${FS_PROXY_BINANCE}" ]]; then
+            docker network connect --ip "${FS_PROXY_BINANCE_IP}" "${FS_PROXY}" "${_containerName}" > /dev/null 2> /dev/null || true
+          elif [[ "${_containerName}" = "${FS_PROXY_KUCOIN}" ]]; then
+            docker network connect --ip "${FS_PROXY_KUCOIN_IP}" "${FS_PROXY}" "${_containerName}" > /dev/null 2> /dev/null || true
           else
-            docker network connect freqstart_proxy "${_containerName}" > /dev/null 2> /dev/null || true
+            docker network connect "${FS_PROXY}" "${_containerName}" > /dev/null 2> /dev/null || true
           fi
           
             # set restart to no to filter faulty containers
@@ -1312,8 +1313,8 @@ _fsSetupFreqtradeYml_() {
 
 _fsSetupBinanceProxy_() {
   local _docker="nightshift2k/binance-proxy:latest"
-  local _dockerName="${FS_BINANCE_PROXY}"
-  local _containerIp="${FS_BINANCE_PROXY_IP}"
+  local _dockerName="${FS_PROXY_BINANCE}"
+  local _containerIp="${FS_PROXY_BINANCE_IP}"
   local _setup=1
 
   _fsMsgTitle_ 'PROXY FOR BINANCE'
@@ -1329,7 +1330,7 @@ _fsSetupBinanceProxy_() {
   
   if [[ "${_setup}" -eq 0 ]]; then
       # binance proxy json file
-    _fsFileCreate_ "${FS_BINANCE_PROXY_JSON}" \
+    _fsFileCreate_ "${FS_PROXY_BINANCE_JSON}" \
     "{" \
     "    \"exchange\": {" \
     "        \"name\": \"binance\"," \
@@ -1348,7 +1349,7 @@ _fsSetupBinanceProxy_() {
     "}"
     
       # binance proxy futures json file
-    _fsFileCreate_ "${FS_BINANCE_PROXY_FUTURES_JSON}" \
+    _fsFileCreate_ "${FS_PROXY_BINANCE_FUTURES_JSON}" \
     "{" \
     "    \"exchange\": {" \
     "        \"name\": \"binance\"," \
@@ -1367,7 +1368,7 @@ _fsSetupBinanceProxy_() {
     "}"
     
       # binance proxy project file
-    _fsFileCreate_ "${FS_BINANCE_PROXY_YML}" \
+    _fsFileCreate_ "${FS_PROXY_BINANCE_YML}" \
     "---" \
     "version: '3'" \
     "services:" \
@@ -1380,7 +1381,7 @@ _fsSetupBinanceProxy_() {
     "      --port-futures=8991" \
     "      --verbose" \
     
-    _fsDockerProject_ "$(basename "${FS_BINANCE_PROXY_YML}")" "compose" "force"
+    _fsDockerProject_ "$(basename "${FS_PROXY_BINANCE_YML}")" "compose" "force"
   else
     _fsMsg_ "Skipping..."
   fi
@@ -1391,8 +1392,8 @@ _fsSetupBinanceProxy_() {
 
 _fsSetupKucoinProxy_() {
   local _docker="mikekonan/exchange-proxy:latest-amd64"
-  local _dockerName="${FS_KUCOIN_PROXY}"
-  local _containerIp="${FS_KUCOIN_PROXY_IP}"
+  local _dockerName="${FS_PROXY_KUCOIN}"
+  local _containerIp="${FS_PROXY_KUCOIN_IP}"
   local _setup=1
 
   _fsMsgTitle_ 'PROXY FOR KUCOIN'
@@ -1409,7 +1410,7 @@ _fsSetupKucoinProxy_() {
   
   if [[ "${_setup}" -eq 0 ]]; then
       # kucoin proxy json file
-    _fsFileCreate_ "${FS_KUCOIN_PROXY_JSON}" \
+    _fsFileCreate_ "${FS_PROXY_KUCOIN_JSON}" \
     "{" \
     "    \"exchange\": {" \
     "        \"name\": \"kucoin\"," \
@@ -1431,7 +1432,7 @@ _fsSetupKucoinProxy_() {
     "}"
     
       # kucoin proxy project file
-    _fsFileCreate_ "${FS_KUCOIN_PROXY_YML}" \
+    _fsFileCreate_ "${FS_PROXY_KUCOIN_YML}" \
     "---" \
     "version: '3'" \
     "services:" \
@@ -1443,7 +1444,7 @@ _fsSetupKucoinProxy_() {
     "      -port 8980" \
     "      -verbose 1"
     
-    _fsDockerProject_ "$(basename "${FS_KUCOIN_PROXY_YML}")" "compose" "force"
+    _fsDockerProject_ "$(basename "${FS_PROXY_KUCOIN_YML}")" "compose" "force"
   else
     _fsMsg_ "Skipping..."
   fi
