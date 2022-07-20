@@ -1976,7 +1976,7 @@ _fsIntro_() {
   
   printf -- '%s\n' \
   "###" \
-  "# FREQSTART: ${FS_VERSION}" \
+  "# ${FS_NAME^^}: ${FS_VERSION}" \
   "###" >&2
   
 	if [[ "$(_fsFile_ "${FS_CONFIG}")" -eq 0 ]]; then
@@ -2001,30 +2001,67 @@ _fsIntro_() {
 }
 
 _fsStats_() {
-	local _ping
-	local _time
-	local _memory
-	local _disk
-	local _cpu
+	local _time=''
+	local _memory=''
+	local _disk=''
+	local _cpuCores=''
+	local _cpuLoad=''
+	local _cpuUsage=''
+  
     # some handy stats to get you an impression how your server compares to the current possibly best location for binance
-	_ping="$(ping -c 1 -w15 api3.binance.com | awk -F '/' 'END {print $5}')"
 	_time="$( (time curl --connect-timeout 10 -X GET "https://api.binance.com/api/v3/exchangeInfo?symbol=BNBBTC") 2>&1 > /dev/null \
   | grep -o "real.*s" \
   | sed "s#real$(echo '\t')##" )"
-  _memory="$(free -m | awk 'NR==2{printf "Memory Usage: %s/%sMB (%.2f%%)\n", $3,$2,$3*100/$2 }')"
-  _disk="$(df -h | awk '$NF=="/"{printf "Disk Usage: %d/%dGB (%s)\n", $3,$2,$5}')"
-  _cpu="$(top -bn1 | grep load | awk '{printf "CPU Load: %.2f\n", $(NF-2)}')"
-  
+  _memory="$(free -m | awk 'NR==2{printf "%s/%sMB (%.2f%%)", $3,$2,$3*100/$2 }')"
+  _disk="$(df -h | awk '$NF=="/"{printf "%d/%dGB (%s)", $3,$2,$5}')"
+
+  _cpuCores="$(nproc)"
+  _cpuLoad="$(awk '{print $3}'< /proc/loadavg)"
+  _cpuUsage="$(echo | awk -v c="${_cpuCores}" -v l="${_cpuLoad}" '{print l*100/c}' | awk -F. '{print $1}')"
+
   printf -- '%s\n' \
 	"###" \
-  "# Ping avg. (Binance): ${_ping}ms | Vultr \"Tokyo\" Server avg.: 1.290ms" \
-	"# Time to API (Binance): ${_time} | Vultr \"Tokyo\" Server avg.: 0m0.039s" \
-	"# ${_memory}" \
-	"# ${_disk}" \
-	"# ${_cpu}" \
-	"# Get closer to Binance? Try Vultr \"Tokyo\" Server and get \$100 usage for free:" \
-	"# https://www.vultr.com/?ref=9122650-8H" \
+	"# Time to API (Binance): ${_time}" \
+	"# CPU Usage: ${_cpuUsage}% (avg. 15min)" \
+	"# Memory Usage: ${_memory}" \
+	"# Disk Usage: ${_disk}" \
 	"###" >&2
+}
+
+_fsUsage_() {
+  local _msg="${1:-}"
+  
+  if [[ -n "${_msg}" ]]; then
+    printf -- '%s\n' \
+    "${_msg}" \
+    "" >&2
+  fi
+  
+  printf -- '%s\n' \
+  "###" \
+  "# ${FS_NAME^^}: ${FS_VERSION}" \
+  "###" \
+  "" \
+  "Freqstart simplifies the use of Freqtrade with Docker. Including a setup guide for Freqtrade," \
+  "configurations and FreqUI with a secured SSL proxy for IP or domain. Freqtrade automatically" \
+  "installs implemented strategies based on Docker Compose files and detects necessary updates." \
+  "" \
+  "USAGE" \
+  "Setup: ${FS_FILE} [-s | --setup] [-y | --yes]" \
+  "Start: ${FS_FILE} [-b | --bot <ARG>] [-a | --auto] [-y | --yes]" \
+  "Stop:  ${FS_FILE} [-b | --bot <ARG>] [-k | --kill] [-y | --yes]" \
+  "" \
+  "OPTIONS" \
+  "-s, --setup             Install and update" \
+  "-b <ARG>, --bot <ARG>   Start docker project" \
+  "-k, --kill              Kill docker project" \
+  "-y, --yes               Yes on every confirmation" \
+  "-a, --auto              Autoupdate docker project" \
+  "--reset                 Stopp and remove all containers, networks and images" \
+  "" >&2
+  
+  _fsStats_
+  exit 0
 }
 
 _fsFile_() {
@@ -2384,37 +2421,6 @@ _fsIsSymlink_() {
     sudo rm -f "${_symlink}"
     echo 1
   fi
-}
-
-_fsUsage_() {
-  local _msg="${1:-}"
-  
-  if [[ -n "${_msg}" ]]; then
-    printf -- '%s\n' \
-    "${_msg}" \
-    "" >&2
-  fi
-  
-  printf -- '%s\n' \
-  "${FS_NAME^^} ${FS_VERSION}" \
-  "Freqstart simplifies the use of Freqtrade with Docker. Including a setup guide for Freqtrade," \
-  "configurations and FreqUI with a secured SSL proxy for IP or domain. Freqtrade automatically" \
-  "installs implemented strategies based on Docker Compose files and detects necessary updates." \
-  "" \
-  "USAGE" \
-  "Setup: ${FS_FILE} [-s | --setup] [-y | --yes]" \
-  "Start: ${FS_FILE} [-b | --bot <ARG>] [-a | --auto] [-y | --yes]" \
-  "Stop:  ${FS_FILE} [-b | --bot <ARG>] [-k | --kill] [-y | --yes]" \
-  "" \
-  "OPTIONS" \
-  "-s, --setup             Install and update" \
-  "-b <ARG>, --bot <ARG>   Start docker project" \
-  "-k, --kill              Kill docker project" \
-  "-y, --yes               Yes on every confirmation" \
-  "-a, --auto              Autoupdate docker project" \
-  "--reset                 Stopp and remove all containers, networks and images" >&2
-  
-  exit 0
 }
 
 _fsScriptLock_() {
