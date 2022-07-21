@@ -55,7 +55,7 @@ readonly FS_SERVER_WAN
 FS_HASH="$(xxd -l 8 -ps /dev/urandom)"
 readonly FS_HASH
 
-FS_OPTS_BOT=1
+FS_OPTS_PROJECT=1
 FS_OPTS_SETUP=1
 FS_OPTS_AUTO=1
 FS_OPTS_KILL=1
@@ -937,7 +937,7 @@ _fsDockerAutoupdate_() {
   local _file="freqstart.autoupdate.sh"
   local _path="${FS_DIR}"'/'"${_file}"
   local _projectFile="${1}"
-  local _projectAutoupdate='freqstart -b '"${_projectFile}"' -y'
+  local _projectAutoupdate='freqstart -c '"${_projectFile}"' -y'
   local _projectAutoupdateMode="${2:-}" # optional: remove
   local _projectAutoupdates=""
   local _cronCmd="${_path}"
@@ -2041,22 +2041,21 @@ _fsUsage_() {
   "# ${FS_NAME^^}: ${FS_VERSION}" \
   "###" \
   "" \
-  "Freqstart simplifies the use of Freqtrade with Docker. Including a setup guide for Freqtrade," \
-  "configurations and FreqUI with a secured SSL proxy for IP or domain. Freqtrade automatically" \
-  "installs implemented strategies based on Docker Compose files and detects necessary updates." \
+  "  Freqstart simplifies the use of Freqtrade with Docker. Including a setup guide for Freqtrade," \
+  "  configurations and FreqUI with a secured SSL proxy for IP or domain. Freqtrade automatically" \
+  "  installs implemented strategies based on Docker Compose files and detects necessary updates." \
   "" \
-  "USAGE" \
-  "Setup: ${FS_FILE} [-s | --setup] [-y | --yes]" \
-  "Start: ${FS_FILE} [-b | --bot <ARG>] [-a | --auto] [-y | --yes]" \
-  "Stop:  ${FS_FILE} [-b | --bot <ARG>] [-k | --kill] [-y | --yes]" \
+  "- USAGE" \
+  "  Start: ${FS_FILE} --compose example.yml --auto --yes" \
+  "  Quit: ${FS_FILE} --compose example.yml --quit --yes" \
   "" \
-  "OPTIONS" \
-  "-s, --setup             Install and update" \
-  "-b <ARG>, --bot <ARG>   Start docker project" \
-  "-k, --kill              Kill docker project" \
-  "-y, --yes               Yes on every confirmation" \
-  "-a, --auto              Autoupdate docker project" \
-  "--reset                 Stopp and remove all containers, networks and images" \
+  "- OPTIONS" \
+  "  -s, --setup     Install and update" \
+  "  -c, --compose   Compose docker project" \
+  "  -q, --quit      Quit docker project" \
+  "  -y, --yes       Yes on every confirmation" \
+  "  -a, --auto      Autoupdate docker project" \
+  "  --reset         Stopp and remove all containers, networks and images" \
   "" >&2
   
   _fsStats_
@@ -2487,9 +2486,9 @@ _fsOptions_() {
   eval set -- "${_opts}"
   while true; do
     case "${1}" in
-      --bot|-b)
-        FS_OPTS_BOT=0
-        readonly b_arg="${2}"
+      --compose|-c)
+        FS_OPTS_PROJECT=0
+        readonly p_arg="${2}"
         shift
         shift
         ;;
@@ -2535,8 +2534,8 @@ _fsOptions_ "${@}"
 
 if [[ "${FS_OPTS_SETUP}" -eq 0 ]]; then
   _fsSetup_
-elif [[ "${FS_OPTS_BOT}" -eq 0 ]]; then
-  _fsStart_ "${b_arg}"
+elif [[ "${FS_OPTS_PROJECT}" -eq 0 ]]; then
+  _fsStart_ "${p_arg}"
 elif [[ "${FS_OPTS_RESET}" -eq 0 ]]; then
   _fsReset_
 else
