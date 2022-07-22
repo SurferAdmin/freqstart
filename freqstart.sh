@@ -1110,7 +1110,7 @@ _fsUser_() {
   fi  
   
   if ! id -nGz "${_currentUser}" | grep -qzxF "docker"; then
-    sudo gpasswd -a "${_currentUser}" docker
+    sudo usermod -aG docker "${_currentUser}"
     _logout=0
   fi
   
@@ -1118,8 +1118,7 @@ _fsUser_() {
     _fsMsg_ 'You have to log out/in to activate the changes!'
     _fsCdown_ 10 'to reboot...'
       # may find a more elegant way but it does its job
-    sudo reboot
-    exit 0
+    sudo reboot && exit 0
   fi
 }
 
@@ -1190,7 +1189,7 @@ _fsSetupPkgsStatus_() {
 _fsDockerPrerequisites_() {
   _fsMsgTitle_ "PREREQUISITES"
 
-  sudo apt-get update
+  sudo apt-get update || true
 
   _fsSetupPkgs_ "git" "curl" "jq" "docker-ce" "ufw"
   _fsMsg_ "Update server and install unattended-upgrades? Reboot may be required!"
