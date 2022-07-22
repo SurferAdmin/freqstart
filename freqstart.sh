@@ -1723,6 +1723,7 @@ _fsSetupNginxConfSecure_() {
   local _confPathFrequi="${_confPath}/frequi.conf"
   local _cronCmd="/usr/bin/certbot renew --quiet"
   local _cronUpdate="0 0 * * *"
+  local _htpasswd="/etc/nginx/conf.d/.htpasswd"
   
   _serverDomain="$(_fsValueGet_ "${FS_CONFIG}" '.server_domain')"
   
