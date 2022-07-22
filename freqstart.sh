@@ -55,10 +55,10 @@ readonly FS_SERVER_WAN
 FS_HASH="$(xxd -l 8 -ps /dev/urandom)"
 readonly FS_HASH
 
-FS_OPTS_PROJECT=1
+FS_OPTS_COMPOSE=1
 FS_OPTS_SETUP=1
 FS_OPTS_AUTO=1
-FS_OPTS_KILL=1
+FS_OPTS_QUIT=1
 FS_OPTS_YES=1
 FS_OPTS_RESET=1
 
@@ -588,7 +588,7 @@ _fsDockerProject_() {
   [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
   local _projectPath="${1}"
-  local _projectMode="${2}" # compose, validate, kill
+  local _projectMode="${2}" # compose, validate, quit
   local _projectForce="${3:-}" # optional: force
   local _projectCronCmd=''
   local _projectCronUpdate=''
@@ -605,6 +605,7 @@ _fsDockerProject_() {
   local _containerCmd=''
   local _containerRunning=''
   local _containerRestart=1
+  local _containerRestartPolicy=''
   local _containerName=''
   local _containerConfigs=''
   local _containerStrategy=''
@@ -615,6 +616,8 @@ _fsDockerProject_() {
   local _containerLogfile=''
   local _containerLogfileTmp=''
   local _containerCount=0
+  local _containerAutoupdate='false'
+  local _containerUpdateCount=0
   local _strategyUpdate=''
   local _strategyDir=''
   local _strategyPath=''
@@ -631,7 +634,7 @@ _fsDockerProject_() {
     _containerConfPath="${FS_DIR}/${_projectFileName}.conf.json"
 
     if [[ "${_projectMode}" = "compose" ]]; then
-      _fsMsgTitle_ "Validate project: ${_projectFile}"
+      _fsMsgTitle_ "Compose project: ${_projectFile}"
 
       _projectImages="$(_fsDockerProjectImages_ "${_projectPath}")"
       _projectStrategies="$(_fsDockerProjectStrategies_ "${_projectPath}")"
@@ -656,9 +659,10 @@ _fsDockerProject_() {
         fi
       fi
     elif [[ "${_projectMode}" = "validate" ]]; then
+      _fsMsgTitle_ "Validate project: ${_projectFile}"
       _fsCdown_ 30 "for any errors..."
-    elif [[ "${_projectMode}" = "kill" ]]; then
-      _fsMsgTitle_ "Kill project: ${_projectFile}"
+    elif [[ "${_projectMode}" = "quit" ]]; then
+      _fsMsgTitle_ "Quit project: ${_projectFile}"
     fi
 
     if [[ "${_error}" -eq 0 ]]; then
@@ -667,6 +671,7 @@ _fsDockerProject_() {
       done < <(cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" ps -q)
 
       for _projectContainer in "${_projectContainers[@]}"; do
+
         _containerName="$(_fsDockerId2Name_ "${_projectContainer}")"
         _containerRunning="$(_fsDockerPsName_ "${_containerName}")"
 
@@ -674,7 +679,10 @@ _fsDockerProject_() {
           _containerJsonInner=''
           _strategyUpdate=''
           _containerStrategyUpdate=''
-          
+          _containerAutoupdate="$(_fsValueGet_ "${_containerConfPath}" '.'"${_containerName}"'.container_update')"
+
+          _fsMsgTitle_ 'Container: '"${_containerName}"
+
             # connect container to proxy network
           docker network create --subnet="${FS_PROXY_SUBNET}" "${FS_PROXY}" > /dev/null 2> /dev/null || true
           if [[ "${_containerName}" = "${FS_PROXY_BINANCE}" ]]; then
@@ -687,6 +695,15 @@ _fsDockerProject_() {
           
             # set restart to no to filter faulty containers
           docker update --restart=no "${_containerName}" > /dev/null
+          
+            # set container to autoupdate
+          if [[ "${FS_OPTS_AUTO}" -eq 1 ]] && [[ ! "${_containerAutoupdate}" = 'true' ]]; then
+            if [[ "$(_fsCaseConfirmation_ "Update container automatically?")" -eq 1 ]]; then
+              _containerAutoupdate='true'
+            fi
+          else
+            _fsMsg_ 'Automatic update is activated.'
+          fi
           
             # get container command
           _containerCmd="$(sudo docker inspect --format="{{.Config.Cmd}}" "${_projectContainer}" \
@@ -735,13 +752,14 @@ _fsDockerProject_() {
           if [[ -n "${_strategyUpdate}" ]]; then
             if [[ -n "${_containerStrategyUpdate}" ]]; then
               if [[ "${_containerRunning}" -eq 0 ]] && [[ ! "${_containerStrategyUpdate}" = "${_strategyUpdate}" ]]; then
-                _fsMsg_ "Strategy is outdated: ${_containerName}"
+                _fsMsg_ "Strategy is outdated: ${_containerStrategy}"
                 _containerRestart=0
               fi
             else
               _containerStrategyUpdate="${_strategyUpdate}"
             fi
           fi
+          
             # compare latest docker image with container image
           _containerImage="$(sudo docker inspect --format="{{.Config.Image}}" "${_projectContainer}")"
           _containerImageVersion="$(sudo docker inspect --format="{{.Image}}" "${_projectContainer}")"
@@ -755,49 +773,64 @@ _fsDockerProject_() {
               # start container
             docker start "${_containerName}" > /dev/null
           else
+              # overrule restart if autoupdate is false
+            if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ ! "${_containerAutoupdate}" = 'true' ]]; then
+              _containerRestart=1
+            fi
+            
               # restart container if necessary
             if [[ "${_containerRestart}" -eq 0 ]]; then
-              if [[ "$(_fsCaseConfirmation_ "Restart container?")" -eq 0 ]]; then
+              if [[ "$(_fsCaseConfirmation_ "Restart container (recommended)?")" -eq 0 ]]; then
+                  # set strategy update only when container is restarted
                 if [[ -n "${_strategyUpdate}" ]]; then
                   _containerStrategyUpdate="${_strategyUpdate}"
                 fi
-                  # start container
+                  # restart container
                 docker restart "${_containerName}" > /dev/null
               fi
               _containerRestart=1
             fi
           fi
+
             # create project json array
-          if [[ -n "${_containerStrategyUpdate}" ]]; then
-            _containerJsonInner="$(jq -n \
-              --arg strategy "${_containerStrategy}" \
-              --arg strategy_path "${_containerStrategyDir}" \
-              --arg strategy_update "${_containerStrategyUpdate}" \
-              '$ARGS.named' \
-            )"
-            _containerJson="$(jq -n \
-              --argjson "${_containerName}" "${_containerJsonInner}" \
-              '$ARGS.named' \
-            )"
-            _procjectJson[$_containerCount]="${_containerJson}"
-          fi
+          _containerJsonInner="$(jq -n \
+            --arg strategy "${_containerStrategy}" \
+            --arg strategy_path "${_containerStrategyDir}" \
+            --arg strategy_update "${_containerStrategyUpdate}" \
+            --arg auto_update "${_containerAutoupdate}" \
+            '$ARGS.named' \
+          )"
+          _containerJson="$(jq -n \
+            --argjson "${_containerName}" "${_containerJsonInner}" \
+            '$ARGS.named' \
+          )"
+          _procjectJson[$_containerCount]="${_containerJson}"
+          
             # increment container count
           _containerCount=$((_containerCount+1))
         elif [[ "${_projectMode}" = "validate" ]]; then
           if [[ "${_containerRunning}" -eq 0 ]]; then
               # set restart to unless-stopped
             docker update --restart=unless-stopped "${_containerName}" > /dev/null
-            _fsMsg_ "[SUCCESS] Container is active: ${_containerName}"' (Restart: '"$(docker inspect --format '{{.HostConfig.RestartPolicy.Name}}' "${_containerName}")"')'
+            _containerRestartPolicy="$(docker inspect --format '{{.HostConfig.RestartPolicy.Name}}' "${_containerName}")"
+            
+            _containerAutoupdate="$(_fsValueGet_ "${_containerConfPath}" '.'"${_containerName}"'.container_update')"
+            if [[ "${_containerAutoupdate}" = 'true' ]]; then
+              _containerUpdateCount=$((_containerUpdateCount+1))
+            fi
+            
+            _fsMsg_ "[SUCCESS] Container is active: ${_containerName}"' (Restart: '"${_containerRestartPolicy}"')'
           else
             _fsMsg_ "[ERROR] Container is not active: ${_containerName}"
             _fsDockerStop_ "${_containerName}"
             _error=$((_error+1))
           fi
-        elif [[ "${_projectMode}" = "kill" ]]; then
+        elif [[ "${_projectMode}" = "quit" ]]; then
           _fsMsg_ "Container is active: ${_containerName}"
 
-          if [[ "$(_fsCaseConfirmation_ "Kill container?")" -eq 0 ]]; then
+          if [[ "$(_fsCaseConfirmation_ "Quit container?")" -eq 0 ]]; then
             _fsDockerStop_ "${_containerName}"
+            _fsValueUpdate_ "${_containerConfPath}" '.'"${_containerName}"'.container_update' 'false'
             
             if [[ "$(_fsDockerPsName_ "${_containerName}")" -eq 1 ]]; then
               _fsMsg_ "[SUCCESS] Container is removed: ${_containerName}"
@@ -811,22 +844,30 @@ _fsDockerProject_() {
     
     if [[ "${_projectMode}" = "compose" ]]; then
       if [[ "${_error}" -eq 0 ]]; then
+          # create project conf file
         if (( ${#_procjectJson[@]} )); then
           printf -- '%s\n' "${_procjectJson[@]}" | jq . | sudo tee "${_containerConfPath}" > /dev/null
         else
           sudo rm -f "${_containerConfPath}"
         fi
+          # validate project
         _fsDockerProject_ "${_projectPath}" "validate"
       else
         _fsMsg_ "[ERROR] Cannot start: ${_projectFile}"
       fi
     elif [[ "${_projectMode}" = "validate" ]]; then
-      yes $'y' | docker network prune > /dev/null || true
-      
-      if [[ "${FS_OPTS_AUTO}" -eq 0 ]]; then
-        _fsDockerAutoupdate_ "${_projectFile}"
+      if [[ "${_error}" -eq 0 ]]; then
+        if [[ "${_containerUpdateCount}" -gt 0 ]]; then
+          _fsDockerAutoupdate_ "${_projectFile}"
+        else
+          _fsDockerAutoupdate_ "${_projectFile}" 'remove'
+        fi
+      else
+        _fsDockerAutoupdate_ "${_projectFile}" 'remove'
       fi
-    elif [[ "${_projectMode}" = "kill" ]]; then
+        # clear unused networks
+      yes $'y' | docker network prune > /dev/null || true
+    elif [[ "${_projectMode}" = "quit" ]]; then
       _fsDockerAutoupdate_ "${_projectFile}" "remove"
       
       if (( ! ${#_projectContainers[@]} )); then
@@ -937,7 +978,7 @@ _fsDockerAutoupdate_() {
   local _file="freqstart.autoupdate.sh"
   local _path="${FS_DIR}"'/'"${_file}"
   local _projectFile="${1}"
-  local _projectAutoupdate='freqstart -c '"${_projectFile}"' -y'
+  local _projectAutoupdate='freqstart -c '"${_projectFile}"' -a -y'
   local _projectAutoupdateMode="${2:-}" # optional: remove
   local _projectAutoupdates=""
   local _cronCmd="${_path}"
@@ -1941,7 +1982,7 @@ _fsSetupFrequiCompose_() {
 _fsStart_() {
 	local _yml="${1:-}"
   local _symlink="${FS_SYMLINK}"
-  local _kill="${FS_OPTS_KILL}"
+  local _kill="${FS_OPTS_QUIT}"
     
     # check if symlink from setup routine exist
 	if [[ "$(_fsIsSymlink_ "${_symlink}")" -eq 1 ]]; then
@@ -1950,13 +1991,13 @@ _fsStart_() {
   
   _fsIntro_
   
-  if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ "${FS_OPTS_KILL}" -eq 0 ]]; then
-    _fsUsage_ "Option -a or --auto cannot be used with -k or --kill."
+  if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
+    _fsUsage_ "Option -a or --auto cannot be used with -k or --quit."
   elif [[ -z "${_yml}" ]]; then
     _fsUsage_ "Setting an \"example.yml\" file with -b or --bot is required."
   else
     if [[ "${_kill}" -eq 0 ]]; then
-      _fsDockerProject_ "${_yml}" "kill"
+      _fsDockerProject_ "${_yml}" "quit"
     else
       _fsDockerProject_ "${_yml}" "compose"
     fi
@@ -2046,7 +2087,7 @@ _fsUsage_() {
   "  installs implemented strategies based on Docker Compose files and detects necessary updates." \
   "" \
   "- USAGE" \
-  "  Start: ${FS_FILE} --compose example.yml --auto --yes" \
+  "  Start: ${FS_FILE} --compose example.yml --yes" \
   "  Quit: ${FS_FILE} --compose example.yml --quit --yes" \
   "" \
   "- OPTIONS" \
@@ -2054,7 +2095,6 @@ _fsUsage_() {
   "  -c, --compose   Compose docker project" \
   "  -q, --quit      Quit docker project" \
   "  -y, --yes       Yes on every confirmation" \
-  "  -a, --auto      Autoupdate docker project" \
   "  --reset         Stopp and remove all containers, networks and images" \
   "" >&2
   
@@ -2478,7 +2518,7 @@ _fsOptions_() {
   local -r _args=("${@}")
   local _opts
   
-  _opts=$(getopt --options b:,s,k,a,y,h --long bot:,setup,kill,auto,yes,help,reset -- "${_args[@]}" 2> /dev/null) || {
+  _opts=$(getopt --options c:,s,q,a,y,h --long compose:,setup,quit,auto,yes,help,reset -- "${_args[@]}" 2> /dev/null) || {
     _fsUsage_
     _fsMsgExit_ "parsing options"
   }
@@ -2487,7 +2527,7 @@ _fsOptions_() {
   while true; do
     case "${1}" in
       --compose|-c)
-        FS_OPTS_PROJECT=0
+        FS_OPTS_COMPOSE=0
         readonly p_arg="${2}"
         shift
         shift
@@ -2496,8 +2536,8 @@ _fsOptions_() {
         FS_OPTS_SETUP=0
         shift
         ;;
-      --kill|-k)
-        FS_OPTS_KILL=0
+      --quit|-k)
+        FS_OPTS_QUIT=0
         shift
         ;;
       --auto|-a)
@@ -2534,7 +2574,7 @@ _fsOptions_ "${@}"
 
 if [[ "${FS_OPTS_SETUP}" -eq 0 ]]; then
   _fsSetup_
-elif [[ "${FS_OPTS_PROJECT}" -eq 0 ]]; then
+elif [[ "${FS_OPTS_COMPOSE}" -eq 0 ]]; then
   _fsStart_ "${p_arg}"
 elif [[ "${FS_OPTS_RESET}" -eq 0 ]]; then
   _fsReset_
