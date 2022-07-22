@@ -1159,6 +1159,8 @@ _fsSetupPkgs_() {
       elif [[ "${_pkg}" = 'chrony' ]]; then
           # ntp setup
         sudo apt-get install -y -q chrony
+          # thanks: lsiem
+        sudo systemctl unmask systemd-timesyncd.service
         sudo systemctl stop chronyd
         sudo timedatectl set-timezone 'UTC'
         sudo systemctl start chronyd
@@ -1553,27 +1555,62 @@ _fsSetupNginxConf_() {
   local _confPathFrequi="${_confPath}/frequi.conf"
   local _confPathNginx="${_confPath}/default.conf"
   local _serverUrl='http://'"${FS_SERVER_WAN}"
-  
+  local _htpasswd="/etc/nginx/conf.d/.htpasswd"
+  local _auth=''
+  local _username=''
+  local _password=''
+  local _passwordCompare=''
+  local _setup=1
+
   _fsValueUpdate_ "${FS_CONFIG}" '.server_url' "${_serverUrl}"
   _fsSetupPkgs_ "nginx"
   
+  if [[ "$(_fsFile_ "${_htpasswd}")" -eq 0 ]]; then
+    if [[ "$(_fsCaseConfirmation_ "Skip generating new server login data?")" -eq 1 ]]; then
+      _setup=0
+    fi
+  else
+    _fsMsg_ "Create server login data now!"
+    _setup=0
+  fi
+  
+  if [[ "${_setup}" -eq 0 ]];then
+    _loginData="$(_fsLoginData_)"
+    _username="$(_fsLoginDataUsername_ "${_loginData}")"
+    _password="$(_fsLoginDataPassword_ "${_loginData}")"
+    
+      # create htpasswd for proxy access
+    sudo rm -f "${_htpasswd}"
+    sudo sh -c "echo -n ${_username}':' > ${_htpasswd}"
+    sudo sh -c "openssl passwd ${_password} >> ${_htpasswd}"
+  fi
+    
+    # create nginx conf for non ssl
   _fsFileCreate_ "${_confPathFrequi}" \
   "server {" \
   "    listen ${FS_SERVER_WAN}:80;" \
   "    server_name ${FS_SERVER_WAN};" \
   "    location / {" \
-  "        proxy_set_header Host \$host;" \
-  "        proxy_set_header X-Real-IP \$remote_addr;" \
   "        proxy_pass http://127.0.0.1:9999;" \
+  "        proxy_set_header X-Real-IP \$remote_addr;" \
+  "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" \
+  "        proxy_set_header Host \$host;" \
+  "        proxy_set_header X-NginX-Proxy true;" \
+  "        proxy_redirect off;" \
+  "        auth_basic \"Restricted\";" \
+  "        auth_basic_user_file ${_htpasswd};" \
   "    }" \
   "}" \
   "server {" \
   "    listen ${FS_SERVER_WAN}:9000-9100;" \
   "    server_name ${FS_SERVER_WAN};" \
   "    location / {" \
-  "        proxy_set_header Host \$host;" \
-  "        proxy_set_header X-Real-IP \$remote_addr;" \
   "        proxy_pass http://127.0.0.1:\$server_port;" \
+  "        proxy_set_header X-Real-IP \$remote_addr;" \
+  "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" \
+  "        proxy_set_header Host \$host;" \
+  "        proxy_set_header X-NginX-Proxy true;" \
+  "        proxy_redirect off;" \
   "    }" \
   "}"
   
@@ -1703,6 +1740,7 @@ _fsSetupNginxConfSecure_() {
   sudo rm -f "${_confPathFrequi}"
     # thanks: Blood4rc, Hippocritical
   if [[ "${_mode}" = 'openssl' ]]; then
+      # create nginx conf for ip ssl
     _fsFileCreate_ "${_confPathFrequi}" \
     "server {" \
     "    listen ${FS_SERVER_WAN}:443 ssl;" \
@@ -1710,9 +1748,14 @@ _fsSetupNginxConfSecure_() {
     "    include snippets/self-signed.conf;" \
     "    include snippets/ssl-params.conf;" \
     "    location / {" \
-    "        proxy_set_header Host \$host;" \
-    "        proxy_set_header X-Real-IP \$remote_addr;" \
     "        proxy_pass http://127.0.0.1:9999;" \
+    "        proxy_set_header X-Real-IP \$remote_addr;" \
+    "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" \
+    "        proxy_set_header Host \$host;" \
+    "        proxy_set_header X-NginX-Proxy true;" \
+    "        proxy_redirect off;" \
+    "        auth_basic \"Restricted\";" \
+    "        auth_basic_user_file ${_htpasswd};" \
     "    }" \
     "}" \
     "server {" \
@@ -1721,9 +1764,12 @@ _fsSetupNginxConfSecure_() {
     "    include snippets/self-signed.conf;" \
     "    include snippets/ssl-params.conf;" \
     "    location / {" \
-    "        proxy_set_header Host \$host;" \
-    "        proxy_set_header X-Real-IP \$remote_addr;" \
     "        proxy_pass http://127.0.0.1:\$server_port;" \
+    "        proxy_set_header X-Real-IP \$remote_addr;" \
+    "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" \
+    "        proxy_set_header Host \$host;" \
+    "        proxy_set_header X-NginX-Proxy true;" \
+    "        proxy_redirect off;" \
     "    }" \
     "}"
   elif [[ "${_mode}" = 'letsencrypt' ]]; then
@@ -1745,6 +1791,7 @@ _fsSetupNginxConfSecure_() {
       # add cron to automatically renew cert file
     _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
     
+    # create nginx conf for domain ssl
     _fsFileCreate_ "${_confPathFrequi}" \
     "server {" \
     "    listen ${_serverDomain}:443 ssl http2;" \
@@ -1759,9 +1806,14 @@ _fsSetupNginxConfSecure_() {
     "        root /var/www/html;" \
     "    }" \
     "    location / {" \
-    "        proxy_set_header Host \$host;" \
-    "        proxy_set_header X-Real-IP \$remote_addr;" \
     "        proxy_pass http://127.0.0.1:9999;" \
+    "        proxy_set_header X-Real-IP \$remote_addr;" \
+    "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" \
+    "        proxy_set_header Host \$host;" \
+    "        proxy_set_header X-NginX-Proxy true;" \
+    "        proxy_redirect off;" \
+    "        auth_basic \"Restricted\";" \
+    "        auth_basic_user_file ${_htpasswd};" \
     "    }" \
     "}" \
     "server {" \
@@ -1772,9 +1824,12 @@ _fsSetupNginxConfSecure_() {
     "    include /etc/letsencrypt/options-ssl-nginx.conf;" \
     "    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;" \
     "    location / {" \
-    "        proxy_set_header Host \$host;" \
-    "        proxy_set_header X-Real-IP \$remote_addr;" \
     "        proxy_pass http://127.0.0.1:\$server_port;" \
+    "        proxy_set_header X-Real-IP \$remote_addr;" \
+    "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" \
+    "        proxy_set_header Host \$host;" \
+    "        proxy_set_header X-NginX-Proxy true;" \
+    "        proxy_redirect off;" \
     "    }" \
     "}"
   fi
@@ -1843,7 +1898,7 @@ _fsSetupFrequiJson_() {
   if [[ -n "${_frequiUsername}" ]] || [[ -n "${_frequiPassword}" ]]; then
     _fsMsg_ "Login data already found."
     
-    if [[ "$(_fsCaseConfirmation_ "Skip generating new login data?")" -eq 1 ]]; then
+    if [[ "$(_fsCaseConfirmation_ "Skip generating new FreqUI login data?")" -eq 1 ]]; then
       _setup=0
     fi
   else
@@ -1859,47 +1914,13 @@ _fsSetupFrequiJson_() {
   fi
 
   if [[ "${_setup}" = 0 ]]; then
-    _fsMsg_ "Create your login data now!"
-      # create username
-    while true; do
-      read -rp 'Enter username: ' _frequiUsername
-      
-      if [[ -n "${_frequiUsername}" ]]; then
-        if [[ "$(_fsCaseConfirmation_ "Is the username correct: ${_frequiUsername}")" -eq 0 ]]; then
-          break
-        else
-          _fsMsg_ "Try again!"
-        fi
-      fi
-    done
-      # create password - NON VERBOSE
-    while true; do
-      _fsMsg_ 'Enter password (ENTRY HIDDEN):'
-      read -rs _frequiPassword
-      echo
-      case ${_frequiPassword} in 
-        "")
-          _fsCaseEmpty_
-          ;;
-        *)
-          _fsMsg_ 'Enter password again: '
-          read -r -s _frequiPasswordCompare
-          echo
-          if [[ ! "${_frequiPassword}" = "${_frequiPasswordCompare}" ]]; then
-            _fsMsg_ "The password does not match. Try again!"
-            _frequiPassword=""
-            _frequiPasswordCompare=""
-            shift
-          else
-            break
-          fi
-          ;;
-      esac
-    done
+    _loginData="$(_fsLoginData_)"
+    _frequiUsername="$(_fsLoginDataUsername_ "${_loginData}")"
+    _frequiPassword="$(_fsLoginDataPassword_ "${_loginData}")"
   fi
   
-    # create frequi json for bots
   if [[ -n "${_frequiUsername}" ]] && [[ -n "${_frequiPassword}" ]]; then
+      # create frequi json for bots
     _fsFileCreate_ "${FS_FREQUI_JSON}" \
     "{" \
     "    \"api_server\": {" \
@@ -2468,6 +2489,67 @@ _fsScriptLock_() {
   fi
 }
 
+_fsLoginData_() {
+    local _username=''
+    local _password=''
+    local _passwordCompare=''
+    
+    _fsMsg_ "Create your login data now!"
+    
+      # create username
+    while true; do
+      read -rp '  Enter username: ' _username >&2
+      
+      if [[ -n "${_username}" ]]; then
+        if [[ "$(_fsCaseConfirmation_ "Is the username correct: ${_username}")" -eq 0 ]]; then
+          break
+        else
+          _fsMsg_ "Try again!"
+        fi
+      fi
+    done
+    
+      # create password - NON VERBOSE
+    while true; do
+      echo -n '  Enter password (ENTRY HIDDEN): ' >&2
+      read -rs _password >&2
+      echo >&2
+      case ${_password} in 
+        "")
+          _fsCaseEmpty_
+          ;;
+        *)
+          echo -n '  Enter password again (ENTRY HIDDEN): ' >&2
+          read -r -s _passwordCompare >&2
+          echo >&2
+          if [[ ! "${_password}" = "${_passwordCompare}" ]]; then
+            _fsMsg_ "The password does not match. Try again!"
+            _password=''
+            _passwordCompare=''
+          else
+            break
+          fi
+          ;;
+      esac
+    done
+    
+    echo "${_username}"':'"${_password}"
+}
+
+_fsLoginDataUsername_() {
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  
+  local _username="${1}"
+  echo "$(cut -d':' -f1 <<< "${_username}")"
+}
+
+_fsLoginDataPassword_() {
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  
+  local _password="${1}"
+  echo "$(cut -d':' -f2 <<< "${_password}")"
+}
+
 _fsCleanup_() {
   local _error="${?}"
   trap - ERR EXIT SIGINT SIGTERM
@@ -2543,7 +2625,7 @@ _fsOptions_() {
         ;;
       --reset)
         FS_OPTS_RESET=0
-        break
+        shift
         ;;
       --help|-h)
         break
