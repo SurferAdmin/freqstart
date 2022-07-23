@@ -1,14 +1,15 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v0.1.9
+# FREQSTART v0.2.0
 
-`v0.1.9`
-* Default arguments changed to "-c" start and "-q" stop of projects.
-* Autoupdate is now an interactive routine per container. The argument "-a" should no longer be used.
-* Nginx requires basic auth before proxy forward to FreqUI in v0.1.9. Restart setup routine for FreqUI!
+`v0.2.0`
+* Set auto-update of containers to every 4 hours (Short enough and better than a fixed hour for users in different timezones)
+* Fixed certbot crontab permission (Please re-run FreqUI installation)
+* Added routine to check for existing user while logged-in as root
+* Improved user setup function to switch user instead of reboot and auto sign in to new groups (Thanks: lsiem)
 
-### Freqtrade with Docker
+## Setup & Docker-Manager for Freqtrade
 
 Freqstart simplifies the use of Freqtrade with Docker. Including a simple setup guide for Freqtrade,
 configurations and FreqUI with a secured SSL proxy for IP or domain. Freqstart also automatically
@@ -17,13 +18,6 @@ installs implemented strategies based on Docker Compose files and detects necess
 If you are not familiar with Freqtrade, please read the complete documentation first on: [www.freqtrade.io](https://www.freqtrade.io/)
 
 ![Freqstart Screen Shot][product-screenshot]
-
-<!-- DISCLAIMER -->
-## Disclaimer
- 
-This software is for educational purposes only. Do not risk money which you are afraid to lose. USE THE SOFTWARE AT YOUR OWN RISK. THE AUTHORS AND ALL AFFILIATES ASSUME NO RESPONSIBILITY FOR YOUR TRADING RESULTS.
-
-<p align="right">(<a href="#top">back to top</a>)</p>
 
 ### Features
 
@@ -54,14 +48,13 @@ Freqstart provides an interactive setup guide for server security, Freqtrade inc
 
 ### Prerequisites
 
-`Warning` Freqstart installs server packages and configurations tailored to the needs of Freqtrade. It is recommended to set it up in a new and clean environment!
+Freqstart installs server packages and configurations tailored to the needs of Freqtrade and may overwrite existing installations and configurations. It is recommended to set it up in a new and clean environment!
 
-`Packages` git, curl, jq, docker-ce, chrony, nginx, certbot, python3-certbot-nginx, ufw, openssl
+Packages: git, curl, jq, docker-ce, chrony, nginx, certbot, python3-certbot-nginx, ufw, openssl
 
-`Freqstart` is beeing developed and testet on Vultr "Tokyo" Server with `Ubuntu 22.04 x64`. Please open any issues with your specific OS.
+### Recommended VPS
 
-Try Vultr "Tokyo" Server and get $100 usage for free:<br/>
-[https://www.vultr.com/?ref=9122650-8H](https://www.vultr.com/?ref=9122650-8H)
+Vultr (AMD High Performance / Tokyo): [www.vultr.com](https://www.vultr.com/?ref=9122650-8H)
 
 ### Installation
 
@@ -151,6 +144,13 @@ Try Vultr "Tokyo" Server and get $100 usage for free:<br/>
 ## Roadmap
 
 See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full list of proposed features (and known issues).
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+<!-- DISCLAIMER -->
+## Disclaimer
+ 
+This software is for educational purposes only. Do not risk money which you are afraid to lose. USE THE SOFTWARE AT YOUR OWN RISK. THE AUTHORS AND ALL AFFILIATES ASSUME NO RESPONSIBILITY FOR YOUR TRADING RESULTS.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
