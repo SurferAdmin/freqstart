@@ -1003,7 +1003,7 @@ _fsDockerAutoupdate_() {
   local _projectAutoupdateMode="${2:-}" # optional: remove
   local _projectAutoupdates=""
   local _cronCmd="${_path}"
-  local _cronUpdate="0 */2 * * *" # update every 2 hours
+  local _cronUpdate="0 */4 * * *" # update every 4 hours
   
   _projectAutoupdates=()
   _projectAutoupdates+=("#!/usr/bin/env bash")
@@ -1070,6 +1070,7 @@ _fsUser_() {
   local _symlink="${FS_SYMLINK}"
   local _newUser=''
   local _newPath=''
+  local _superUser=''
   local _logout=1
   
   _currentUser="$(id -u -n)"
@@ -1078,8 +1079,20 @@ _fsUser_() {
   sudo groupadd docker > /dev/null 2>&1 || true
 
   if [[ "${_currentUserId}" -eq 0 ]]; then
+      # credit: https://askubuntu.com/a/611607
+    _superUser="$(getent group sudo | cut -d: -f4 | head -1)"
+
     _fsMsg_ "Your are logged in as root."
-    
+
+    if [[ -n "${_superUser}" ]]; then
+      _fsMsg_ 'Log in to your super user instead: '"${_superUser}"
+      if [[ "$(_fsCaseConfirmation_ 'Switch user now (recommended)?')" -eq 0 ]]; then
+        sudo su -l "${_newUser}"
+      else
+        _fsMsg_ 'Skipping...'
+      fi
+    fi
+      # confirmation has to be no because of non-interactive mode
     if [[ "$(_fsCaseConfirmation_ 'Skip creating a new user?')" -eq 1 ]]; then
       while true; do
         read -rp 'Enter your new username: ' _newUser
@@ -1126,21 +1139,28 @@ _fsUser_() {
         
         _fsMsgTitle_ 'Files can be found in new path: '"${_newPath}"
         
-        su -l "${_newUser}"
+        _fsCdown_ 10 'to log into your new user...'
+        sudo su -l "${_newUser}"
       fi
     fi
-  fi  
-  
-  if ! id -nGz "${_currentUser}" | grep -qzxF "sudo"; then
-    sudo usermod -aG sudo "${_currentUser}"
-      # thanks: lsiem
-    sudo newgrp sudo
-  fi
-  
-  if ! id -nGz "${_currentUser}" | grep -qzxF "docker"; then
-    sudo usermod -aG docker "${_currentUser}"
-      # thanks: lsiem
-    sudo newgrp docker
+  else  
+      # add current user to sudo group
+    if ! id -nGz "${_currentUser}" | grep -qzxF "sudo"; then
+      sudo usermod -aG sudo "${_currentUser}"
+      sudo newgrp sudo
+    fi
+
+      # add current user to docker group
+    if ! id -nGz "${_currentUser}" | grep -qzxF "docker"; then
+      sudo usermod -aG docker "${_currentUser}"
+      sudo newgrp docker
+    fi
+    
+    if [[ -z "$(sudo -l | grep -o '(ALL : ALL) NOPASSWD: ALL')" ]]; then
+      if [[ "$(_fsCaseConfirmation_ "Give permissions without entering password everytime (recommended)?")" -eq 0 ]]; then
+        echo "${_currentUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
+      fi
+    fi
   fi
 }
 
