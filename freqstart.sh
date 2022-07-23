@@ -622,7 +622,7 @@ _fsDockerProject_() {
   local _containerLogfileTmp=''
   local _containerCount=0
   local _containerAutoupdate='false'
-  local _containerUpdateCount=0
+  local _containerAutoupdateCount=0
   local _strategyUpdate=''
   local _strategyDir=''
   local _strategyPath=''
@@ -691,22 +691,24 @@ _fsDockerProject_() {
     done < <(cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" ps -q)
 
     for _projectContainer in "${_projectContainers[@]}"; do
-
       _containerName="$(_fsDockerId2Name_ "${_projectContainer}")"
       _containerRunning="$(_fsDockerPsName_ "${_containerName}")"
-
+      _containerJsonInner=''
+      _strategyUpdate=''
+      _containerStrategyUpdate=''
+      _containerAutoupdate="$(_fsValueGet_ "${_containerConfPath}" '.'"${_containerName}"'.autoupdate')"
+        
       if [[ ! "${_projectMode}" = "validate" ]]; then
         _fsMsg_ ''
         _fsMsgTitle_ 'Container: '"${_containerName}"
       fi
       
-      if [[ "${_projectMode}" = "compose" ]]; then
-        # compose container
-        _containerJsonInner=''
-        _strategyUpdate=''
-        _containerStrategyUpdate=''
-        _containerAutoupdate="$(_fsValueGet_ "${_containerConfPath}" '.'"${_containerName}"'.autoupdate')"
-        
+        # start container
+      if [[ "${_projectMode}" = "compose" ]]; then        
+          # skip container if autostart is active but not true
+        if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ ! "${_containerAutoupdate}" = 'true' ]]; then
+          continue
+        fi
           # connect container to proxy network
         docker network create --subnet="${FS_PROXY_SUBNET}" "${FS_PROXY}" > /dev/null 2> /dev/null || true
         if [[ "${_containerName}" = "${FS_PROXY_BINANCE}" ]]; then
@@ -800,11 +802,6 @@ _fsDockerProject_() {
             # start container
           docker start "${_containerName}" > /dev/null
         else
-            # overrule restart if autoupdate is false
-          if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ ! "${_containerAutoupdate}" = 'true' ]]; then
-            _containerRestart=1
-          fi
-          
             # restart container if necessary
           if [[ "${_containerRestart}" -eq 0 ]]; then
             if [[ "$(_fsCaseConfirmation_ "Restart container (recommended)?")" -eq 0 ]]; then
@@ -835,34 +832,36 @@ _fsDockerProject_() {
         
           # increment container count
         _containerCount=$((_containerCount+1))
-      elif [[ "${_projectMode}" = "validate" ]]; then
+        
         # validate container
+      elif [[ "${_projectMode}" = "validate" ]]; then
         if [[ "${_containerRunning}" -eq 0 ]]; then
             # set restart to unless-stopped
           docker update --restart=unless-stopped "${_containerName}" > /dev/null
           
-          _containerAutoupdate="$(_fsValueGet_ "${_containerConfPath}" '.'"${_containerName}"'.autoupdate')"
           if [[ "${_containerAutoupdate}" = 'true' ]]; then
-            _containerUpdateCount=$((_containerUpdateCount+1))
+            _containerAutoupdateCount=$((_containerAutoupdateCount+1))
           fi
           
           _fsMsg_ '[SUCCESS] Container is active: '"${_containerName}"
         else
-          _fsMsg_ '[ERROR] Container is not active: '"${_containerName}"
-          _fsDockerStop_ "${_containerName}"
-          _error=$((_error+1))
-        fi
-      elif [[ "${_projectMode}" = "quit" ]]; then
-        # stop container
-        if [[ "$(_fsCaseConfirmation_ "Quit container?")" -eq 0 ]]; then
-          _fsDockerStop_ "${_containerName}"
           _fsValueUpdate_ "${_containerConfPath}" '.'"${_containerName}"'.autoupdate' 'false'
-          
+          _fsDockerStop_ "${_containerName}"
+          _fsMsg_ '[ERROR] Container is not active: '"${_containerName}"
+        fi
+        
+        # stop container
+      elif [[ "${_projectMode}" = "quit" ]]; then
+        if [[ "$(_fsCaseConfirmation_ "Quit container?")" -eq 0 ]]; then
+          _fsValueUpdate_ "${_containerConfPath}" '.'"${_containerName}"'.autoupdate' 'false'
+          _fsDockerStop_ "${_containerName}"
           if [[ "$(_fsDockerPsName_ "${_containerName}")" -eq 1 ]]; then
             _fsMsg_ "[SUCCESS] Container is removed: ${_containerName}"
           else
             _fsMsg_ "[ERROR] Container not removed: ${_containerName}"
           fi
+        else
+          _fsMsg_ 'Skipping...'
         fi
       fi
     done
@@ -882,12 +881,9 @@ _fsDockerProject_() {
       _fsMsg_ "[ERROR] Cannot start: ${_projectFile}"
     fi
   elif [[ "${_projectMode}" = "validate" ]]; then
-    if [[ "${_error}" -eq 0 ]]; then
-      if [[ "${_containerUpdateCount}" -gt 0 ]]; then
-        _fsDockerAutoupdate_ "${_projectFile}"
-      else
-        _fsDockerAutoupdate_ "${_projectFile}" 'remove'
-      fi
+      # add or remove project from autoupdate
+    if [[ "${_containerAutoupdateCount}" -gt 0 ]]; then
+      _fsDockerAutoupdate_ "${_projectFile}"
     else
       _fsDockerAutoupdate_ "${_projectFile}" 'remove'
     fi
@@ -1021,12 +1017,13 @@ _fsDockerAutoupdate_() {
     _projectAutoupdates+=("${_projectAutoupdate}")
   fi
   
-  printf '%s\n' "${_projectAutoupdates[@]}" | sudo tee "${_path}" > /dev/null
-  sudo chmod +x "${_path}"
-  _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
-  
-  if [[ "${#_projectAutoupdates[@]}" -eq 1 ]]; then
+  if [[ "${#_projectAutoupdates[@]}" -lt 2 ]]; then
     _fsCrontabRemove_ "${_cronCmd}"
+    sudo rm -f "${_path}"
+  else
+    printf '%s\n' "${_projectAutoupdates[@]}" | sudo tee "${_path}" > /dev/null
+    sudo chmod +x "${_path}"
+    _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
   fi
 }
 
