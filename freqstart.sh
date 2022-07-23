@@ -2042,16 +2042,21 @@ _fsStart_() {
 
 ###
 # UTILITY
-
+_fsLogo_() {
+  printf -- '%s\n' \
+  "    __                  _            _" \
+  "   / _|_ _ ___ __ _ ___| |_ __ _ _ _| |_" \
+  "  |  _| '_/ -_) _\` (__-\  _/ _\` | '_|  _|" \
+  "  |_| |_| \___\__, /___/\__\__,_|_|  \__|" \
+  "                 |_|               ${FS_VERSION}" \
+  "" >&2
+}
 _fsIntro_() {
 	local _serverWan=''
 	local _serverDomain=''
 	local _serverUrl=''
   
-  printf -- '%s\n' \
-  "###" \
-  "# ${FS_NAME^^}: ${FS_VERSION}" \
-  "###" >&2
+  _fsLogo_
   
 	if [[ "$(_fsFile_ "${FS_CONFIG}")" -eq 0 ]]; then
     _serverWan="$(_fsValueGet_ "${FS_CONFIG}" ".server_wan")"
@@ -2094,12 +2099,12 @@ _fsStats_() {
   _cpuUsage="$(echo | awk -v c="${_cpuCores}" -v l="${_cpuLoad}" '{print l*100/c}' | awk -F. '{print $1}')"
 
   printf -- '%s\n' \
-	"###" \
-	"# Time to API (Binance): ${_time}" \
-	"# CPU Usage: ${_cpuUsage}% (avg. 15min)" \
-	"# Memory Usage: ${_memory}" \
-	"# Disk Usage: ${_disk}" \
-	"###" >&2
+	"" \
+	"  Time to API (Binance): ${_time}" \
+	"  CPU Usage: ${_cpuUsage}% (avg. 15min)" \
+	"  Memory Usage: ${_memory}" \
+	"  Disk Usage: ${_disk}" \
+	"" >&2
 }
 
 _fsUsage_() {
@@ -2111,11 +2116,9 @@ _fsUsage_() {
     "" >&2
   fi
   
+  _fsLogo_
+  
   printf -- '%s\n' \
-  "###" \
-  "# ${FS_NAME^^}: ${FS_VERSION}" \
-  "###" \
-  "" \
   "  Freqstart simplifies the use of Freqtrade with Docker. Including a setup guide for Freqtrade," \
   "  configurations and FreqUI with a secured SSL proxy for IP or domain. Freqtrade automatically" \
   "  installs implemented strategies based on Docker Compose files and detects necessary updates." \
@@ -2553,7 +2556,7 @@ _fsCleanup_() {
   local _error="${?}"
   trap - ERR EXIT SIGINT SIGTERM
   if [[ "${_error}" -ne 99 ]]; then
-    _fsMsg_ 'Cleanup...'
+    _fsMsg_ '~ fin ~'
       # thanks: lsiem
     sudo rm -rf "${FS_DIR_TMP}"
   fi
