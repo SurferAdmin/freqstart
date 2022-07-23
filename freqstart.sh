@@ -694,9 +694,11 @@ _fsDockerProject_() {
 
       _containerName="$(_fsDockerId2Name_ "${_projectContainer}")"
       _containerRunning="$(_fsDockerPsName_ "${_containerName}")"
-      
-      _fsMsg_ ''
-      _fsMsgTitle_ 'Container: '"${_containerName}"
+
+      if [[ ! "${_projectMode}" = "validate" ]]; then
+        _fsMsg_ ''
+        _fsMsgTitle_ 'Container: '"${_containerName}"
+      fi
       
       if [[ "${_projectMode}" = "compose" ]]; then
         # compose container
