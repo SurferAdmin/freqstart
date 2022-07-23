@@ -1,12 +1,10 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v0.1.9
+# FREQSTART v0.2.0
 
-`v0.1.9`
-* Default arguments changed to "-c" start and "-q" stop of projects.
-* Autoupdate is now an interactive routine per container. The argument "-a" should no longer be used.
-* Nginx requires basic auth before proxy forward to FreqUI in v0.1.9. Restart setup routine for FreqUI!
+`v0.2.0`
+* TBA
 
 ### Freqtrade with Docker
 
