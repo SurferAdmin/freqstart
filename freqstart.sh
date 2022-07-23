@@ -22,7 +22,7 @@ set -o nounset
 set -o pipefail
 
 readonly FS_NAME="freqstart"
-readonly FS_VERSION='v0.2.0'
+readonly FS_VERSION='v0.2.1'
 FS_DIR="$(dirname "$(readlink --canonicalize-existing "${0}" 2> /dev/null)")"
 readonly FS_DIR
 readonly FS_FILE="${0##*/}"

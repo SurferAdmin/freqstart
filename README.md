@@ -1,13 +1,10 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v0.2.0
+# FREQSTART v0.2.1
 
-`v0.2.0`
-* Set auto-update of containers to every 4 hours (Short enough and better than a fixed hour for users in different timezones)
-* Fixed certbot crontab permission (Please re-run FreqUI installation)
-* Added routine to check for existing user while logged-in as root
-* Improved user setup function to switch user instead of reboot and auto sign in to new groups (Thanks: lsiem)
+`v0.2.1`
+* TBA
 
 ## Setup & Docker-Manager for Freqtrade
 
