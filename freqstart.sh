@@ -1003,7 +1003,7 @@ _fsDockerAutoupdate_() {
   local _projectAutoupdateMode="${2:-}" # optional: remove
   local _projectAutoupdates=""
   local _cronCmd="${_path}"
-  local _cronUpdate="0 3 * * *" # update on 3am UTC
+  local _cronUpdate="0 */2 * * *" # update every 2 hours
   
   _projectAutoupdates=()
   _projectAutoupdates+=("#!/usr/bin/env bash")
@@ -1519,7 +1519,7 @@ _fsSetupKucoinProxy_() {
 # NGINX
 
 _fsSetupNginx_() {
-  local _cronCmd="/usr/bin/certbot renew --quiet"
+  local _cronCmd="sudo /usr/bin/certbot renew --quiet"
   local _nr=''
 
     _fsSetupNginxConf_
