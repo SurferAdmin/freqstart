@@ -1519,7 +1519,6 @@ _fsSetupKucoinProxy_() {
 # NGINX
 
 _fsSetupNginx_() {
-  local _cronCmd="sudo /usr/bin/certbot renew --quiet"
   local _nr=''
 
     _fsSetupNginxConf_
@@ -1727,7 +1726,7 @@ _fsSetupNginxConfSecure_() {
   local _serverUrl=''
   local _sslCert=''
   local _sslCertKey=''
-  local _cronCmd="/usr/bin/certbot renew --quiet"
+  local _cronCmd="sudo /usr/bin/certbot renew --quiet"
   local _cronUpdate="0 0 * * *"
   
   _serverDomain="$(_fsValueGet_ "${FS_CONFIG}" '.server_domain')"
