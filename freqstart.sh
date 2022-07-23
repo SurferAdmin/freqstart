@@ -1258,14 +1258,14 @@ _fsSetupNtpCheck_() {
   local timeutc=''
   local timesyn=''
   
-  timentp="$(timedatectl | grep -o 'NTP service: active')"
-  timeutc="$(timedatectl | grep -o '(UTC, +0000)')"
-  timesyn="$(timedatectl | grep -o 'System clock synchronized: yes')"
+  timentp="$(sudo timedatectl | grep -o 'NTP service: active')"
+  timeutc="$(sudo timedatectl | grep -o '(UTC, +0000)')"
+  timesyn="$(sudo timedatectl | grep -o 'System clock synchronized: yes')"
   
-  if [[ -n "${timentp}" ]] || [[ -n  "${timeutc}" ]] || [[ -n  "${timesyn}" ]]; then
-    echo 0
-  else
+  if [[ -z "${timentp}" ]] || [[ -z  "${timeutc}" ]] || [[ -z  "${timesyn}" ]]; then
     echo 1
+  else
+    echo 0
   fi
 }
 
@@ -2126,10 +2126,10 @@ _fsUsage_() {
   "" \
   "- OPTIONS" \
   "  -s, --setup     Install and update" \
-  "  -c, --compose   Compose docker project" \
-  "  -q, --quit      Quit docker project" \
+  "  -c, --compose   Start docker project" \
+  "  -q, --quit      Stop docker project" \
   "  -y, --yes       Yes on every confirmation" \
-  "  --reset         Stopp and remove all containers, networks and images" \
+  "  --reset         Stop and remove all Docker images, containers und networks but keep all files" \
   "" >&2
   
   _fsStats_
