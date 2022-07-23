@@ -2115,7 +2115,7 @@ _fsStats_() {
 }
 
 _fsUsage_() {
-  local _msg="${@:-}"
+  local _msg="${1:-}"
   
   if [[ -n "${_msg}" ]]; then
     printf -- '%s\n' \
@@ -2377,7 +2377,7 @@ _fsIsUrl_() {
 
 _fsCdown_() {
   [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-  
+
   local _secs="${1}"; shift
   local _text="${*}"
   
