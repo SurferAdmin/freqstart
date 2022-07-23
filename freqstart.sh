@@ -22,7 +22,7 @@ set -o nounset
 set -o pipefail
 
 readonly FS_NAME="freqstart"
-readonly FS_VERSION='v0.1.9'
+readonly FS_VERSION='v0.2.0'
 FS_DIR="$(dirname "$(readlink --canonicalize-existing "${0}" 2> /dev/null)")"
 readonly FS_DIR
 readonly FS_FILE="${0##*/}"
@@ -2139,8 +2139,7 @@ _fsUsage_() {
   "  -c, --compose   Start docker project" \
   "  -q, --quit      Stop docker project" \
   "  -y, --yes       Yes on every confirmation" \
-  "  --reset         Stop and remove all Docker images, containers und networks but keep all files" \
-  "" >&2
+  "  --reset         Stop and remove all Docker images, containers und networks but keep all files" >&2
   
   _fsStats_
   exit 0
