@@ -16,13 +16,6 @@ If you are not familiar with Freqtrade, please read the complete documentation f
 
 ![Freqstart Screen Shot][product-screenshot]
 
-<!-- DISCLAIMER -->
-## Disclaimer
- 
-This software is for educational purposes only. Do not risk money which you are afraid to lose. USE THE SOFTWARE AT YOUR OWN RISK. THE AUTHORS AND ALL AFFILIATES ASSUME NO RESPONSIBILITY FOR YOUR TRADING RESULTS.
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
 ### Features
 
 * `Freqtrade` Guided setup for Docker including the native config generator and creation of "user_data" folder.
@@ -149,6 +142,13 @@ Try Vultr "Tokyo" Server and get $100 usage for free:<br/>
 ## Roadmap
 
 See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full list of proposed features (and known issues).
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+<!-- DISCLAIMER -->
+## Disclaimer
+ 
+This software is for educational purposes only. Do not risk money which you are afraid to lose. USE THE SOFTWARE AT YOUR OWN RISK. THE AUTHORS AND ALL AFFILIATES ASSUME NO RESPONSIBILITY FOR YOUR TRADING RESULTS.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
