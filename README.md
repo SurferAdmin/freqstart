@@ -4,9 +4,9 @@
 # FREQSTART v0.1.9
 
 `v0.1.9`
-1. Default arguments changed to "-c" start and "-q" stop of projects.
-2. Autoupdate is now an interactive routine per container. The argument "-a" should no longer be used.
-3. Nginx requires basic auth before proxy forward to FreqUI in v0.1.9. Restart setup routine for FreqUI!
+* Default arguments changed to "-c" start and "-q" stop of projects.
+* Autoupdate is now an interactive routine per container. The argument "-a" should no longer be used.
+* Nginx requires basic auth before proxy forward to FreqUI in v0.1.9. Restart setup routine for FreqUI!
 
 ### Freqtrade with Docker
 
