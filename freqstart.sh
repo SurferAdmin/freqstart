@@ -611,7 +611,6 @@ _fsDockerProject_() {
   local _containerCmd=''
   local _containerRunning=''
   local _containerRestart=1
-  local _containerRestartPolicy=''
   local _containerName=''
   local _containerConfigs=''
   local _containerStrategy=''
@@ -679,6 +678,7 @@ _fsDockerProject_() {
       fi
     fi
   elif [[ "${_projectMode}" = "validate" ]]; then
+    _fsMsg_ ''
     _fsMsgTitle_ "Validate project: ${_projectFile}"
     _fsCdown_ 30 "for any errors..."
   elif [[ "${_projectMode}" = "quit" ]]; then
@@ -694,15 +694,17 @@ _fsDockerProject_() {
 
       _containerName="$(_fsDockerId2Name_ "${_projectContainer}")"
       _containerRunning="$(_fsDockerPsName_ "${_containerName}")"
-
+      
+      _fsMsg_ ''
+      _fsMsgTitle_ 'Container: '"${_containerName}"
+      
       if [[ "${_projectMode}" = "compose" ]]; then
+        # compose container
         _containerJsonInner=''
         _strategyUpdate=''
         _containerStrategyUpdate=''
         _containerAutoupdate="$(_fsValueGet_ "${_containerConfPath}" '.'"${_containerName}"'.autoupdate')"
-
-        _fsMsgTitle_ 'Container: '"${_containerName}"
-
+        
           # connect container to proxy network
         docker network create --subnet="${FS_PROXY_SUBNET}" "${FS_PROXY}" > /dev/null 2> /dev/null || true
         if [[ "${_containerName}" = "${FS_PROXY_BINANCE}" ]]; then
@@ -769,15 +771,16 @@ _fsDockerProject_() {
           _containerStrategyUpdate=""
         fi
 
-        if [[ -n "${_strategyUpdate}" ]]; then
-          if [[ -n "${_containerStrategyUpdate}" ]]; then
-            if [[ "${_containerRunning}" -eq 0 ]] && [[ ! "${_containerStrategyUpdate}" = "${_strategyUpdate}" ]]; then
-              _fsMsg_ "Strategy is outdated: ${_containerStrategy}"
-              _containerRestart=0
-            fi
+        if [[ -n "${_containerStrategyUpdate}" ]]; then
+          if [[ "${_containerRunning}" -eq 0 ]] && [[ ! "${_containerStrategyUpdate}" = "${_strategyUpdate}" ]]; then
+            _containerRestart=0
+            _fsMsg_ '[WARNING] Strategy is outdated: '"${_containerStrategy}"
           else
-            _containerStrategyUpdate="${_strategyUpdate}"
+            _fsMsg_ 'Strategy is up-to-date: '"${_containerStrategy}"
           fi
+        else
+          _containerStrategyUpdate="${_strategyUpdate}"
+          _fsMsg_ '[WARNING] Strategy version unkown: '"${_containerStrategy}"
         fi
         
           # compare latest docker image with container image
@@ -785,8 +788,10 @@ _fsDockerProject_() {
         _containerImageVersion="$(sudo docker inspect --format="{{.Image}}" "${_projectContainer}")"
         _dockerImageVersion="$(docker inspect --format='{{.Id}}' "${_containerImage}")"
         if [[ "${_containerRunning}" -eq 0 ]] && [[ ! "${_containerImageVersion}" = "${_dockerImageVersion}" ]]; then
-          _fsMsg_ "Image is outdated: ${_containerName}"
+          _fsMsg_ '[WARNING] Image is outdated: '"${_containerImage}"
           _containerRestart=0
+        else
+          _fsMsg_ 'Image is up-to-date: '"${_containerImage}"
         fi
 
         if [[ "${_containerRunning}" -eq 1 ]]; then
@@ -829,25 +834,24 @@ _fsDockerProject_() {
           # increment container count
         _containerCount=$((_containerCount+1))
       elif [[ "${_projectMode}" = "validate" ]]; then
+        # validate container
         if [[ "${_containerRunning}" -eq 0 ]]; then
             # set restart to unless-stopped
           docker update --restart=unless-stopped "${_containerName}" > /dev/null
-          _containerRestartPolicy="$(docker inspect --format '{{.HostConfig.RestartPolicy.Name}}' "${_containerName}")"
           
           _containerAutoupdate="$(_fsValueGet_ "${_containerConfPath}" '.'"${_containerName}"'.autoupdate')"
           if [[ "${_containerAutoupdate}" = 'true' ]]; then
             _containerUpdateCount=$((_containerUpdateCount+1))
           fi
           
-          _fsMsg_ "[SUCCESS] Container is active: ${_containerName}"' (Restart: '"${_containerRestartPolicy}"')'
+          _fsMsg_ '[SUCCESS] Container is active: '"${_containerName}"
         else
-          _fsMsg_ "[ERROR] Container is not active: ${_containerName}"
+          _fsMsg_ '[ERROR] Container is not active: '"${_containerName}"
           _fsDockerStop_ "${_containerName}"
           _error=$((_error+1))
         fi
       elif [[ "${_projectMode}" = "quit" ]]; then
-        _fsMsg_ "Container is active: ${_containerName}"
-
+        # stop container
         if [[ "$(_fsCaseConfirmation_ "Quit container?")" -eq 0 ]]; then
           _fsDockerStop_ "${_containerName}"
           _fsValueUpdate_ "${_containerConfPath}" '.'"${_containerName}"'.autoupdate' 'false'
@@ -1238,6 +1242,7 @@ _fsDockerPrerequisites_() {
 # NTP
 
 _fsSetupNtp_() {
+  _fsMsg_ ''
   _fsMsgTitle_ "NTP (Timezone: UTC)"
   
   if [[ "$(_fsSetupNtpCheck_)" = 1 ]]; then
@@ -1281,6 +1286,7 @@ _fsSetupFreqtrade_() {
   local _configFile=''
   local _configFileTmp=''
   
+  _fsMsg_ ''
   _fsMsgTitle_ "FREQTRADE"
   
   if [[ ! -d "${FS_DIR_USER_DATA}" ]]; then
@@ -1375,7 +1381,8 @@ _fsSetupBinanceProxy_() {
   local _dockerName="${FS_PROXY_BINANCE}"
   local _containerIp="${FS_PROXY_BINANCE_IP}"
   local _setup=1
-
+  
+  _fsMsg_ ''
   _fsMsgTitle_ 'PROXY FOR BINANCE'
   
   if [[ "$(_fsDockerPsName_ "${_dockerName}")" -eq 0 ]]; then
@@ -1454,7 +1461,8 @@ _fsSetupKucoinProxy_() {
   local _dockerName="${FS_PROXY_KUCOIN}"
   local _containerIp="${FS_PROXY_KUCOIN_IP}"
   local _setup=1
-
+  
+  _fsMsg_ ''
   _fsMsgTitle_ 'PROXY FOR KUCOIN'
   
   if [[ "$(_fsDockerPsName_ "${_dockerName}")" -eq 0 ]]; then
@@ -1847,7 +1855,8 @@ _fsSetupFrequi_() {
   local _nr=''
   
   _serverUrl="$(_fsValueGet_ "${FS_CONFIG}" ".server_url")"
-
+  
+  _fsMsg_ ''
   _fsMsgTitle_ "FREQUI"
   
 	if [[ "$(_fsDockerPsName_ "${_frequiName}")" -eq 0 ]]; then
@@ -2019,7 +2028,6 @@ _fsStart_() {
 	if [[ "$(_fsIsSymlink_ "${_symlink}")" -eq 1 ]]; then
 		_fsUsage_ "Start setup first!"
   fi
-  
   
   if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
     _fsUsage_ "[ERROR] Option -a or --auto cannot be used with -q or --quit."
