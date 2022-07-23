@@ -4,7 +4,8 @@
 # FREQSTART v0.2.0
 
 `v0.2.0`
-* TBA
+* Set auto-update to every 2 hours
+* Fixed certbot crontab permission
 
 ### Freqtrade with Docker
 
