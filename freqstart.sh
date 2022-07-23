@@ -47,6 +47,11 @@ readonly FS_PROXY_KUCOIN_IP='172.99.0.201'
 readonly FS_PROXY_KUCOIN_JSON="${FS_DIR_USER_DATA}/${FS_PROXY_KUCOIN}.json"
 readonly FS_PROXY_KUCOIN_YML="${FS_DIR}/${FS_PROXY_KUCOIN}.yml"
 
+readonly FS_NGINX_CONFD="/etc/nginx/conf.d"
+readonly FS_NGINX_CONFD_FREQUI="${FS_NGINX_CONFD}"'/frequi.conf'
+readonly FS_NGINX_CONFD_DEFAULT="${FS_NGINX_CONFD}"'/default.conf'
+readonly FS_NGINX_CONFD_HTPASSWD="${FS_NGINX_CONFD}"'/.htpasswd'
+
 readonly FS_FREQUI_JSON="${FS_DIR_USER_DATA}/frequi.json"
 readonly FS_FREQUI_SERVER_JSON="${FS_DIR_USER_DATA}/frequi_server.json"
 readonly FS_FREQUI_YML="${FS_DIR}/${FS_NAME}_frequi.yml"
@@ -1551,11 +1556,7 @@ _fsSetupNginx_() {
 }
 
 _fsSetupNginxConf_() {
-  local _confPath="/etc/nginx/conf.d"
-  local _confPathFrequi="${_confPath}/frequi.conf"
-  local _confPathNginx="${_confPath}/default.conf"
   local _serverUrl='http://'"${FS_SERVER_WAN}"
-  local _htpasswd="/etc/nginx/conf.d/.htpasswd"
   local _auth=''
   local _username=''
   local _password=''
@@ -1565,7 +1566,7 @@ _fsSetupNginxConf_() {
   _fsValueUpdate_ "${FS_CONFIG}" '.server_url' "${_serverUrl}"
   _fsSetupPkgs_ "nginx"
   
-  if [[ "$(_fsFile_ "${_htpasswd}")" -eq 0 ]]; then
+  if [[ "$(_fsFile_ "${FS_NGINX_CONFD_HTPASSWD}")" -eq 0 ]]; then
     if [[ "$(_fsCaseConfirmation_ "Skip generating new server login data?")" -eq 1 ]]; then
       _setup=0
     fi
@@ -1580,13 +1581,13 @@ _fsSetupNginxConf_() {
     _password="$(_fsLoginDataPassword_ "${_loginData}")"
     
       # create htpasswd for proxy access
-    sudo rm -f "${_htpasswd}"
-    sudo sh -c "echo -n ${_username}':' > ${_htpasswd}"
-    sudo sh -c "openssl passwd ${_password} >> ${_htpasswd}"
+    sudo rm -f "${FS_NGINX_CONFD_HTPASSWD}"
+    sudo sh -c "echo -n ${_username}':' > ${FS_NGINX_CONFD_HTPASSWD}"
+    sudo sh -c "openssl passwd ${_password} >> ${FS_NGINX_CONFD_HTPASSWD}"
   fi
     
     # create nginx conf for non ssl
-  _fsFileCreate_ "${_confPathFrequi}" \
+  _fsFileCreate_ "${FS_NGINX_CONFD_FREQUI}" \
   "server {" \
   "    listen ${FS_SERVER_WAN}:80;" \
   "    server_name ${FS_SERVER_WAN};" \
@@ -1598,7 +1599,7 @@ _fsSetupNginxConf_() {
   "        proxy_set_header X-NginX-Proxy true;" \
   "        proxy_redirect off;" \
   "        auth_basic \"Restricted\";" \
-  "        auth_basic_user_file ${_htpasswd};" \
+  "        auth_basic_user_file ${FS_NGINX_CONFD_HTPASSWD};" \
   "    }" \
   "}" \
   "server {" \
@@ -1614,8 +1615,8 @@ _fsSetupNginxConf_() {
   "    }" \
   "}"
   
-  if [[ "$(_fsFile_ "${_confPathNginx}")" -eq 0 ]]; then
-    sudo mv "${_confPathNginx}" "${_confPathNginx}.disabled"
+  if [[ "$(_fsFile_ "${FS_NGINX_CONFD_DEFAULT}")" -eq 0 ]]; then
+    sudo mv "${FS_NGINX_CONFD_DEFAULT}" "${FS_NGINX_CONFD_DEFAULT}.disabled"
   fi
   
   sudo rm -f "/etc/nginx/sites-enabled/default"
@@ -1719,11 +1720,8 @@ _fsSetupNginxConfSecure_() {
   local _serverUrl=''
   local _sslCert=''
   local _sslCertKey=''
-  local _confPath="/etc/nginx/conf.d"
-  local _confPathFrequi="${_confPath}/frequi.conf"
   local _cronCmd="/usr/bin/certbot renew --quiet"
   local _cronUpdate="0 0 * * *"
-  local _htpasswd="/etc/nginx/conf.d/.htpasswd"
   
   _serverDomain="$(_fsValueGet_ "${FS_CONFIG}" '.server_domain')"
   
@@ -1738,11 +1736,11 @@ _fsSetupNginxConfSecure_() {
   
   _fsValueUpdate_ "${FS_CONFIG}" '.server_url' "${_serverUrl}"
   
-  sudo rm -f "${_confPathFrequi}"
+  sudo rm -f "${FS_NGINX_CONFD_FREQUI}"
     # thanks: Blood4rc, Hippocritical
   if [[ "${_mode}" = 'openssl' ]]; then
       # create nginx conf for ip ssl
-    _fsFileCreate_ "${_confPathFrequi}" \
+    _fsFileCreate_ "${FS_NGINX_CONFD_FREQUI}" \
     "server {" \
     "    listen ${FS_SERVER_WAN}:443 ssl;" \
     "    server_name ${FS_SERVER_WAN};" \
@@ -1756,7 +1754,7 @@ _fsSetupNginxConfSecure_() {
     "        proxy_set_header X-NginX-Proxy true;" \
     "        proxy_redirect off;" \
     "        auth_basic \"Restricted\";" \
-    "        auth_basic_user_file ${_htpasswd};" \
+    "        auth_basic_user_file ${FS_NGINX_CONFD_HTPASSWD};" \
     "    }" \
     "}" \
     "server {" \
@@ -1776,7 +1774,7 @@ _fsSetupNginxConfSecure_() {
   elif [[ "${_mode}" = 'letsencrypt' ]]; then
       # workaround for first setup while missing cert files
     if [[ "$(_fsFile_ "${_sslCert}")" -eq 1 ]] || [[ "$(_fsFile_ "${_sslCertKey}")" -eq 1 ]]; then
-      _fsFileCreate_ "${_confPathFrequi}" \
+      _fsFileCreate_ "${FS_NGINX_CONFD_FREQUI}" \
       "server {" \
       "    listen 80;" \
       "    server_name ${_serverDomain};" \
@@ -1793,7 +1791,7 @@ _fsSetupNginxConfSecure_() {
     _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
     
     # create nginx conf for domain ssl
-    _fsFileCreate_ "${_confPathFrequi}" \
+    _fsFileCreate_ "${FS_NGINX_CONFD_FREQUI}" \
     "server {" \
     "    listen ${_serverDomain}:443 ssl http2;" \
     "    server_name ${_serverDomain};" \
@@ -1814,7 +1812,7 @@ _fsSetupNginxConfSecure_() {
     "        proxy_set_header X-NginX-Proxy true;" \
     "        proxy_redirect off;" \
     "        auth_basic \"Restricted\";" \
-    "        auth_basic_user_file ${_htpasswd};" \
+    "        auth_basic_user_file ${FS_NGINX_CONFD_HTPASSWD};" \
     "    }" \
     "}" \
     "server {" \
