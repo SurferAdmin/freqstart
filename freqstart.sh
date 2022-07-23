@@ -1125,21 +1125,22 @@ _fsUser_() {
         fi
         
         _fsMsgTitle_ 'Files can be found in new path: '"${_newPath}"
-        _logout=0
+        
+        su -l "${_newUser}"
       fi
     fi
   fi  
   
-  if ! id -nGz "${_currentUser}" | grep -qzxF "docker"; then
-    sudo usermod -aG docker "${_currentUser}"
-    _logout=0
+  if ! id -nGz "${_currentUser}" | grep -qzxF "sudo"; then
+    sudo usermod -aG sudo "${_currentUser}"
+      # thanks: lsiem
+    sudo newgrp sudo
   fi
   
-  if [[ "${_logout}" -eq 0 ]]; then
-    _fsMsg_ 'You have to log out/in to activate the changes!'
-    _fsCdown_ 10 'to reboot...'
-      # may find a more elegant way but it does its job
-    sudo reboot && exit 0
+  if ! id -nGz "${_currentUser}" | grep -qzxF "docker"; then
+    sudo usermod -aG docker "${_currentUser}"
+      # thanks: lsiem
+    sudo newgrp docker
   fi
 }
 
