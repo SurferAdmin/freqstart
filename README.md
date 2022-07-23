@@ -7,7 +7,7 @@
 * Set auto-update to every 2 hours
 * Fixed certbot crontab permission
 
-### Freqtrade with Docker
+## Setup & Docker-Manager for Freqtrade
 
 Freqstart simplifies the use of Freqtrade with Docker. Including a simple setup guide for Freqtrade,
 configurations and FreqUI with a secured SSL proxy for IP or domain. Freqstart also automatically
@@ -46,14 +46,13 @@ Freqstart provides an interactive setup guide for server security, Freqtrade inc
 
 ### Prerequisites
 
-`Warning` Freqstart installs server packages and configurations tailored to the needs of Freqtrade. It is recommended to set it up in a new and clean environment!
+Freqstart installs server packages and configurations tailored to the needs of Freqtrade and may overwrite existing installations and configurations. It is recommended to set it up in a new and clean environment!
 
-`Packages` git, curl, jq, docker-ce, chrony, nginx, certbot, python3-certbot-nginx, ufw, openssl
+Packages: git, curl, jq, docker-ce, chrony, nginx, certbot, python3-certbot-nginx, ufw, openssl
 
-`Freqstart` is beeing developed and testet on Vultr "Tokyo" Server with `Ubuntu 22.04 x64`. Please open any issues with your specific OS.
+### Recommended VPS
 
-Try Vultr "Tokyo" Server and get $100 usage for free:<br/>
-[https://www.vultr.com/?ref=9122650-8H](https://www.vultr.com/?ref=9122650-8H)
+Vultr (AMD High Performance / Tokyo): [www.vultr.com](https://www.vultr.com/?ref=9122650-8H)
 
 ### Installation
 
