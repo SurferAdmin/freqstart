@@ -4,7 +4,8 @@
 # FREQSTART v0.2.1
 
 `v0.2.1`
-* TBA
+* Moved firewall setup into FreqUI routine. Re-run setup for FreqUI again if in use, major security update!
+* Added rate limit to Nginx proxy for FreqUI based on uniqe cookie value after login (Check if cookie may gets blocket by browser or ad-blocker)
 
 ## Setup & Docker-Manager for Freqtrade
 
