@@ -22,7 +22,7 @@ set -o nounset
 set -o pipefail
 
 readonly FS_NAME="freqstart"
-readonly FS_VERSION='v0.2.0'
+readonly FS_VERSION='v0.2.1'
 FS_DIR="$(dirname "$(readlink --canonicalize-existing "${0}" 2> /dev/null)")"
 readonly FS_DIR
 readonly FS_FILE="${0##*/}"
@@ -1043,7 +1043,7 @@ _fsSetup_() {
 
   _fsIntro_
   _fsUser_
-  _fsDockerPrerequisites_
+  _fsSetupPrerequisites_
   _fsSetupNtp_
   _fsSetupFreqtrade_
   _fsSetupFrequi_
@@ -1199,7 +1199,6 @@ _fsSetupPkgs_() {
           # firewall setup
         sudo apt-get install -y -q ufw
         sudo ufw logging medium > /dev/null
-        yes $'y' | sudo ufw enable
       else
         sudo apt-get install -y -q "${_pkg}"
       fi
@@ -1230,12 +1229,12 @@ _fsSetupPkgsStatus_() {
 
 # PREREQUISITES
 
-_fsDockerPrerequisites_() {
+_fsSetupPrerequisites_() {
   _fsMsgTitle_ "PREREQUISITES"
 
-  sudo apt-get update || true
+  sudo apt-get update || true # workarpund if you have manually installed packages that are cousing errors
 
-  _fsSetupPkgs_ "git" "curl" "jq" "docker-ce" "ufw"
+  _fsSetupPkgs_ "git" "curl" "jq" "docker-ce"
   _fsMsg_ "Update server and install unattended-upgrades? Reboot may be required!"
   
   if [[ "$(_fsCaseConfirmation_ "Skip server update?")" -eq 0 ]]; then
@@ -1257,6 +1256,61 @@ _fsDockerPrerequisites_() {
       _fsMsg_ "A reboot is not required."
     fi
   fi
+}
+
+# FIREWALL
+
+_fsSetupFirewall_() {
+  local _serverFirewall=''
+  local _portSSH=22
+  
+  _serverFirewall="$(_fsValueGet_ "${FS_CONFIG}" '.server_firewall')"
+  
+  _fsSetupPkgs_ "ufw"
+  
+  while true; do
+    if [[ -n "${_serverFirewall}" ]]; then
+      if [[ "$(_fsCaseConfirmation_ 'Skip reconfiguration of firewall?')" -eq 0 ]]; then
+        break
+      fi
+    else
+      if [[ "$(_fsCaseConfirmation_ 'Install firewall for Nginx proxy (recommended)?')" -eq 1 ]]; then
+        _serverFirewall="$(_fsValueUpdate_ "${FS_CONFIG}" '.server_firewall' 'false')"
+        break
+      fi
+    fi
+    
+    if [[ "$(_fsCaseConfirmation_ 'Is the default SSH port "22/tcp"?')" -eq 1 ]]; then
+      while true; do
+        read -rp '? SSH port (Press [ENTER] for default "22/tcp"): ' _portSSH
+        case ${_portSSH} in
+          "")
+            _portSSH=22
+            ;;
+          *)
+            _fsMsg_ 'Do not continue if the default SSH port is not: '"${_portSSH}"
+            if [[ "$(_fsCaseConfirmation_ 'Continue?')" -eq 0 ]]; then
+              break
+            fi
+            ;;
+        esac
+      done
+    fi
+    
+    yes $'y' | sudo ufw reset || true
+    sudo ufw default deny incoming
+    sudo ufw allow ssh
+    sudo ufw allow "${_portSSH}"/tcp
+    sudo ufw allow 80/tcp
+    sudo ufw allow 443/tcp
+    sudo ufw allow 9999/tcp
+    sudo ufw allow 9000:9100/tcp
+    yes $'y' | sudo ufw enable || true
+    
+    _serverFirewall="$(_fsValueUpdate_ "${FS_CONFIG}" '.server_firewall' 'true')"
+    
+    break
+  done
 }
 
 # NTP
@@ -1570,7 +1624,6 @@ _fsSetupNginx_() {
           ;;
         [3])
           _fsMsg_ "Continuing with 3) ..."
-          sudo ufw allow http > /dev/null
           break
           ;;
         *)
@@ -1614,19 +1667,31 @@ _fsSetupNginxConf_() {
   fi
     
     # create nginx conf for non ssl
+    # credit :https://serverfault.com/a/1060487
   _fsFileCreate_ "${FS_NGINX_CONFD_FREQUI}" \
+  'map $http_cookie $rate_limit_key {' \
+  "    default \$binary_remote_addr;" \
+  '    \"~__Secure-rl-bypass='"${_bypass}"'" "";' \
+  "}" \
+  "limit_req_status 429;" \
+  "limit_req_zone \$rate_limit_key zone=auth:10m rate=1r/m;" \
   "server {" \
   "    listen ${FS_SERVER_WAN}:80;" \
   "    server_name ${FS_SERVER_WAN};" \
   "    location / {" \
+  "        auth_basic \"Restricted\";" \
+  "        auth_basic_user_file ${FS_NGINX_CONFD_HTPASSWD};" \
+  "        limit_req zone=auth burst=20 nodelay;" \
+  '        add_header Set-Cookie "__Secure-rl-bypass='"${_bypass}"';Max-Age=31536000;Domain=$host;Path=/;Secure;HttpOnly";' \
   "        proxy_pass http://127.0.0.1:9999;" \
   "        proxy_set_header X-Real-IP \$remote_addr;" \
   "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" \
   "        proxy_set_header Host \$host;" \
   "        proxy_set_header X-NginX-Proxy true;" \
   "        proxy_redirect off;" \
-  "        auth_basic \"Restricted\";" \
-  "        auth_basic_user_file ${FS_NGINX_CONFD_HTPASSWD};" \
+  "    }" \
+  "    location /api {" \
+  "        return 400;" \
   "    }" \
   "}" \
   "server {" \
@@ -1640,8 +1705,11 @@ _fsSetupNginxConf_() {
   "        proxy_set_header X-NginX-Proxy true;" \
   "        proxy_redirect off;" \
   "    }" \
+  "    location = / {" \
+  "        return 400;" \
+  "    }" \
   "}"
-  
+
   if [[ "$(_fsFile_ "${FS_NGINX_CONFD_DEFAULT}")" -eq 0 ]]; then
     sudo mv "${FS_NGINX_CONFD_DEFAULT}" "${FS_NGINX_CONFD_DEFAULT}.disabled"
   fi
@@ -1749,7 +1817,8 @@ _fsSetupNginxConfSecure_() {
   local _sslCertKey=''
   local _cronCmd="sudo /usr/bin/certbot renew --quiet"
   local _cronUpdate="0 0 * * *"
-  
+  local _bypass=''
+
   _serverDomain="$(_fsValueGet_ "${FS_CONFIG}" '.server_domain')"
   
   if [[ -n "${_serverDomain}" ]]; then
@@ -1768,20 +1837,31 @@ _fsSetupNginxConfSecure_() {
   if [[ "${_mode}" = 'openssl' ]]; then
       # create nginx conf for ip ssl
     _fsFileCreate_ "${FS_NGINX_CONFD_FREQUI}" \
+    'map $http_cookie $rate_limit_key {' \
+    "    default \$binary_remote_addr;" \
+    '    \"~__Secure-rl-bypass='"${_bypass}"'" "";' \
+    "}" \
+    "limit_req_status 429;" \
+    "limit_req_zone \$rate_limit_key zone=auth:10m rate=1r/m;" \
     "server {" \
     "    listen ${FS_SERVER_WAN}:443 ssl;" \
     "    server_name ${FS_SERVER_WAN};" \
     "    include snippets/self-signed.conf;" \
     "    include snippets/ssl-params.conf;" \
     "    location / {" \
+    "        auth_basic \"Restricted\";" \
+    "        auth_basic_user_file ${FS_NGINX_CONFD_HTPASSWD};" \
+    "        limit_req zone=auth burst=20 nodelay;" \
+    '        add_header Set-Cookie "__Secure-rl-bypass='"${_bypass}"';Max-Age=31536000;Domain=$host;Path=/;Secure;HttpOnly";' \
     "        proxy_pass http://127.0.0.1:9999;" \
     "        proxy_set_header X-Real-IP \$remote_addr;" \
     "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" \
     "        proxy_set_header Host \$host;" \
     "        proxy_set_header X-NginX-Proxy true;" \
     "        proxy_redirect off;" \
-    "        auth_basic \"Restricted\";" \
-    "        auth_basic_user_file ${FS_NGINX_CONFD_HTPASSWD};" \
+    "    }" \
+    "    location /api {" \
+    "        return 400;" \
     "    }" \
     "}" \
     "server {" \
@@ -1797,7 +1877,11 @@ _fsSetupNginxConfSecure_() {
     "        proxy_set_header X-NginX-Proxy true;" \
     "        proxy_redirect off;" \
     "    }" \
+    "    location = / {" \
+    "        return 400;" \
+    "    }" \
     "}"
+
   elif [[ "${_mode}" = 'letsencrypt' ]]; then
       # workaround for first setup while missing cert files
     if [[ "$(_fsFile_ "${_sslCert}")" -eq 1 ]] || [[ "$(_fsFile_ "${_sslCertKey}")" -eq 1 ]]; then
@@ -1817,8 +1901,15 @@ _fsSetupNginxConfSecure_() {
       # add cron to automatically renew cert file
     _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
     
-    # create nginx conf for domain ssl
+    _bypass="$(_fsRandomBase64UrlSafe_ 16)"
+      # create nginx conf for domain ssl
     _fsFileCreate_ "${FS_NGINX_CONFD_FREQUI}" \
+    'map $http_cookie $rate_limit_key {' \
+    "    default \$binary_remote_addr;" \
+    '    \"~__Secure-rl-bypass='"${_bypass}"'" "";' \
+    "}" \
+    "limit_req_status 429;" \
+    "limit_req_zone \$rate_limit_key zone=auth:10m rate=1r/m;" \
     "server {" \
     "    listen ${_serverDomain}:443 ssl http2;" \
     "    server_name ${_serverDomain};" \
@@ -1826,20 +1917,25 @@ _fsSetupNginxConfSecure_() {
     "    ssl_certificate_key /etc/letsencrypt/live/${_serverDomain}/privkey.pem;" \
     "    include /etc/letsencrypt/options-ssl-nginx.conf;" \
     "    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;" \
-    "    # Required for LE certificate enrollment using certbot" \
     "    location '/.well-known/acme-challenge' {" \
+    "        auth_basic off;" \
     "        default_type \"text/plain\";" \
     "        root /var/www/html;" \
     "    }" \
     "    location / {" \
+    "        auth_basic \"Restricted\";" \
+    "        auth_basic_user_file ${FS_NGINX_CONFD_HTPASSWD};" \
+    "        limit_req zone=auth burst=20 nodelay;" \
+    '        add_header Set-Cookie "__Secure-rl-bypass='"${_bypass}"';Max-Age=31536000;Domain=$host;Path=/;Secure;HttpOnly";' \
     "        proxy_pass http://127.0.0.1:9999;" \
     "        proxy_set_header X-Real-IP \$remote_addr;" \
     "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" \
     "        proxy_set_header Host \$host;" \
     "        proxy_set_header X-NginX-Proxy true;" \
     "        proxy_redirect off;" \
-    "        auth_basic \"Restricted\";" \
-    "        auth_basic_user_file ${FS_NGINX_CONFD_HTPASSWD};" \
+    "    }" \
+    "    location /api {" \
+    "        return 400;" \
     "    }" \
     "}" \
     "server {" \
@@ -1857,12 +1953,11 @@ _fsSetupNginxConfSecure_() {
     "        proxy_set_header X-NginX-Proxy true;" \
     "        proxy_redirect off;" \
     "    }" \
+    "    location = / {" \
+    "        return 400;" \
+    "    }" \
     "}"
   fi
-  
-  sudo ufw delete allow http > /dev/null
-  sudo ufw deny http > /dev/null
-  sudo ufw allow https > /dev/null
 }
 
 # FREQUI
@@ -1890,13 +1985,8 @@ _fsSetupFrequi_() {
   fi
   
   if [[ "${_setup}" -eq 0 ]];then
+    _fsSetupFirewall_
     _fsSetupNginx_
-    
-      # allow port range for containers that use frequi
-    sudo ufw allow 9000:9100/tcp > /dev/null
-      # allow port for frequi container
-    sudo ufw allow 9999/tcp > /dev/null
-
     _fsSetupFrequiJson_
     _fsSetupFrequiCompose_
   fi
@@ -1949,19 +2039,19 @@ _fsSetupFrequiJson_() {
   if [[ -n "${_frequiUsername}" ]] && [[ -n "${_frequiPassword}" ]]; then
       # create frequi json for bots
     _fsFileCreate_ "${FS_FREQUI_JSON}" \
-    "{" \
-    "    \"api_server\": {" \
-    "        \"enabled\": true," \
-    "        \"listen_ip_address\": \"0.0.0.0\"," \
-    "        \"listen_port\": 9999," \
-    "        \"verbosity\": \"error\"," \
-    "        \"enable_openapi\": false," \
-    "        \"jwt_secret_key\": \"${_frequiJwt}\"," \
-    "        \"CORS_origins\": [\"${_serverUrl}\"]," \
-    "        \"username\": \"${_frequiUsername}\"," \
-    "        \"password\": \"${_frequiPassword}\"" \
-    "    }" \
-    "}"
+    '{' \
+    '    "api_server": {' \
+    '        "enabled": true,' \
+    '        "listen_ip_address": "0.0.0.0",' \
+    '        "listen_port": 9999,' \
+    '        "verbosity": "error",' \
+    '        "enable_openapi": false,' \
+    '        "jwt_secret_key": "'"${_frequiJwt}"'",' \
+    '        "CORS_origins": ["'"${_serverUrl}"'"],' \
+    '        "username": "'"${_frequiUsername}"'",' \
+    '        "password": "'"${_frequiPassword}"'"' \
+    '    }' \
+    '}'
   else
     _fsMsgExit_ '[FATAL] Passwort or username missing!'
   fi
@@ -2082,9 +2172,12 @@ _fsIntro_() {
 	local _serverWan=''
 	local _serverDomain=''
 	local _serverUrl=''
+	local _serverFirewall=''
   
   _fsLogo_
   
+  [[ -z "${FS_SERVER_WAN}" ]] && _fsMsgExit_ '[FATAL] Cannot retrieve server IP address!'
+
 	if [[ "$(_fsFile_ "${FS_CONFIG}")" -eq 0 ]]; then
     _serverWan="$(_fsValueGet_ "${FS_CONFIG}" ".server_wan")"
     if [[ -n "${_serverWan}" ]] && [[ ! "${FS_SERVER_WAN}" = "${_serverWan}" ]]; then
@@ -2095,15 +2188,19 @@ _fsIntro_() {
     
     _serverDomain="$(_fsValueGet_ "${FS_CONFIG}" ".server_domain")"
     _serverUrl="$(_fsValueGet_ "${FS_CONFIG}" ".server_url")"
+    _serverFirewall="$(_fsValueGet_ "${FS_CONFIG}" '.server_firewall')"
+  else
+    _serverWan="${FS_SERVER_WAN}"
   fi
   
   _fsFileCreate_ "${FS_CONFIG}" \
-  "{" \
-  "    \"version\": \"${FS_VERSION}\"," \
-  "    \"server_wan\": \"${_serverWan}\"," \
-  "    \"server_domain\": \"${_serverDomain}\"," \
-  "    \"server_url\": \"${_serverUrl}\"" \
-  "}"
+  '{' \
+  '    "version": "'"${FS_VERSION}"'",' \
+  '    "server_wan": "'"${_serverWan}"'",' \
+  '    "server_domain": "'"${_serverDomain}"'",' \
+  '    "server_url": "'"${_serverUrl}"'",' \
+  '    "server_firewall": "'"${_serverFirewall}"'"' \
+  '}'
 }
 
 _fsStats_() {
@@ -2202,7 +2299,8 @@ _fsFileCreate_() {
   [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _filePath="${1}"; shift
-  local _array=("${@}")
+  local _input=("${@}")
+  local _output=''
   local _fileTmp=''
   local _file="${_filePath##*/}"
   local _fileDir="${_filePath%/*}"
@@ -2211,7 +2309,8 @@ _fsFileCreate_() {
   _fileHash="$(_fsRandomHex_ 8)"
   _fileTmp="${FS_DIR_TMP}"'/'"${_fileHash}"'_'"${_file}"
 
-  printf -- '%s\n' "${_array[@]}" | sudo tee "${_fileTmp}" > /dev/null
+  _output="$(printf -- '%s\n' "${_input[@]}")"
+  echo "${_output}" | sudo tee "${_fileTmp}" > /dev/null
   
   if [[ ! -d "${_fileDir}" ]]; then
     sudo mkdir -p "${_fileDir}"
@@ -2264,11 +2363,11 @@ _fsValueGet_() {
   local _fileType="${_filePath##*.}"
   local _key="${2}"
   local _value=''
-
+  
   if [[ "$(_fsFile_ "${_filePath}")" -eq 0 ]]; then
     if [[ "${_fileType}" = 'json' ]]; then
         # get value from json
-      _value="$(jq -r "${_key}"' // empty' "${_filePath}" 2> /dev/null || true)"
+      _value="$(jq -r "${_key}"' // empty' "${_filePath}")"
     else
         # get value from other filetypes
       _value="$(cat "${_filePath}" | { grep -o "${_key}\"\?: \"\?.*\"\?" || true; } \
