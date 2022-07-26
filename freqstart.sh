@@ -22,35 +22,42 @@ set -o nounset
 set -o pipefail
 
 readonly FS_NAME="freqstart"
-readonly FS_VERSION='v0.2.1'
+readonly FS_VERSION='v1.0.0'
+readonly FS_FILE="${0##*/}"
+readonly FS_TMP="/tmp/${FS_NAME}"
+readonly FS_SYMLINK="/usr/local/bin/${FS_NAME}"
+
 FS_DIR="$(dirname "$(readlink --canonicalize-existing "${0}" 2> /dev/null)")"
 readonly FS_DIR
-readonly FS_FILE="${0##*/}"
-readonly FS_SYMLINK="/usr/local/bin/${FS_NAME}"
-readonly FS_DIR_TMP="/tmp/${FS_NAME}"
+readonly FS_DIR_DATA="${FS_DIR}"'/data'
 readonly FS_DIR_DOCKER="${FS_DIR}/docker"
 readonly FS_DIR_USER_DATA="${FS_DIR}/user_data"
 readonly FS_DIR_USER_DATA_STRATEGIES="${FS_DIR_USER_DATA}/strategies"
 readonly FS_DIR_USER_DATA_LOGS="${FS_DIR_USER_DATA}/logs"
+
 readonly FS_CONFIG="${FS_DIR}/${FS_NAME}.conf.json"
 readonly FS_STRATEGIES="${FS_DIR}/${FS_NAME}.strategies.json"
 
-readonly FS_PROXY='freqstart_proxy'
-readonly FS_PROXY_SUBNET='172.99.0.0/16'
+readonly FS_NETWORK="${FS_NAME}"'_network'
+readonly FS_NETWORK_SUBNET='172.31.0.0/16'
+readonly FS_NETWORK_IP='172.31.0.1'
+
 readonly FS_PROXY_BINANCE='binance_proxy'
-readonly FS_PROXY_BINANCE_IP='172.99.0.200'
 readonly FS_PROXY_BINANCE_JSON="${FS_DIR_USER_DATA}/${FS_PROXY_BINANCE}.json"
 readonly FS_PROXY_BINANCE_FUTURES_JSON="${FS_DIR_USER_DATA}/${FS_PROXY_BINANCE}_futures.json"
 readonly FS_PROXY_BINANCE_YML="${FS_DIR}/${FS_PROXY_BINANCE}.yml"
+
 readonly FS_PROXY_KUCOIN='kucoin_proxy'
-readonly FS_PROXY_KUCOIN_IP='172.99.0.201'
 readonly FS_PROXY_KUCOIN_JSON="${FS_DIR_USER_DATA}/${FS_PROXY_KUCOIN}.json"
 readonly FS_PROXY_KUCOIN_YML="${FS_DIR}/${FS_PROXY_KUCOIN}.yml"
 
-readonly FS_NGINX_CONFD="/etc/nginx/conf.d"
+readonly FS_NGINX="${FS_NAME}"'_nginx'
+readonly FS_NGINX_YML="${FS_DIR}"'/'"${FS_NAME}"'_nginx.yml'
+readonly FS_NGINX_CONFD="${FS_DIR_DATA}/nginx/conf.d"
 readonly FS_NGINX_CONFD_FREQUI="${FS_NGINX_CONFD}"'/frequi.conf'
 readonly FS_NGINX_CONFD_DEFAULT="${FS_NGINX_CONFD}"'/default.conf'
 readonly FS_NGINX_CONFD_HTPASSWD="${FS_NGINX_CONFD}"'/.htpasswd'
+readonly FS_CERTBOT="${FS_NAME}"'_certbot'
 
 readonly FS_FREQUI_JSON="${FS_DIR_USER_DATA}/frequi.json"
 readonly FS_FREQUI_SERVER_JSON="${FS_DIR_USER_DATA}/frequi_server.json"
@@ -184,7 +191,7 @@ _fsDockerVersionHub_() {
   local _dockerVersionHub=''
 
 	_dockerName="$(_fsDockerVarsName_ "${_dockerRepo}")"
-	_dockerManifest="${FS_DIR_TMP}"'/'"${FS_HASH}"'_'"${_dockerName}"'_'"${_dockerTag}"'.md'
+	_dockerManifest="${FS_TMP}"'/'"${FS_HASH}"'_'"${_dockerName}"'_'"${_dockerTag}"'.md'
 
     # credit: https://stackoverflow.com/a/64309017
   _acceptM="application/vnd.docker.distribution.manifest.v2+json"
@@ -282,7 +289,7 @@ _fsDockerImage_() {
   elif [[ "${_dockerStatus}" -eq 1 ]]; then
       # if image is updated
     if [[ ! -d "${FS_DIR_DOCKER}" ]]; then
-      sudo mkdir -p "${FS_DIR_DOCKER}"
+      mkdir -p "${FS_DIR_DOCKER}"
     fi
 
     sudo rm -f "${_dockerPath}"
@@ -442,12 +449,12 @@ _fsDockerProjectPorts_() {
     _dockerPortsProject=()
     while read -r; do
       _dockerPortsProject+=("$REPLY")
-    done < <(sudo docker ps -a -f name="${_ymlName}" | awk 'NR > 1 {print $12}' | sed "s,->.*,," | sed "s,.*:,,")
+    done < <(docker ps -a -f name="${_ymlName}" | awk 'NR > 1 {print $12}' | sed "s,->.*,," | sed "s,.*:,,")
 
     _dockerPortsAll=()
     while read -r; do
       _dockerPortsAll+=("$REPLY")
-    done < <(sudo docker ps -a | awk 'NR > 1 {print $12}' | sed "s,->.*,," | sed "s,.*:,,")
+    done < <(docker ps -a | awk 'NR > 1 {print $12}' | sed "s,->.*,," | sed "s,.*:,,")
 
     _dockerPortsBlocked=("$(printf '%s\n' "${_dockerPortsAll[@]}" "${_dockerPortsProject[@]}" | sort | uniq -u)")
     _dockerPortsCompare=("$(echo "${_dockerPortsYml[@]}" "${_dockerPortsBlocked[@]}" | tr ' ' '\n' | sort | uniq -D | uniq)")
@@ -593,8 +600,10 @@ _fsDockerProject_() {
   [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
 
   local _projectPath="${FS_DIR}/${1##*/}"
-  local _projectMode="${2}" # compose, validate, quit
-  local _projectForce="${3:-}" # optional: force
+  local _projectMode="${2}" # compose, compose-force, run, run-force, validate, quit
+  shift; shift 
+  local _projectArgs="${*:-}" # optional: args
+echo "XXX _projectArgs: $_projectArgs{}"
   local _projectCronCmd=''
   local _projectCronUpdate=''
   local _projectFile=''
@@ -652,14 +661,14 @@ _fsDockerProject_() {
     fi
   fi
   
-  if [[ "${_projectMode}" = "compose" ]]; then
+  if [[ "${_projectMode}" =* "compose" ]]; then
     _fsMsgTitle_ "Compose project: ${_projectFile}"
 
     _projectImages="$(_fsDockerProjectImages_ "${_projectPath}")"
     _projectStrategies="$(_fsDockerProjectStrategies_ "${_projectPath}")"
     _projectConfigs="$(_fsDockerProjectConfigs_ "${_projectPath}")"
     
-    if [[ "${_projectForce}" = "force" ]]; then
+    if [[ "${_projectMode}" = "compose-force" ]]; then
       _projectPorts=0
     else
       _projectPorts="$(_fsDockerProjectPorts_ "${_projectPath}")"
@@ -671,11 +680,27 @@ _fsDockerProject_() {
     [[ "${_projectStrategies}" -eq 1 ]] && _error=$((_error+1))
 
     if [[ "${_error}" -eq 0 ]]; then
-      if [[ "${_projectForce}" = "force" ]]; then
-        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" up --no-start --force-recreate --remove-orphans
+      if [[ "${_projectMode}" = 'compose-force' ]]; then
+        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" up --no-start --force-recreate --remove-orphans "${_projectArgs}"
       else
-        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" up --no-start --no-recreate --remove-orphans
+        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" up --no-start --no-recreate --remove-orphans "${_projectArgs}"
       fi
+    fi
+  elif [[ "${_projectMode}" =* "run" ]]; then
+    _fsMsgTitle_ "Run project: ${_projectFile}"
+    _projectImages="$(_fsDockerProjectImages_ "${_projectPath}")"
+    
+    if [[ "${_projectMode}" = "run-force" ]]; then
+      _projectPorts=0
+    else
+      _projectPorts="$(_fsDockerProjectPorts_ "${_projectPath}")"
+    fi
+    
+    [[ "${_projectImages}" -eq 1 ]] && _error=$((_error+1))
+    [[ "${_projectPorts}" -eq 1 ]] && _error=$((_error+1))
+    
+    if [[ "${_error}" -eq 0 ]]; then
+      cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" run "${_projectArgs}"
     fi
   elif [[ "${_projectMode}" = "validate" ]]; then
     _fsMsg_ ''
@@ -685,7 +710,7 @@ _fsDockerProject_() {
     _fsMsgTitle_ "Quit project: ${_projectFile}"
   fi
 
-  if [[ "${_error}" -eq 0 ]]; then
+  if [[ "${_error}" -eq 0 ]] && [[ ! "${_projectMode}" =* 'run' ]]; then
     while read -r; do
       _projectContainers+=( "$REPLY" )
     done < <(cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" ps -q)
@@ -709,14 +734,13 @@ _fsDockerProject_() {
         if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ ! "${_containerAutoupdate}" = 'true' ]]; then
           continue
         fi
-          # connect container to proxy network
-        docker network create --subnet="${FS_PROXY_SUBNET}" "${FS_PROXY}" > /dev/null 2> /dev/null || true
-        if [[ "${_containerName}" = "${FS_PROXY_BINANCE}" ]]; then
-          docker network connect --ip "${FS_PROXY_BINANCE_IP}" "${FS_PROXY}" "${_containerName}" > /dev/null 2> /dev/null || true
-        elif [[ "${_containerName}" = "${FS_PROXY_KUCOIN}" ]]; then
-          docker network connect --ip "${FS_PROXY_KUCOIN_IP}" "${FS_PROXY}" "${_containerName}" > /dev/null 2> /dev/null || true
-        else
-          docker network connect "${FS_PROXY}" "${_containerName}" > /dev/null 2> /dev/null || true
+        
+          # create docker network if it does not exist
+        docker network create --subnet="${FS_NETWORK_SUBNET}" "${FS_NETWORK}" > /dev/null 2> /dev/null || true
+        
+          # connect container to docker network excl. nginx and certbot to avoid port collision
+        if [[ ! "${_containerName}" = "${FS_NGINX}" ]] || [[ ! "${_containerName}" = "${FS_CERTBOT}" ]]; then
+          docker network connect --ip "${FS_NETWORK_IP}" "${FS_NETWORK}" "${_containerName}" > /dev/null 2> /dev/null || true
         fi
         
           # set restart to no to filter faulty containers
@@ -747,7 +771,7 @@ _fsDockerProject_() {
         
         if [[ "$(_fsFile_ "${_containerLogfile}")" -eq 0 ]]; then
             # workaround to preserve owner of file
-          _containerLogfileTmp="${FS_DIR_TMP}"'/'"${_containerLogfile##*/}"'.tmp'
+          _containerLogfileTmp="${FS_TMP}"'/'"${_containerLogfile##*/}"'.tmp'
           sudo touch "${_containerLogfileTmp}"
           sudo cp --no-preserve=all "${_containerLogfileTmp}" "${_containerLogfile}"
         fi
@@ -867,7 +891,7 @@ _fsDockerProject_() {
     done
   fi
   
-  if [[ "${_projectMode}" = "compose" ]]; then
+  if [[ "${_projectMode}" =* "compose" ]]; then
     if [[ "${_error}" -eq 0 ]]; then
         # create project conf file
       if (( ${#_procjectJson[@]} )); then
@@ -907,9 +931,9 @@ _fsDockerStrategy_() {
   local _strategyUpdate=''
   local _strategyUpdateCount=0
   local _strategyFileType=''
-  local _strategyFileTypeName="unknown"
-  local _strategyTmp="${FS_DIR_TMP}/${_strategyName}_${FS_HASH}"
-  local _strategyDir="${FS_DIR_USER_DATA_STRATEGIES}/${_strategyName}"
+  local _strategyFileTypeName='unknown'
+  local _strategyTmp="${FS_TMP}"'/'"${_strategyName}"'_'"${FS_HASH}"
+  local _strategyDir="${FS_DIR_USER_DATA_STRATEGIES}"'/'"${_strategyName}"
   local _strategyUrls=''
   local _strategyUrlsDeduped=''
   local _strategyUrl=''
@@ -940,8 +964,8 @@ _fsDockerStrategy_() {
   fi
   
   if (( ${#_strategyUrlsDeduped[@]} )); then
-    sudo mkdir -p "${_strategyTmp}"
-    sudo mkdir -p "${_strategyDir}"
+    mkdir -p "${_strategyTmp}"
+    mkdir -p "${_strategyDir}"
     
     for _strategyUrl in "${_strategyUrlsDeduped[@]}"; do
       if [[ "$(_fsIsUrl_ "${_strategyUrl}")" -eq 0 ]]; then
@@ -1028,7 +1052,7 @@ _fsDockerAutoupdate_() {
 }
 
 _fsDockerPurge_() {
-    if [[ "$(_fsSetupPkgsStatus_ "docker-ce")" -eq 0 ]]; then
+    if [[ "$(_fsPkgsStatus_ "docker-ce")" -eq 0 ]]; then
       sudo docker ps -a -q | xargs -I {} sudo docker rm -f {}
       sudo docker network prune --force
       sudo docker image ls -q | xargs -I {} sudo docker image rm -f {}
@@ -1126,10 +1150,11 @@ _fsUser_() {
         if [[ ! -d "${_newPath}" ]]; then
           sudo mkdir "${_newPath}"
         fi
-        
+          # copy script and content to new user and set permissions
 				sudo cp -R "${_dir}"/* "${_newPath}"
 				sudo chown -R "${_newUser}":"${_newUser}" "${_newPath}"
-        
+          
+          # remove symlink and current script and content
         sudo rm -f "${_symlink}"
         sudo rm -rf "${_dir}"
         
@@ -1164,69 +1189,6 @@ _fsUser_() {
   fi
 }
 
-# PACKAGES
-
-_fsSetupPkgs_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-
-  local _pkgs=("$@")
-  local _pkg=''
-  local _status=''
-  local _getDocker="${FS_DIR}/get-docker.sh"
-
-  for _pkg in "${_pkgs[@]}"; do
-    if [[ "$(_fsSetupPkgsStatus_ "${_pkg}")" -eq 1 ]]; then
-      if [[ "${_pkg}" = 'docker-ce' ]]; then
-          # docker setup
-        mkdir -p "${FS_DIR_DOCKER}"
-        sudo curl --connect-timeout 10 -fsSL "https://get.docker.com" -o "${_getDocker}"
-        _fsFileExist_ "${_getDocker}"
-        sudo chmod +x "${_getDocker}"
-        sudo sh "${_getDocker}"
-        rm -f "${_getDocker}"
-        sudo apt install -y -q docker-compose
-      elif [[ "${_pkg}" = 'chrony' ]]; then
-          # ntp setup
-        sudo apt-get install -y -q chrony
-          # thanks: lsiem
-        sudo systemctl unmask systemd-timesyncd.service
-        sudo systemctl stop chronyd
-        sudo timedatectl set-timezone 'UTC'
-        sudo systemctl start chronyd
-        sudo timedatectl set-ntp true
-        sudo systemctl restart chronyd
-      elif [[ "${_pkg}" = 'ufw' ]]; then
-          # firewall setup
-        sudo apt-get install -y -q ufw
-        sudo ufw logging medium > /dev/null
-      else
-        sudo apt-get install -y -q "${_pkg}"
-      fi
-        # validate installation
-      if [[ "$(_fsSetupPkgsStatus_ "${_pkg}")" -eq 0 ]]; then
-        _fsMsg_ "Installed: ${_pkg}"
-      else
-        _fsMsgExit_ "[FATAL] Cannot install: ${_pkg}"
-      fi
-    fi
-  done
-}
-
-_fsSetupPkgsStatus_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-  
-  local _pkg="${1}"
-  local _status=''
-  
-  _status="$(dpkg-query -W --showformat='${Status}\n' "${_pkg}" 2> /dev/null | grep "install ok installed")"
-
-  if [[ -n "${_status}" ]]; then
-    echo 0
-  else
-    echo 1
-  fi
-}
-
 # PREREQUISITES
 
 _fsSetupPrerequisites_() {
@@ -1234,7 +1196,7 @@ _fsSetupPrerequisites_() {
 
   sudo apt-get update || true # workarpund if you have manually installed packages that are cousing errors
 
-  _fsSetupPkgs_ "git" "curl" "jq" "docker-ce"
+  _fsPkgs_ "curl" "jq" "docker-ce"
   _fsMsg_ "Update server and install unattended-upgrades? Reboot may be required!"
   
   if [[ "$(_fsCaseConfirmation_ "Skip server update?")" -eq 0 ]]; then
@@ -1266,7 +1228,7 @@ _fsSetupFirewall_() {
   
   _serverFirewall="$(_fsValueGet_ "${FS_CONFIG}" '.server_firewall')"
   
-  _fsSetupPkgs_ "ufw"
+  _fsPkgs_ "ufw"
   
   while true; do
     if [[ -n "${_serverFirewall}" ]]; then
@@ -1275,6 +1237,7 @@ _fsSetupFirewall_() {
       fi
     else
       if [[ "$(_fsCaseConfirmation_ 'Install firewall for Nginx proxy (recommended)?')" -eq 1 ]]; then
+          # hopefully you have another solution in place
         _serverFirewall="$(_fsValueUpdate_ "${FS_CONFIG}" '.server_firewall' 'false')"
         break
       fi
@@ -1284,7 +1247,7 @@ _fsSetupFirewall_() {
       while true; do
         read -rp '? SSH port (Press [ENTER] for default "22/tcp"): ' _portSSH
         case ${_portSSH} in
-          "")
+          '')
             _portSSH=22
             ;;
           *)
@@ -1299,6 +1262,7 @@ _fsSetupFirewall_() {
     
     yes $'y' | sudo ufw reset || true
     sudo ufw default deny incoming
+      # ports for ssh access and nginx proxy forward for frequi
     sudo ufw allow ssh
     sudo ufw allow "${_portSSH}"/tcp
     sudo ufw allow 80/tcp
@@ -1320,15 +1284,15 @@ _fsSetupNtp_() {
   _fsMsgTitle_ "NTP (Timezone: UTC)"
   
   if [[ "$(_fsSetupNtpCheck_)" = 1 ]]; then
-    _fsSetupPkgs_ "chrony"
+    _fsPkgs_ "chrony"
     
     if [[ "$(_fsSetupNtpCheck_)" = 1 ]]; then
-      _fsMsgExit_ "[FATAL] Cannot activate or synchronize."
+      _fsMsgExit_ "[FATAL] Cannot activate or synchronize NTP."
     else
-      _fsMsg_ "Activated and synchronized."
+      _fsMsg_ "NTP is activated and synchronized."
     fi
   else
-    _fsMsg_ "Is active and synchronized."
+    _fsMsg_ "NTP is active and synchronized."
   fi
 }
 
@@ -1362,7 +1326,8 @@ _fsSetupFreqtrade_() {
   
   _fsMsg_ ''
   _fsMsgTitle_ "FREQTRADE"
-  
+    
+    # create user_data folder
   if [[ ! -d "${FS_DIR_USER_DATA}" ]]; then
     _fsSetupFreqtradeYml_
     
@@ -1378,7 +1343,8 @@ _fsSetupFreqtrade_() {
   fi
   
   sudo chmod -R g+w "${FS_DIR_USER_DATA}"
-  
+    
+    # optional creation of freqtrade config
   if [[ "$(_fsCaseConfirmation_ "Skip creating a config?")" -eq 0 ]]; then
      _fsMsg_ "Skipping..."
   else
@@ -1440,7 +1406,8 @@ _fsSetupFreqtrade_() {
 _fsSetupFreqtradeYml_() {
   local _dockerYml="${FS_DIR}/${FS_NAME}_setup.yml"
   local _dockerGit="https://raw.githubusercontent.com/freqtrade/freqtrade/stable/docker-compose.yml"
-
+    
+    # download original freqtrade docker project file from git repo
   if [[ "$(_fsFile_ "${_dockerYml}")" -eq 1 ]]; then
     sudo curl --connect-timeout 10 -s -L "${_dockerGit}" -o "${_dockerYml}"
     _fsFileExist_ "${_dockerYml}"
@@ -1453,22 +1420,21 @@ _fsSetupFreqtradeYml_() {
 _fsSetupBinanceProxy_() {
   local _docker="nightshift2k/binance-proxy:latest"
   local _dockerName="${FS_PROXY_BINANCE}"
-  local _containerIp="${FS_PROXY_BINANCE_IP}"
-  local _setup=1
+  local _containerIp="${FS_NETWORK_PROXY_BINANCE}"
   
   _fsMsg_ ''
   _fsMsgTitle_ 'PROXY FOR BINANCE'
-  
-  if [[ "$(_fsDockerPsName_ "${_dockerName}")" -eq 0 ]]; then
-    _fsMsg_ 'Is already running. (Port: 8990-8991)'
-    if [[ "$(_fsCaseConfirmation_ "Skip update?")" -eq 1 ]]; then
-      _setup=0
+
+  while true; do
+    if [[ "$(_fsDockerPsName_ "${_dockerName}")" -eq 0 ]]; then
+      _fsMsg_ 'Is already running. (Port: 8990-8991)'
+      
+      if [[ "$(_fsCaseConfirmation_ "Skip update?")" -eq 0 ]]; then
+        _fsMsg_ "Skipping..."
+        break
+      fi
     fi
-  elif [[ "$(_fsCaseConfirmation_ "Install now?")" -eq 0 ]]; then
-    _setup=0
-  fi
-  
-  if [[ "${_setup}" -eq 0 ]]; then
+    
       # binance proxy json file
     _fsFileCreate_ "${FS_PROXY_BINANCE_JSON}" \
     "{" \
@@ -1521,10 +1487,8 @@ _fsSetupBinanceProxy_() {
     "      --port-futures=8991" \
     "      --verbose" \
     
-    _fsDockerProject_ "$(basename "${FS_PROXY_BINANCE_YML}")" "compose" "force"
-  else
-    _fsMsg_ "Skipping..."
-  fi
+    _fsDockerProject_ "$(basename "${FS_PROXY_BINANCE_YML}")" 'compose-force'
+  done
 }
 
 # KUCOIN-PROXY
@@ -1533,23 +1497,21 @@ _fsSetupBinanceProxy_() {
 _fsSetupKucoinProxy_() {
   local _docker="mikekonan/exchange-proxy:latest-amd64"
   local _dockerName="${FS_PROXY_KUCOIN}"
-  local _containerIp="${FS_PROXY_KUCOIN_IP}"
-  local _setup=1
+  local _containerIp="${FS_NETWORK_PROXY_KUCOIN}"
   
   _fsMsg_ ''
   _fsMsgTitle_ 'PROXY FOR KUCOIN'
   
-  if [[ "$(_fsDockerPsName_ "${_dockerName}")" -eq 0 ]]; then
-    _fsMsg_ 'Is already running. (Port: 8980)'
-    
-    if [[ "$(_fsCaseConfirmation_ "Skip update?")" -eq 1 ]]; then
-      _setup=0
+  while true; do
+    if [[ "$(_fsDockerPsName_ "${_dockerName}")" -eq 0 ]]; then
+      _fsMsg_ 'Is already running. (Port: 8980)'
+      
+      if [[ "$(_fsCaseConfirmation_ "Skip update?")" -eq 0 ]]; then
+        _fsMsg_ "Skipping..."
+        break
+      fi
     fi
-  elif [[ "$(_fsCaseConfirmation_ "Install now?")" -eq 0 ]]; then
-    _setup=0
-  fi
-  
-  if [[ "${_setup}" -eq 0 ]]; then
+    
       # kucoin proxy json file
     _fsFileCreate_ "${FS_PROXY_KUCOIN_JSON}" \
     "{" \
@@ -1585,89 +1547,100 @@ _fsSetupKucoinProxy_() {
     "      -port 8980" \
     "      -verbose 1"
     
-    _fsDockerProject_ "$(basename "${FS_PROXY_KUCOIN_YML}")" "compose" "force"
-  else
-    _fsMsg_ "Skipping..."
-  fi
+    _fsDockerProject_ "$(basename "${FS_PROXY_KUCOIN_YML}")" 'compose-force'
+  done
 }
 
 # NGINX
 
 _fsSetupNginx_() {
   local _nr=''
-
-    _fsSetupNginxConf_
-    
-    while true; do
-      printf -- '%s\n' \
-      "? Secure the connection to FreqUI?" \
-      "  1) Yes, I want to use an IP with SSL (openssl)" \
-      "  2) Yes, I want to use a domain with SSL (truecrypt)" \
-      "  3) No, I dont want to use SSL (not recommended)" >&2
-      
-      if [[ "${FS_OPTS_YES}" -eq 1 ]]; then
-        read -rp "  (1/2/3) " _nr
-      else
-        local _nr="3"
-      fi
-      
-      case ${_nr} in 
-        [1])
-          _fsMsg_ "Continuing with 1) ..."
-          _fsSetupNginxOpenssl_
-          break
-          ;;
-        [2])
-          _fsMsg_ "Continuing with 2) ..."
-          _setupNginxLetsencrypt_
-          break
-          ;;
-        [3])
-          _fsMsg_ "Continuing with 3) ..."
-          break
-          ;;
-        *)
-          _fsCaseInvalid_
-          ;;
-      esac
-    done
-    
-    _fsSetupNginxRestart_
-}
-
-_fsSetupNginxConf_() {
-  local _serverUrl='http://'"${FS_SERVER_WAN}"
-  local _auth=''
   local _username=''
   local _password=''
   local _passwordCompare=''
-  local _setup=1
+
+  while true; do
+    if [[ "$(_fsFile_ "${FS_NGINX_CONFD_HTPASSWD}")" -eq 0 ]]; then
+      if [[ "$(_fsCaseConfirmation_ "Skip generating new server login data?")" -eq 0 ]]; then
+        _fsMsg_ "Skipping..."
+        break
+      fi
+    fi
+    
+    if [[ "${FS_OPTS_YES}" -eq 1 ]]; then
+        # create login data to access frequi
+      _loginData="$(_fsLoginData_)"
+      _username="$(_fsLoginDataUsername_ "${_loginData}")"
+      _password="$(_fsLoginDataPassword_ "${_loginData}")"
+    else
+        # better then nothing
+      _username='freqstart'
+      _password='freqstart'
+    fi
+    
+      # create htpasswd for frequi access
+    sh -c "echo -n ${_username}':' > ${FS_NGINX_CONFD_HTPASSWD}"
+    sh -c "openssl passwd ${_password} >> ${FS_NGINX_CONFD_HTPASSWD}"
+  done
+
+  while true; do
+    printf -- '%s\n' \
+    "? How to access FreqUI?" \
+    "  1) IP with SSL (self-signed)" \
+    "  2) Domain with SSL (truecrypt)" >&2
+    
+    if [[ "${FS_OPTS_YES}" -eq 1 ]]; then
+      read -rp "  (1/2) " _nr
+    else
+      local _nr="1"
+    fi
+    
+    case ${_nr} in 
+      [1])
+        _fsMsg_ "Continuing with 1) ..."
+        _fsSetupNginxOpenssl_
+        break
+        ;;
+      [2])
+        _fsMsg_ "Continuing with 2) ..."
+        _setupNginxLetsencrypt_
+        break
+        ;;
+      *)
+        _fsCaseInvalid_
+        ;;
+    esac
+  done
+}
+
+_fsSetupNginxOpenssl_() {
+  local _serverUrl="https://${FS_SERVER_WAN}"
+  local _sslCert=''
+  local _sslCertKey=''
+  local _cronCmd="sudo /usr/bin/certbot renew --quiet"
+  local _cronUpdate="0 0 * * *"
+  local _bypass=''
+  
+  _fsFileCreate_ "${FS_NGINX_YML}" \
+  "version: '3'" \
+  'services:' \
+  '  '"${FS_NGINX}"':' \
+  '    image: nginx:latest' \
+  '    restart: unless-stopped' \
+  '    ports:' \
+  '      - 80:80' \
+  '      - 443:443' \
+  '      - 9999:9999' \
+  '      - 9000-9100:9000-9100' \
+  '    volumes:' \
+  '      - '"${FS_DIR_DATA}"'/nginx/snippets:/etc/nginx/snippets:ro' \
+  '      - '"${FS_DIR_DATA}"'/ssl/certs:/etc/ssl/certs:ro' \
+  '      - '"${FS_DIR_DATA}"'/ssl/private:/etc/ssl/private:ro' \  
 
   _fsValueUpdate_ "${FS_CONFIG}" '.server_url' "${_serverUrl}"
-  _fsSetupPkgs_ "nginx"
-  
-  if [[ "$(_fsFile_ "${FS_NGINX_CONFD_HTPASSWD}")" -eq 0 ]]; then
-    if [[ "$(_fsCaseConfirmation_ "Skip generating new server login data?")" -eq 1 ]]; then
-      _setup=0
-    fi
-  else
-    _fsMsg_ "Create server login data now!"
-    _setup=0
-  fi
-  
-  if [[ "${_setup}" -eq 0 ]];then
-    _loginData="$(_fsLoginData_)"
-    _username="$(_fsLoginDataUsername_ "${_loginData}")"
-    _password="$(_fsLoginDataPassword_ "${_loginData}")"
-    
-      # create htpasswd for proxy access
-    sudo rm -f "${FS_NGINX_CONFD_HTPASSWD}"
-    sudo sh -c "echo -n ${_username}':' > ${FS_NGINX_CONFD_HTPASSWD}"
-    sudo sh -c "openssl passwd ${_password} >> ${FS_NGINX_CONFD_HTPASSWD}"
-  fi
-    
-    # create nginx conf for non ssl
-    # credit :https://serverfault.com/a/1060487
+
+    # create nginx conf for ip ssl
+    # thanks: Blood4rc, Hippocritical
   _fsFileCreate_ "${FS_NGINX_CONFD_FREQUI}" \
   'map $http_cookie $rate_limit_key {' \
   "    default \$binary_remote_addr;" \
@@ -1676,8 +1649,10 @@ _fsSetupNginxConf_() {
   "limit_req_status 429;" \
   "limit_req_zone \$rate_limit_key zone=auth:10m rate=1r/m;" \
   "server {" \
-  "    listen ${FS_SERVER_WAN}:80;" \
+  "    listen ${FS_SERVER_WAN}:443 ssl;" \
   "    server_name ${FS_SERVER_WAN};" \
+  "    include snippets/self-signed.conf;" \
+  "    include snippets/ssl-params.conf;" \
   "    location / {" \
   "        auth_basic \"Restricted\";" \
   "        auth_basic_user_file ${FS_NGINX_CONFD_HTPASSWD};" \
@@ -1695,8 +1670,10 @@ _fsSetupNginxConf_() {
   "    }" \
   "}" \
   "server {" \
-  "    listen ${FS_SERVER_WAN}:9000-9100;" \
+  "    listen ${FS_SERVER_WAN}:9000-9100 ssl;" \
   "    server_name ${FS_SERVER_WAN};" \
+  "    include snippets/self-signed.conf;" \
+  "    include snippets/ssl-params.conf;" \
   "    location / {" \
   "        proxy_pass http://127.0.0.1:\$server_port;" \
   "        proxy_set_header X-Real-IP \$remote_addr;" \
@@ -1710,48 +1687,26 @@ _fsSetupNginxConf_() {
   "    }" \
   "}"
 
-  if [[ "$(_fsFile_ "${FS_NGINX_CONFD_DEFAULT}")" -eq 0 ]]; then
-    sudo mv "${FS_NGINX_CONFD_DEFAULT}" "${FS_NGINX_CONFD_DEFAULT}.disabled"
-  fi
-  
-  sudo rm -f "/etc/nginx/sites-enabled/default"
-}
+    # create dummy certificate for domain
+  mkdir -p "${FS_DIR_DATA}/conf/live/${_serverDomain}"
+  _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' \
+  '--rm --entrypoint' \
+  "openssl req -x509 -nodes -days 358000 -newkey rsa:2048" \
+  "-keyout \'${FS_DIR_DATA}/ssl/private/nginx-selfsigned.key\'" \
+  "-out \'${FS_DIR_DATA}/ssl/certs/nginx-selfsigned.crt\'" \
+  "-subj \'/C=US/ST=Denial/L=Springfield/O=Dis/CN=localhost\'" \
+  "${FS_NGINX}"
 
-_fsSetupNginxCheck_() {
-  if [[ "$(_fsSetupPkgsStatus_ 'nginx')" -eq 1 ]]; then
-    echo 1
-  elif sudo nginx -t 2>&1 | grep -qo "failed"; then
-    echo 1
-  else
-    echo 0
-  fi
-}
+  _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' \
+  '--rm --entrypoint' \
+  "openssl dhparam -out /etc/nginx/dhparam.pem 4096" \
+  "${FS_NGINX}"
 
-_fsSetupNginxRestart_() {
-  if [[ "$(_fsSetupNginxCheck_)" -eq 1 ]]; then
-    _fsMsgExit_ "Error in nginx config file. For more info enter: sudo nginx -t"
-  fi
+  _fsFileCreate_ "${FS_DIR_DATA}"'/nginx/snippets/self-signed.conf' \
+  "ssl_certificate ${FS_DIR_DATA}/ssl/certs/nginx-selfsigned.crt;" \
+  "ssl_certificate_key ${FS_DIR_DATA}/ssl/private/nginx-selfsigned.key;"
   
-  sudo /etc/init.d/nginx stop > /dev/null
-  sudo pkill -f nginx & wait $! > /dev/null
-  sudo /etc/init.d/nginx start > /dev/null
-}
-
-_fsSetupNginxOpenssl_() {
-  _fsSetupNginxConfSecure_ "openssl"
-  
-  sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=www.example.com" \
-  -keyout /etc/ssl/private/nginx-selfsigned.key \
-  -out /etc/ssl/certs/nginx-selfsigned.crt
-  
-  sudo openssl dhparam -out /etc/nginx/dhparam.pem 4096
-  
-  _fsFileCreate_ '/etc/nginx/snippets/self-signed.conf' \
-  "ssl_certificate /etc/ssl/certs/nginx-selfsigned.crt;" \
-  "ssl_certificate_key /etc/ssl/private/nginx-selfsigned.key;"
-  
-  _fsFileCreate_ '/etc/nginx/snippets/ssl-params.conf' \
+  _fsFileCreate_ "${FS_DIR_DATA}"'/nginx/snippets/ssl-params.conf' \
   "ssl_protocols TLSv1.2;" \
   "ssl_prefer_server_ciphers on;" \
   "ssl_dhparam /etc/nginx/dhparam.pem;" \
@@ -1770,15 +1725,28 @@ _fsSetupNginxOpenssl_() {
   "add_header X-Frame-Options DENY;" \
   "add_header X-Content-Type-Options nosniff;" \
   "add_header X-XSS-Protection \"1; mode=block\";"
+
+    # start nginx container
+  _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force' \
+  "${FS_NGINX}"
 }
 
 _setupNginxLetsencrypt_() {
   local _serverDomain=''
   local _serverDomainIp=''
+  local _serverUrl=''
+  local _sslCert=''
+  local _sslCertKey=''
+  local _cronCmd="sudo /usr/bin/certbot renew --quiet"
+  local _cronUpdate="0 0 * * *"
+  local _bypass=''
+  local _rsaKeySize=4096
+  local _sslNginx="${FS_DIR_DATA}/certbot/conf/options-ssl-nginx.conf"
+  local _sslDhparams="${FS_DIR_DATA}/certbot/conf/ssl-dhparams.pem"
+  local _certEmail=''
   
+  _bypass="$(_fsRandomBase64UrlSafe_ 16)"
   _serverDomain="$(_fsValueGet_ "${FS_CONFIG}" '.server_domain')"
-  
-  _fsSetupPkgs_ 'certbot' 'python3-certbot-nginx'
   
   while true; do
     if [[ -z "${_serverDomain}" ]]; then
@@ -1797,113 +1765,89 @@ _setupNginxLetsencrypt_() {
           _fsMsg_ "The domain \"${_serverDomain}\" does not point to \"${FS_SERVER_WAN}\". Review DNS and try again!"
         else
           _fsValueUpdate_ "${FS_CONFIG}" '.server_domain' "${_serverDomain}"
-
-          _fsSetupNginxConfSecure_ "letsencrypt"
+            # register ssl certificate with an email (recommended)
+          if [[ "$(_fsCaseConfirmation_ "Register SSL certificate with an email (recommended)?")" -eq 0 ]]; then
+            while true; do
+              read -rp "? Your email: " _certEmail
+              case ${_yesNo} in
+                '')
+                  _fsCaseEmpty_
+                  ;;
+                *)
+                  if [[ "$(_fsCaseConfirmation_ 'Is your email "'"${_certEmail}"'" correct?')" -eq 0 ]]; then
+                    _certEmail="--email ${_certEmail}"
+                    break
+                  else
+                    _certEmail=''
+                  fi
+                  ;;
+              esac
+            done
+          else
+            _certEmail="--register-unsafely-without-email"
+          fi
+  
           break
         fi
       fi
       _serverDomain=''
     fi
   done
-}
-
-_fsSetupNginxConfSecure_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-  
-  local _mode="${1}"
-  local _serverDomain=''
-  local _serverUrl=''
-  local _sslCert=''
-  local _sslCertKey=''
-  local _cronCmd="sudo /usr/bin/certbot renew --quiet"
-  local _cronUpdate="0 0 * * *"
-  local _bypass=''
-
-  _serverDomain="$(_fsValueGet_ "${FS_CONFIG}" '.server_domain')"
   
   if [[ -n "${_serverDomain}" ]]; then
-    _serverUrl='https://'"${_serverDomain}"
-  else
-    _serverUrl='https://'"${FS_SERVER_WAN}"
-  fi
-  
-  _sslCert="/etc/letsencrypt/live/${_serverDomain}/fullchain.pem"
-  _sslCertKey="/etc/letsencrypt/live/${_serverDomain}/privkey.pem"
-  
-  _fsValueUpdate_ "${FS_CONFIG}" '.server_url' "${_serverUrl}"
-  
-  sudo rm -f "${FS_NGINX_CONFD_FREQUI}"
-    # thanks: Blood4rc, Hippocritical
-  if [[ "${_mode}" = 'openssl' ]]; then
-      # create nginx conf for ip ssl
-    _fsFileCreate_ "${FS_NGINX_CONFD_FREQUI}" \
-    'map $http_cookie $rate_limit_key {' \
-    "    default \$binary_remote_addr;" \
-    '    \"~__Secure-rl-bypass='"${_bypass}"'" "";' \
-    "}" \
-    "limit_req_status 429;" \
-    "limit_req_zone \$rate_limit_key zone=auth:10m rate=1r/m;" \
-    "server {" \
-    "    listen ${FS_SERVER_WAN}:443 ssl;" \
-    "    server_name ${FS_SERVER_WAN};" \
-    "    include snippets/self-signed.conf;" \
-    "    include snippets/ssl-params.conf;" \
-    "    location / {" \
-    "        auth_basic \"Restricted\";" \
-    "        auth_basic_user_file ${FS_NGINX_CONFD_HTPASSWD};" \
-    "        limit_req zone=auth burst=20 nodelay;" \
-    '        add_header Set-Cookie "__Secure-rl-bypass='"${_bypass}"';Max-Age=31536000;Domain=$host;Path=/;Secure;HttpOnly";' \
-    "        proxy_pass http://127.0.0.1:9999;" \
-    "        proxy_set_header X-Real-IP \$remote_addr;" \
-    "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" \
-    "        proxy_set_header Host \$host;" \
-    "        proxy_set_header X-NginX-Proxy true;" \
-    "        proxy_redirect off;" \
-    "    }" \
-    "    location /api {" \
-    "        return 400;" \
-    "    }" \
-    "}" \
-    "server {" \
-    "    listen ${FS_SERVER_WAN}:9000-9100 ssl;" \
-    "    server_name ${FS_SERVER_WAN};" \
-    "    include snippets/self-signed.conf;" \
-    "    include snippets/ssl-params.conf;" \
-    "    location / {" \
-    "        proxy_pass http://127.0.0.1:\$server_port;" \
-    "        proxy_set_header X-Real-IP \$remote_addr;" \
-    "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" \
-    "        proxy_set_header Host \$host;" \
-    "        proxy_set_header X-NginX-Proxy true;" \
-    "        proxy_redirect off;" \
-    "    }" \
-    "    location = / {" \
-    "        return 400;" \
-    "    }" \
-    "}"
+    _serverUrl="https://${_serverDomain}"
+    _fsValueUpdate_ "${FS_CONFIG}" '.server_url' "${_serverUrl}"
 
-  elif [[ "${_mode}" = 'letsencrypt' ]]; then
-      # workaround for first setup while missing cert files
-    if [[ "$(_fsFile_ "${_sslCert}")" -eq 1 ]] || [[ "$(_fsFile_ "${_sslCertKey}")" -eq 1 ]]; then
-      _fsFileCreate_ "${FS_NGINX_CONFD_FREQUI}" \
-      "server {" \
-      "    listen 80;" \
-      "    server_name ${_serverDomain};" \
-      "    location '/.well-known/acme-challenge' {" \
-      "        default_type \"text/plain\";" \
-      "        root /var/www/html;" \
-      "    }" \
-      "}"
-      _fsSetupNginxRestart_
-    fi
-      # start letsencrypt routine
-    sudo certbot --nginx -d "${_serverDomain}"
-      # add cron to automatically renew cert file
-    _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
+      # credit: https://github.com/wmnnd/nginx-certbot/
+    _fsFileCreate_ "${FS_NGINX_YML}" \
+    "version: '3'" \
+    'services:' \
+    '  '"${FS_NGINX}"':' \
+    '    image: nginx:1.15-alpine' \
+    '    restart: unless-stopped' \
+    '    ports:' \
+    '      - 80:80' \
+    '      - 443:443' \
+    '      - 9999:9999' \
+    '      - 9000-9100:9000-9100' \
+    '    volumes:' \
+    '      - '"${FS_NGINX_CONFD}"':/etc/nginx/conf.d:ro' \
+    '      - '"${FS_DIR_DATA}"'/certbot/conf:/etc/letsencrypt:ro' \
+    '      - '"${FS_DIR_DATA}"'/certbot/www:/var/www/certbot:ro' \
+    "    command: \"/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'\"" \
+    '  '"${FS_CERTBOT}"':' \
+    '    image: certbot/certbot:latest' \
+    "    restart: unless-stopped" \
+    '    volumes:' \
+    '      - '"${FS_DIR_DATA}"'/certbot/conf:/etc/letsencrypt:rw' \
+    '      - '"${FS_DIR_DATA}"'/certbot/www:/var/www/certbot:rw' \
+    "    entrypoint: \"/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'\""
     
-    _bypass="$(_fsRandomBase64UrlSafe_ 16)"
-      # create nginx conf for domain ssl
-    _fsFileCreate_ "${FS_NGINX_CONFD_FREQUI}" \
+      # download recommended TLS parameters
+    if [[ ! -f "${_sslNginx}" ]] || [[ ! -f "${_sslDhparams}" ]]; then
+      mkdir -p "${FS_DIR_DATA}/certbot/conf"
+      
+      curl -s https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf > "${_sslNginx}"
+      curl -s https://raw.githubusercontent.com/certbot/certbot/master/certbot/certbot/ssl-dhparams.pem > "${_sslDhparams}"
+      
+      _fsFileExist_ "${_sslNginx}"
+      _fsFileExist_ "${_sslDhparams}"
+    fi
+    
+      # create dummy certificate for domain
+    mkdir -p "${FS_DIR_DATA}/conf/live/${_serverDomain}"
+    _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' \
+    '--rm --entrypoint' \
+    "openssl req -x509 -nodes -newkey rsa:${_rsaKeySize} -days 1" \
+    "-keyout \'${FS_DIR_DATA}/conf/live/${_serverDomain}/privkey.pem\'" \
+    "-out \'${FS_DIR_DATA}/conf/live/${_serverDomain}/fullchain.pem\'" \
+    "-subj '/CN=localhost'" \
+    "${FS_CERTBOT}"
+    
+      # create nginx conf for domain ssl    
+    _sslCert="/etc/letsencrypt/live/${_serverDomain}/fullchain.pem"
+    _sslCertKey="/etc/letsencrypt/live/${_serverDomain}/privkey.pem"
+    _fsFileCreate_ "${FS_NGINX_CONFD_DEFAULT}" \
     'map $http_cookie $rate_limit_key {' \
     "    default \$binary_remote_addr;" \
     '    \"~__Secure-rl-bypass='"${_bypass}"'" "";' \
@@ -1913,8 +1857,8 @@ _fsSetupNginxConfSecure_() {
     "server {" \
     "    listen ${_serverDomain}:443 ssl http2;" \
     "    server_name ${_serverDomain};" \
-    "    ssl_certificate /etc/letsencrypt/live/${_serverDomain}/fullchain.pem;" \
-    "    ssl_certificate_key /etc/letsencrypt/live/${_serverDomain}/privkey.pem;" \
+    "    ssl_certificate ${_sslCert};" \
+    "    ssl_certificate_key ${_sslCertKey};" \
     "    include /etc/letsencrypt/options-ssl-nginx.conf;" \
     "    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;" \
     "    location '/.well-known/acme-challenge' {" \
@@ -1941,8 +1885,8 @@ _fsSetupNginxConfSecure_() {
     "server {" \
     "    listen ${_serverDomain}:9000-9100 ssl http2;" \
     "    server_name ${_serverDomain};" \
-    "    ssl_certificate /etc/letsencrypt/live/${_serverDomain}/fullchain.pem;" \
-    "    ssl_certificate_key /etc/letsencrypt/live/${_serverDomain}/privkey.pem;" \
+    "    ssl_certificate ${_sslCert};" \
+    "    ssl_certificate_key ${_sslCertKey};" \
     "    include /etc/letsencrypt/options-ssl-nginx.conf;" \
     "    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;" \
     "    location / {" \
@@ -1957,6 +1901,34 @@ _fsSetupNginxConfSecure_() {
     "        return 400;" \
     "    }" \
     "}"
+    
+      # start nginx container
+    _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force' \
+    "${FS_NGINX}"
+    
+      # delete dummy domain certificate
+    _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' \
+    "--rm --entrypoint" \
+    "rm -Rf /etc/letsencrypt/live/${_serverDomain} &&" \
+    "rm -Rf /etc/letsencrypt/archive/${_serverDomain} &&" \
+    "rm -Rf /etc/letsencrypt/renewal/${_serverDomain}.conf" \
+    "${FS_CERTBOT}"
+    
+      # DISABLE STAGING
+      # create domain certificate
+    _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' \
+    '--entrypoint ' \
+    'certbot certonly --webroot -w /var/www/certbot' \
+    '--staging' \
+    "${_certEmail}" \
+    "-d ${_serverDomain}" \
+    "--rsa-key-size ${_rsaKeySize}" \
+    '--agree-tos' \
+    '--force-renewal' \
+    "${FS_CERTBOT}"
+    
+      # reload nginx
+    docker-compose exec "${FS_NGINX}" nginx -s reload
   fi
 }
 
@@ -2123,7 +2095,7 @@ _fsSetupFrequiCompose_() {
   "      --config /freqtrade/user_data/$(basename "${FS_FREQUI_SERVER_JSON}")" \
   "      --config /freqtrade/user_data/$(basename "${FS_FREQUI_JSON}")"
   
-  _fsDockerProject_ "${FS_FREQUI_YML}" "compose" "force"
+  _fsDockerProject_ "${FS_FREQUI_YML}" 'compose-force'
 }
 
 ###
@@ -2290,8 +2262,7 @@ _fsFileExist_() {
   local _file="${1:-}" # optional: path to file
   
 	if [[ "$(_fsFile_ "${_file}")" -eq 1 ]]; then
-		_fsMsg_ "Cannot create file: ${_file}"
-    exit 1
+		_fsMsgExit_ "Cannot create file: ${_file}" '1'
   fi
 }
 
@@ -2307,16 +2278,16 @@ _fsFileCreate_() {
   local _fileHash=''
 
   _fileHash="$(_fsRandomHex_ 8)"
-  _fileTmp="${FS_DIR_TMP}"'/'"${_fileHash}"'_'"${_file}"
+  _fileTmp="${FS_TMP}"'/'"${_fileHash}"'_'"${_file}"
 
   _output="$(printf -- '%s\n' "${_input[@]}")"
   echo "${_output}" | sudo tee "${_fileTmp}" > /dev/null
   
   if [[ ! -d "${_fileDir}" ]]; then
-    sudo mkdir -p "${_fileDir}"
+    mkdir -p "${_fileDir}"
   fi
   
-  sudo cp "${_fileTmp}" "${_filePath}"
+  cp "${_fileTmp}" "${_filePath}"
   
   _fsFileExist_ "${_filePath}"
 }
@@ -2399,7 +2370,7 @@ _fsValueUpdate_() {
   _fsFileExist_ "${_filePath}"
   
   _fileHash="$(_fsRandomHex_ 8)"
-  _fileTmp="${FS_DIR_TMP}"'/'"${_fileHash}"'_'"${_file}"
+  _fileTmp="${FS_TMP}"'/'"${_fileHash}"'_'"${_file}"
   
   if [[ "${_fileType}" = 'json' ]]; then
       # update value for json
@@ -2580,6 +2551,67 @@ _fsReset_() {
   fi
 }
 
+_fsPkgs_() {
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+
+  local _pkgs=("$@")
+  local _pkg=''
+  local _status=''
+  local _getDocker="${FS_DIR}"'/get-docker.sh'
+
+  for _pkg in "${_pkgs[@]}"; do
+    if [[ "$(_fsPkgsStatus_ "${_pkg}")" -eq 1 ]]; then
+      if [[ "${_pkg}" = 'docker-ce' ]]; then
+          # docker setup
+        mkdir -p "${FS_DIR_DOCKER}"
+        sudo curl --connect-timeout 10 -fsSL "https://get.docker.com" -o "${_getDocker}"
+        _fsFileExist_ "${_getDocker}"
+        sudo chmod +x "${_getDocker}"
+        sudo sh "${_getDocker}"
+        rm -f "${_getDocker}"
+        sudo apt install -y -q docker-compose
+      elif [[ "${_pkg}" = 'chrony' ]]; then
+          # ntp setup
+        sudo apt-get install -y -q chrony
+          # thanks: lsiem
+        sudo systemctl unmask systemd-timesyncd.service
+        sudo systemctl stop chronyd
+        sudo timedatectl set-timezone 'UTC'
+        sudo systemctl start chronyd
+        sudo timedatectl set-ntp true
+        sudo systemctl restart chronyd
+      elif [[ "${_pkg}" = 'ufw' ]]; then
+          # firewall setup
+        sudo apt-get install -y -q ufw
+        sudo ufw logging medium > /dev/null
+      else
+        sudo apt-get install -y -q "${_pkg}"
+      fi
+        # validate installation
+      if [[ "$(_fsPkgsStatus_ "${_pkg}")" -eq 0 ]]; then
+        _fsMsg_ "Installed: ${_pkg}"
+      else
+        _fsMsgExit_ "[FATAL] Cannot install: ${_pkg}"
+      fi
+    fi
+  done
+}
+
+_fsPkgsStatus_() {
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  
+  local _pkg="${1}"
+  local _status=''
+  
+  _status="$(dpkg-query -W --showformat='${Status}\n' "${_pkg}" 2> /dev/null | grep "install ok installed")"
+
+  if [[ -n "${_status}" ]]; then
+    echo 0
+  else
+    echo 1
+  fi
+}
+
 _fsIsSymlink_() {
   [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
   
@@ -2602,13 +2634,13 @@ _fsIsSymlink_() {
 }
 
 _fsScriptLock_() {
-  local _lockDir="${FS_DIR_TMP}/${FS_NAME}.lock"
+  local _lockDir="${FS_TMP}/${FS_NAME}.lock"
   
-  if [[ -n "${FS_DIR_TMP}" ]]; then
+  if [[ -n "${FS_TMP}" ]]; then
     if [[ -d "${_lockDir}" ]]; then
         # error 99 to not remove temp dir
-      _fsMsgExit_ "[FATAL] Script is already running! Delete folder if this is an error: sudo rm -rf ${FS_DIR_TMP}" 99
-    elif ! sudo mkdir -p "${_lockDir}" 2> /dev/null; then
+      _fsMsgExit_ "[FATAL] Script is already running! Delete folder if this is an error: sudo rm -rf ${FS_TMP}" 99
+    elif ! mkdir -p "${_lockDir}" 2> /dev/null; then
       _fsMsgExit_ "[FATAL] Unable to acquire script lock: ${_lockDir}"
     fi
   else
@@ -2683,7 +2715,7 @@ _fsCleanup_() {
   if [[ "${_error}" -ne 99 ]]; then
     _fsMsg_ '~ fin ~'
       # thanks: lsiem
-    sudo rm -rf "${FS_DIR_TMP}"
+    sudo rm -rf "${FS_TMP}"
   fi
 }
 
