@@ -1064,9 +1064,10 @@ _fsDockerPurge_() {
 
 _fsSetup_() {
   local _symlinkSource="${FS_DIR}/${FS_NAME}.sh"
+  
   _fsLogo_
   _fsSetupPrerequisites_
-  _fsIntro_
+  _fsConf_
   _fsUser_
   _fsSetupNtp_
   _fsSetupFreqtrade_
@@ -2115,7 +2116,8 @@ _fsStart_() {
   elif [[ -z "${_yml}" ]]; then
     _fsUsage_ "[ERROR] Setting an \"example.yml\" file with -c or --compose is required."
   else
-    _fsIntro_
+    _fsLogo_
+    _fsConf_
 
     if [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
       _fsDockerProject_ "${_yml}" "quit"
@@ -2138,7 +2140,7 @@ _fsLogo_() {
   "                 |_|               ${FS_VERSION}" \
   "" >&2
 }
-_fsIntro_() {
+_fsConf_() {
 	local _serverWan=''
 	local _serverDomain=''
 	local _serverUrl=''
@@ -2538,7 +2540,7 @@ _fsRandomBase64UrlSafe_() {
 }
 
 _fsReset_() {
-  _fsIntro_
+  _fsLogo_
   
   _fsMsgTitle_ '[WARNING] Stopp and remove all containers, networks and images!'
   
@@ -2563,8 +2565,9 @@ _fsPkgs_() {
         sudo curl --connect-timeout 10 -fsSL "https://get.docker.com" -o "${_getDocker}"
         _fsFileExist_ "${_getDocker}"
         sudo chmod +x "${_getDocker}"
+        _fsMsg_ 'Installing docker can take some time, please be patient!'
         sudo sh "${_getDocker}"
-        rm -f "${_getDocker}"
+        sudo rm -f "${_getDocker}"
         sudo apt install -y -q docker-compose
       elif [[ "${_pkg}" = 'chrony' ]]; then
           # ntp setup
