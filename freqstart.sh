@@ -1064,10 +1064,10 @@ _fsDockerPurge_() {
 
 _fsSetup_() {
   local _symlinkSource="${FS_DIR}/${FS_NAME}.sh"
-
+  _fsLogo_
+  _fsSetupPrerequisites_
   _fsIntro_
   _fsUser_
-  _fsSetupPrerequisites_
   _fsSetupNtp_
   _fsSetupFreqtrade_
   _fsSetupFrequi_
@@ -1099,8 +1099,6 @@ _fsUser_() {
   
   _currentUser="$(id -u -n)"
   _currentUserId="$(id -u)"
-
-  sudo groupadd docker > /dev/null 2>&1 || true
 
   if [[ "${_currentUserId}" -eq 0 ]]; then
       # credit: https://askubuntu.com/a/611607
@@ -1169,22 +1167,22 @@ _fsUser_() {
       fi
     fi
   else  
+    if [[ -z "$(sudo -l | grep -o '(ALL : ALL) NOPASSWD: ALL')" ]]; then
+      if [[ "$(_fsCaseConfirmation_ "Give permissions without entering password everytime (recommended)?")" -eq 0 ]]; then
+        echo "${_currentUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
+      fi
+    fi
+    
       # add current user to sudo group
     if ! id -nGz "${_currentUser}" | grep -qzxF "sudo"; then
       sudo usermod -aG sudo "${_currentUser}"
       sudo newgrp sudo
     fi
-
+    
       # add current user to docker group
     if ! id -nGz "${_currentUser}" | grep -qzxF "docker"; then
       sudo usermod -aG docker "${_currentUser}"
       sudo newgrp docker
-    fi
-    
-    if [[ -z "$(sudo -l | grep -o '(ALL : ALL) NOPASSWD: ALL')" ]]; then
-      if [[ "$(_fsCaseConfirmation_ "Give permissions without entering password everytime (recommended)?")" -eq 0 ]]; then
-        echo "${_currentUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
-      fi
     fi
   fi
 }
@@ -2145,9 +2143,7 @@ _fsIntro_() {
 	local _serverDomain=''
 	local _serverUrl=''
 	local _serverFirewall=''
-  
-  _fsLogo_
-  
+    
   [[ -z "${FS_SERVER_WAN}" ]] && _fsMsgExit_ '[FATAL] Cannot retrieve server IP address!'
 
 	if [[ "$(_fsFile_ "${FS_CONFIG}")" -eq 0 ]]; then
