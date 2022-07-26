@@ -661,7 +661,7 @@ echo "XXX _projectArgs: $_projectArgs{}"
     fi
   fi
   
-  if [[ "${_projectMode}" =* "compose" ]]; then
+  if [[ "${_projectMode}" =~ "compose" ]]; then
     _fsMsgTitle_ "Compose project: ${_projectFile}"
 
     _projectImages="$(_fsDockerProjectImages_ "${_projectPath}")"
@@ -686,7 +686,7 @@ echo "XXX _projectArgs: $_projectArgs{}"
         cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" up --no-start --no-recreate --remove-orphans "${_projectArgs}"
       fi
     fi
-  elif [[ "${_projectMode}" =* "run" ]]; then
+  elif [[ "${_projectMode}" =~ "run" ]]; then
     _fsMsgTitle_ "Run project: ${_projectFile}"
     _projectImages="$(_fsDockerProjectImages_ "${_projectPath}")"
     
@@ -710,7 +710,7 @@ echo "XXX _projectArgs: $_projectArgs{}"
     _fsMsgTitle_ "Quit project: ${_projectFile}"
   fi
 
-  if [[ "${_error}" -eq 0 ]] && [[ ! "${_projectMode}" =* 'run' ]]; then
+  if [[ "${_error}" -eq 0 ]] && [[ ! "${_projectMode}" =~ 'run' ]]; then
     while read -r; do
       _projectContainers+=( "$REPLY" )
     done < <(cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" ps -q)
@@ -891,7 +891,7 @@ echo "XXX _projectArgs: $_projectArgs{}"
     done
   fi
   
-  if [[ "${_projectMode}" =* "compose" ]]; then
+  if [[ "${_projectMode}" =~ "compose" ]]; then
     if [[ "${_error}" -eq 0 ]]; then
         # create project conf file
       if (( ${#_procjectJson[@]} )); then
