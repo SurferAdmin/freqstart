@@ -1066,9 +1066,9 @@ _fsSetup_() {
   local _symlinkSource="${FS_DIR}/${FS_NAME}.sh"
   
   _fsLogo_
+  _fsUser_
   _fsSetupPrerequisites_
   _fsConf_
-  _fsUser_
   _fsSetupNtp_
   _fsSetupFreqtrade_
   _fsSetupFrequi_
@@ -1147,15 +1147,15 @@ _fsUser_() {
         _newPath="$(bash -c "cd ~$(printf %q "${_newUser}") && pwd")"'/'"${FS_NAME}"
         
         if [[ ! -d "${_newPath}" ]]; then
-          sudo mkdir "${_newPath}"
+          mkdir -p "${_newPath}"
         fi
           # copy script and content to new user and set permissions
-				sudo cp -R "${_dir}"/* "${_newPath}"
+				cp -R "${_dir}"/* "${_newPath}"
 				sudo chown -R "${_newUser}":"${_newUser}" "${_newPath}"
           
           # remove symlink and current script and content
-        sudo rm -f "${_symlink}"
-        sudo rm -rf "${_dir}"
+        rm -f "${_symlink}"
+        rm -rf "${_dir}"
         
         if [[ "$(_fsCaseConfirmation_ "Disable \"${_currentUser}\" user (recommended)?")" -eq 0 ]]; then
           sudo usermod -L "${_currentUser}"
@@ -1167,17 +1167,19 @@ _fsUser_() {
         sudo su -l "${_newUser}"
       fi
     fi
-  else  
-    if [[ -z "$(sudo -l | grep -o '(ALL : ALL) NOPASSWD: ALL')" ]]; then
-      if [[ "$(_fsCaseConfirmation_ "Give permissions without entering password everytime (recommended)?")" -eq 0 ]]; then
-        echo "${_currentUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
-      fi
-    fi
-    
+  fi
+
+  if [[ "${_currentUserId}" -ne 0 ]]; then
       # add current user to sudo group
     if ! id -nGz "${_currentUser}" | grep -qzxF "sudo"; then
       sudo usermod -aG sudo "${_currentUser}"
       sudo newgrp sudo
+    fi
+    
+    if [[ -z "$(sudo -l | grep -o '(ALL : ALL) NOPASSWD: ALL')" ]]; then
+      if [[ "$(_fsCaseConfirmation_ "Give permissions without entering password everytime (recommended)?")" -eq 0 ]]; then
+        echo "${_currentUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
+      fi
     fi
     
       # add current user to docker group
@@ -2714,7 +2716,7 @@ _fsCleanup_() {
   if [[ "${_error}" -ne 99 ]]; then
     _fsMsg_ '~ fin ~'
       # thanks: lsiem
-    sudo rm -rf "${FS_TMP}"
+    rm -rf "${FS_TMP}"
   fi
 }
 
