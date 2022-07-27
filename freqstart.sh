@@ -30,7 +30,7 @@ readonly FS_SYMLINK="/usr/local/bin/${FS_NAME}"
 FS_DIR="$(dirname "$(readlink --canonicalize-existing "${0}" 2> /dev/null)")"
 readonly FS_DIR
 readonly FS_DIR_DATA="${FS_DIR}"'/data'
-readonly FS_DIR_DOCKER="${FS_DIR}/docker"
+readonly FS_DIR_DOCKER="${FS_DIR_DATA}/docker"
 readonly FS_DIR_USER_DATA="${FS_DIR}/user_data"
 readonly FS_DIR_USER_DATA_STRATEGIES="${FS_DIR_USER_DATA}/strategies"
 readonly FS_DIR_USER_DATA_LOGS="${FS_DIR_USER_DATA}/logs"
@@ -53,7 +53,7 @@ readonly FS_PROXY_KUCOIN_YML="${FS_DIR}/${FS_PROXY_KUCOIN}.yml"
 
 readonly FS_NGINX="${FS_NAME}"'_nginx'
 readonly FS_NGINX_YML="${FS_DIR}"'/'"${FS_NAME}"'_nginx.yml'
-readonly FS_NGINX_CONFD="${FS_DIR_DATA}/nginx/conf.d"
+readonly FS_NGINX_CONFD="/etc/nginx/conf.d"
 readonly FS_NGINX_CONFD_FREQUI="${FS_NGINX_CONFD}"'/frequi.conf'
 readonly FS_NGINX_CONFD_DEFAULT="${FS_NGINX_CONFD}"'/default.conf'
 readonly FS_NGINX_CONFD_HTPASSWD="${FS_NGINX_CONFD}"'/.htpasswd'
@@ -74,7 +74,7 @@ FS_OPTS_QUIT=1
 FS_OPTS_YES=1
 FS_OPTS_RESET=1
 
-trap _fsCleanup_ EXIT
+trap _fsCleanup_ EXIT SIGINT SIGTERM
 trap '_fsErr_ "${FUNCNAME:-.}" ${LINENO}' ERR
 
 ###
@@ -179,28 +179,24 @@ _fsDockerVersionLocal_() {
 
 _fsDockerVersionHub_() {
   [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-
+  
   local _dockerRepo="${1}"
   local _dockerTag="${2}"
+  local _token=''
+  local _acceptM="application/vnd.docker.distribution.manifest.v2+json"
+  local _acceptML="application/vnd.docker.distribution.manifest.list.v2+json"
   local _dockerName=''
   local _dockerManifest=''
-  local _acceptM=''
-  local _acceptML=''
-  local _token=''
-  local _status=''
-  local _dockerVersionHub=''
-
+  
 	_dockerName="$(_fsDockerVarsName_ "${_dockerRepo}")"
 	_dockerManifest="${FS_TMP}"'/'"${FS_HASH}"'_'"${_dockerName}"'_'"${_dockerTag}"'.md'
-
-    # credit: https://stackoverflow.com/a/64309017
-  _acceptM="application/vnd.docker.distribution.manifest.v2+json"
-  _acceptML="application/vnd.docker.distribution.manifest.list.v2+json"
-  _token="$(curl --connect-timeout 10 -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${_dockerRepo}:pull" | jq -r '.token' || true)"
+  
+  _token="$(curl -s "https://auth.docker.io/token?scope=repository:${_dockerRepo}:pull&service=registry.docker.io"  | jq -r '.token')"
 
   if [[ -n "${_token}" ]]; then
-    sudo curl --connect-timeout 10 -H "Accept: ${_acceptM}" -H "Accept: ${_acceptML}" -H "Authorization: Bearer ${_token}" -o "${_dockerManifest}" \
-    -I -s -L "https://registry-1.docker.io/v2/${_dockerRepo}/manifests/${_dockerTag}" || true
+    curl -s --header "Accept: ${_acceptM}" --header "Accept: ${_acceptML}" --header "Authorization: Bearer ${_token}" \
+    -o "${_dockerManifest}" \
+    -I -s -L "https://registry-1.docker.io/v2/${_dockerRepo}/manifests/${_dockerTag}"
   fi
 
   if [[ "$(_fsFile_ "${_dockerManifest}")" -eq 0 ]]; then
@@ -210,6 +206,7 @@ _fsDockerVersionHub_() {
       _dockerVersionHub="$(_fsValueGet_ "${_dockerManifest}" 'etag')"
       
       if [[ -n "${_dockerVersionHub}" ]]; then
+        _fsMsg_ "_dockerVersionHub: ${_dockerVersionHub}"
         echo "${_dockerVersionHub}"
       fi
     fi
@@ -235,6 +232,8 @@ _fsDockerImage_() {
   _dockerName="$(_fsDockerVarsName_ "${_dockerImage}")"
   _dockerCompare="$(_fsDockerVarsCompare_ "${_dockerImage}")"
   _dockerPath="$(_fsDockerVarsPath_ "${_dockerImage}")"
+
+_fsMsg_ "_dockerCompare: ${_dockerCompare}"
 
   if [[ "${_dockerCompare}" -eq 0 ]]; then
       # docker hub image version is equal
@@ -601,9 +600,8 @@ _fsDockerProject_() {
 
   local _projectPath="${FS_DIR}/${1##*/}"
   local _projectMode="${2}" # compose, compose-force, run, run-force, validate, quit
-  shift; shift 
-  local _projectArgs="${*:-}" # optional: args
-echo "XXX _projectArgs: $_projectArgs{}"
+  local _projectService="${3:-}" # optional: service
+  local _projectArgs="${4:-}" # optional: args
   local _projectCronCmd=''
   local _projectCronUpdate=''
   local _projectFile=''
@@ -636,6 +634,11 @@ echo "XXX _projectArgs: $_projectArgs{}"
   local _strategyDir=''
   local _strategyPath=''
   local _error=0
+
+  if [[ -n "${_projectArgs}" ]]; then
+    shift;shift;shift
+    _projectArgs="${*:-}" # optional: args
+  fi
   
   _projectFile="${_projectPath##*/}"
   _projectFileType="${_projectFile##*.}"
@@ -664,15 +667,17 @@ echo "XXX _projectArgs: $_projectArgs{}"
   if [[ "${_projectMode}" =~ "compose" ]]; then
     _fsMsgTitle_ "Compose project: ${_projectFile}"
 
-    _projectImages="$(_fsDockerProjectImages_ "${_projectPath}")"
-    _projectStrategies="$(_fsDockerProjectStrategies_ "${_projectPath}")"
-    _projectConfigs="$(_fsDockerProjectConfigs_ "${_projectPath}")"
-    
     if [[ "${_projectMode}" = "compose-force" ]]; then
       _projectPorts=0
+      _projectStrategies=0
+      _projectConfigs=0      
     else
       _projectPorts="$(_fsDockerProjectPorts_ "${_projectPath}")"
+      _projectStrategies="$(_fsDockerProjectStrategies_ "${_projectPath}")"
+      _projectConfigs="$(_fsDockerProjectConfigs_ "${_projectPath}")"
     fi
+    
+    _projectImages="$(_fsDockerProjectImages_ "${_projectPath}")"
 
     [[ "${_projectImages}" -eq 1 ]] && _error=$((_error+1))
     [[ "${_projectConfigs}" -eq 1 ]] && _error=$((_error+1))
@@ -681,14 +686,13 @@ echo "XXX _projectArgs: $_projectArgs{}"
 
     if [[ "${_error}" -eq 0 ]]; then
       if [[ "${_projectMode}" = 'compose-force' ]]; then
-        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" up --no-start --force-recreate --remove-orphans "${_projectArgs}"
+        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" up --no-start --force-recreate --remove-orphans "${_projectService}"
       else
-        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" up --no-start --no-recreate --remove-orphans "${_projectArgs}"
+        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" up --no-start --no-recreate --remove-orphans "${_projectService}"
       fi
     fi
   elif [[ "${_projectMode}" =~ "run" ]]; then
     _fsMsgTitle_ "Run project: ${_projectFile}"
-    _projectImages="$(_fsDockerProjectImages_ "${_projectPath}")"
     
     if [[ "${_projectMode}" = "run-force" ]]; then
       _projectPorts=0
@@ -696,11 +700,13 @@ echo "XXX _projectArgs: $_projectArgs{}"
       _projectPorts="$(_fsDockerProjectPorts_ "${_projectPath}")"
     fi
     
+    _projectImages="$(_fsDockerProjectImages_ "${_projectPath}")"
+
     [[ "${_projectImages}" -eq 1 ]] && _error=$((_error+1))
     [[ "${_projectPorts}" -eq 1 ]] && _error=$((_error+1))
     
     if [[ "${_error}" -eq 0 ]]; then
-      cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" run "${_projectArgs}"
+      cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" run --rm "${_projectService}" /bin/sh -c "${_projectArgs}"
     fi
   elif [[ "${_projectMode}" = "validate" ]]; then
     _fsMsg_ ''
@@ -729,7 +735,7 @@ echo "XXX _projectArgs: $_projectArgs{}"
       fi
       
         # start container
-      if [[ "${_projectMode}" = "compose" ]]; then        
+      if [[ "${_projectMode}" =~ "compose" ]]; then        
           # skip container if autostart is active but not true
         if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ ! "${_containerAutoupdate}" = 'true' ]]; then
           continue
@@ -763,52 +769,63 @@ echo "XXX _projectArgs: $_projectArgs{}"
         | sed "s,\=, ,g" \
         | sed "s,\/freqtrade\/,,g")"
         
-          # remove logfile
-        _containerLogfile="$(echo "${_containerCmd}" | { grep -Eos "\--logfile [-A-Za-z0-9_/]+.log " || true; } \
-        | sed "s,\--logfile,," \
-        | sed "s, ,,g")"
-        _containerLogfile="${FS_DIR_USER_DATA_LOGS}"'/'"${_containerLogfile##*/}"
+        echo "_containerCmd: X${_containerCmd}X"
         
-        if [[ "$(_fsFile_ "${_containerLogfile}")" -eq 0 ]]; then
-            # workaround to preserve owner of file
-          _containerLogfileTmp="${FS_TMP}"'/'"${_containerLogfile##*/}"'.tmp'
-          sudo touch "${_containerLogfileTmp}"
-          sudo cp --no-preserve=all "${_containerLogfileTmp}" "${_containerLogfile}"
-        fi
         
-          # validate strategy
-        _containerStrategy="$(echo "${_containerCmd}" | { grep -Eos "(\-s|\--strategy) [-A-Za-z0-9_]+ " || true; } \
-        | sed "s,\--strategy,," \
-        | sed "s, ,,g")"
-        
-        _containerStrategyDir="$(echo "${_containerCmd}" | { grep -Eos "\--strategy-path [-A-Za-z0-9_/]+ " || true; } \
-        | sed "s,\-\-strategy-path,," \
-        | sed "s, ,,g")"
-        
-        _strategyPath="${_containerStrategyDir}/${_containerStrategy}.conf.json"
-        
-        if [[ "$(_fsFileEmpty_ "${_strategyPath}")" -eq 0 ]]; then
-          _strategyUpdate="$(_fsValueGet_ "${_strategyPath}" '.update')"
-        else
-          _strategyUpdate=""
-        fi
-        
-        if [[ "$(_fsFileEmpty_ "${_containerConfPath}")" -eq 0 ]]; then
-          _containerStrategyUpdate="$(_fsValueGet_ "${_containerConfPath}" '.'"${_containerName}"'.strategy_update')"
-        else
-          _containerStrategyUpdate=""
-        fi
+        if [[ -n "${_containerCmd}" ]]; then
+            # remove logfile
+          _containerLogfile="$(echo "${_containerCmd}" | { grep -Eos "\--logfile [-A-Za-z0-9_/]+.log " || true; } \
+          | sed "s,\--logfile,," \
+          | sed "s, ,,g")"
+        echo "_containerLogfile: X${_containerLogfile}X"
 
-        if [[ -n "${_containerStrategyUpdate}" ]]; then
-          if [[ "${_containerRunning}" -eq 0 ]] && [[ ! "${_containerStrategyUpdate}" = "${_strategyUpdate}" ]]; then
-            _containerRestart=0
-            _fsMsg_ '[WARNING] Strategy is outdated: '"${_containerStrategy}"
-          else
-            _fsMsg_ 'Strategy is up-to-date: '"${_containerStrategy}"
+          if [[ -n "${_containerLogfile}" ]]; then
+            _containerLogfile="${FS_DIR_USER_DATA_LOGS}"'/'"${_containerLogfile##*/}"
+            
+            if [[ "$(_fsFile_ "${_containerLogfile}")" -eq 0 ]]; then
+                # workaround to preserve owner of file
+              _containerLogfileTmp="${FS_TMP}"'/'"${_containerLogfile##*/}"'.tmp'
+              touch "${_containerLogfileTmp}"
+              cp --no-preserve=all "${_containerLogfileTmp}" "${_containerLogfile}"
+            fi
           fi
-        else
-          _containerStrategyUpdate="${_strategyUpdate}"
-          _fsMsg_ '[WARNING] Strategy version unkown: '"${_containerStrategy}"
+            # validate strategy
+          _containerStrategy="$(echo "${_containerCmd}" | { grep -Eos "(\-s|\--strategy) [-A-Za-z0-9_]+ " || true; } \
+          | sed "s,\--strategy,," \
+          | sed "s, ,,g")"
+        echo "_containerStrategy: X${_containerStrategy}X"
+
+          if [[ -n "${_containerStrategy}" ]]; then
+            _containerStrategyDir="$(echo "${_containerCmd}" | { grep -Eos "\--strategy-path [-A-Za-z0-9_/]+ " || true; } \
+            | sed "s,\-\-strategy-path,," \
+            | sed "s, ,,g")"
+            
+            _strategyPath="${_containerStrategyDir}/${_containerStrategy}.conf.json"
+            
+            if [[ "$(_fsFileEmpty_ "${_strategyPath}")" -eq 0 ]]; then
+              _strategyUpdate="$(_fsValueGet_ "${_strategyPath}" '.update')"
+            else
+              _strategyUpdate=""
+            fi
+            
+            if [[ "$(_fsFileEmpty_ "${_containerConfPath}")" -eq 0 ]]; then
+              _containerStrategyUpdate="$(_fsValueGet_ "${_containerConfPath}" '.'"${_containerName}"'.strategy_update')"
+            else
+              _containerStrategyUpdate=""
+            fi
+
+            if [[ -n "${_containerStrategyUpdate}" ]]; then
+              if [[ "${_containerRunning}" -eq 0 ]] && [[ ! "${_containerStrategyUpdate}" = "${_strategyUpdate}" ]]; then
+                _containerRestart=0
+                _fsMsg_ '[WARNING] Strategy is outdated: '"${_containerStrategy}"
+              else
+                _fsMsg_ 'Strategy is up-to-date: '"${_containerStrategy}"
+              fi
+            else
+              _containerStrategyUpdate="${_strategyUpdate}"
+              _fsMsg_ '[WARNING] Strategy version unkown: '"${_containerStrategy}"
+            fi
+          fi
         fi
         
           # compare latest docker image with container image
@@ -895,7 +912,7 @@ echo "XXX _projectArgs: $_projectArgs{}"
     if [[ "${_error}" -eq 0 ]]; then
         # create project conf file
       if (( ${#_procjectJson[@]} )); then
-        printf -- '%s\n' "${_procjectJson[@]}" | jq . | sudo tee "${_containerConfPath}" > /dev/null
+        printf -- '%s\n' "${_procjectJson[@]}" | jq . | tee "${_containerConfPath}" > /dev/null
       else
         sudo rm -f "${_containerConfPath}"
       fi
@@ -911,15 +928,16 @@ echo "XXX _projectArgs: $_projectArgs{}"
     else
       _fsDockerAutoupdate_ "${_projectFile}" 'remove'
     fi
-      # clear unused networks
-    yes $'y' | docker network prune > /dev/null || true
   elif [[ "${_projectMode}" = "quit" ]]; then
     _fsDockerAutoupdate_ "${_projectFile}" "remove"
     
     if (( ! ${#_projectContainers[@]} )); then
-      _fsMsg_ "No container active in project: ${_projectFile}"
+      _fsMsg_ "No active container in project: ${_projectFile}"
     fi
   fi
+  
+    # clear deprecated networks
+  yes $'y' | docker network prune > /dev/null || true
 }
 
 _fsDockerStrategy_() {
@@ -980,17 +998,17 @@ _fsDockerStrategy_() {
           _strategyFileTypeName="config"
         fi
         
-        sudo curl --connect-timeout 10 -s -L "${_strategyUrl}" -o "${_strategyPathTmp}"
+        curl --connect-timeout 10 -s -L "${_strategyUrl}" -o "${_strategyPathTmp}"
         
         if [[ "$(_fsFile_ "${_strategyPath}")" -eq 0 ]]; then
             # only update file if it is different
           if ! cmp --silent "${_strategyPathTmp}" "${_strategyPath}"; then
-            sudo cp -a "${_strategyPathTmp}" "${_strategyPath}"
+            cp -a "${_strategyPathTmp}" "${_strategyPath}"
             _strategyUpdateCount=$((_strategyUpdateCount+1))
             _fsFileExist_ "${_strategyPath}"
           fi
         else
-          sudo cp -a "${_strategyPathTmp}" "${_strategyPath}"
+          cp -a "${_strategyPathTmp}" "${_strategyPath}"
           _strategyUpdateCount=$((_strategyUpdateCount+1))
           _fsFileExist_ "${_strategyPath}"
         fi
@@ -1010,7 +1028,7 @@ _fsDockerStrategy_() {
         --arg update "${_strategyUpdate}" \
         '$ARGS.named' \
       )"
-      printf '%s\n' "${_strategyJson}" | jq . | sudo tee "${_strategyDir}/${_strategyName}.conf.json" > /dev/null
+      printf '%s\n' "${_strategyJson}" | jq . | tee "${_strategyDir}/${_strategyName}.conf.json" > /dev/null
     fi
   else
     _fsMsg_ "[WARNING] Strategy is not implemented: ${_strategyName}"
@@ -1045,7 +1063,7 @@ _fsDockerAutoupdate_() {
     _fsCrontabRemove_ "${_cronCmd}"
     sudo rm -f "${_path}"
   else
-    printf '%s\n' "${_projectAutoupdates[@]}" | sudo tee "${_path}" > /dev/null
+    printf '%s\n' "${_projectAutoupdates[@]}" | tee "${_path}" > /dev/null
     sudo chmod +x "${_path}"
     _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
   fi
@@ -1067,7 +1085,7 @@ _fsSetup_() {
   
   _fsLogo_
   _fsUser_
-  _fsSetupPrerequisites_
+  #_fsSetupPrerequisites_
   _fsConf_
   _fsSetupNtp_
   _fsSetupFreqtrade_
@@ -1234,6 +1252,7 @@ _fsSetupFirewall_() {
   while true; do
     if [[ -n "${_serverFirewall}" ]]; then
       if [[ "$(_fsCaseConfirmation_ 'Skip reconfiguration of firewall?')" -eq 0 ]]; then
+        _fsMsg_ 'Skipping...'
         break
       fi
     else
@@ -1559,9 +1578,11 @@ _fsSetupNginx_() {
   local _username=''
   local _password=''
   local _passwordCompare=''
+  local _htpasswd="${FS_DIR_DATA}${FS_NGINX_CONFD_HTPASSWD}"
+  local _htpasswdDir="${FS_DIR_DATA}${FS_NGINX_CONFD_HTPASSWD%/*}"
 
   while true; do
-    if [[ "$(_fsFile_ "${FS_NGINX_CONFD_HTPASSWD}")" -eq 0 ]]; then
+    if [[ "$(_fsFile_ "${_htpasswd}")" -eq 0 ]]; then
       if [[ "$(_fsCaseConfirmation_ "Skip generating new server login data?")" -eq 0 ]]; then
         _fsMsg_ "Skipping..."
         break
@@ -1577,11 +1598,15 @@ _fsSetupNginx_() {
         # better then nothing
       _username='freqstart'
       _password='freqstart'
+      _fsMsg_ '[WARNING] Created default login data: freqstart:freqstart'
     fi
     
       # create htpasswd for frequi access
-    sh -c "echo -n ${_username}':' > ${FS_NGINX_CONFD_HTPASSWD}"
-    sh -c "openssl passwd ${_password} >> ${FS_NGINX_CONFD_HTPASSWD}"
+    mkdir -p "${_htpasswdDir}"
+    sh -c "echo -n ${_username}':' > ${_htpasswd}"
+    sh -c "openssl passwd ${_password} >> ${_htpasswd}"
+    
+    break
   done
 
   while true; do
@@ -1616,33 +1641,38 @@ _fsSetupNginx_() {
 
 _fsSetupNginxOpenssl_() {
   local _serverUrl="https://${FS_SERVER_WAN}"
-  local _sslCert=''
-  local _sslCertKey=''
   local _cronCmd="sudo /usr/bin/certbot renew --quiet"
   local _cronUpdate="0 0 * * *"
   local _bypass=''
+  local _sslPrivate='/etc/ssl/private'
+  local _sslKey="${_sslPrivate}"'/nginx-selfsigned.key'
+  local _sslCerts='/etc/ssl/certs'
+  local _sslCert="${_sslCerts}"'/nginx-selfsigned.crt'
+  local _sslParam='/etc/nginx/dhparam.pem'
+  local _sslSnippets='/etc/nginx/snippets'
+  local _sslConf="${_sslSnippets}"'/self-signed.conf'
+  local _sslConfParam="${_sslSnippets}"'/ssl-params.conf'
   
+  _fsValueUpdate_ "${FS_CONFIG}" '.server_url' "${_serverUrl}"
+
   _fsFileCreate_ "${FS_NGINX_YML}" \
   "version: '3'" \
   'services:' \
-  '  '"${FS_NGINX}"':' \
-  '    image: nginx:latest' \
-  '    restart: unless-stopped' \
+  "  ${FS_NGINX}:" \
+  '    image: amd64/nginx:stable' \
   '    ports:' \
   '      - 80:80' \
   '      - 443:443' \
   '      - 9999:9999' \
   '      - 9000-9100:9000-9100' \
   '    volumes:' \
-  '      - '"${FS_DIR_DATA}"'/nginx/snippets:/etc/nginx/snippets:ro' \
-  '      - '"${FS_DIR_DATA}"'/ssl/certs:/etc/ssl/certs:ro' \
-  '      - '"${FS_DIR_DATA}"'/ssl/private:/etc/ssl/private:ro' \  
-
-  _fsValueUpdate_ "${FS_CONFIG}" '.server_url' "${_serverUrl}"
-
+  '      - '"${FS_DIR_DATA}${_sslSnippets}"':'"${_sslSnippets}" \
+  '      - '"${FS_DIR_DATA}${_sslParam}"':'"${_sslParam}" \
+  '      - '"${FS_DIR_DATA}${_sslCerts}"':'"${_sslCerts}" \
+  '      - '"${FS_DIR_DATA}${_sslPrivate}"':'"${_sslPrivate}"
+  
     # create nginx conf for ip ssl
-    # thanks: Blood4rc, Hippocritical
-  _fsFileCreate_ "${FS_NGINX_CONFD_FREQUI}" \
+  _fsFileCreate_ "${FS_DIR_DATA}${FS_NGINX_CONFD_FREQUI}" \
   'map $http_cookie $rate_limit_key {' \
   "    default \$binary_remote_addr;" \
   '    \"~__Secure-rl-bypass='"${_bypass}"'" "";' \
@@ -1689,28 +1719,41 @@ _fsSetupNginxOpenssl_() {
   "}"
 
     # create dummy certificate for domain
-  mkdir -p "${FS_DIR_DATA}/conf/live/${_serverDomain}"
-  _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' \
-  '--rm --entrypoint' \
-  "openssl req -x509 -nodes -days 358000 -newkey rsa:2048" \
-  "-keyout \'${FS_DIR_DATA}/ssl/private/nginx-selfsigned.key\'" \
-  "-out \'${FS_DIR_DATA}/ssl/certs/nginx-selfsigned.crt\'" \
-  "-subj \'/C=US/ST=Denial/L=Springfield/O=Dis/CN=localhost\'" \
-  "${FS_NGINX}"
-
-  _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' \
-  '--rm --entrypoint' \
-  "openssl dhparam -out /etc/nginx/dhparam.pem 4096" \
-  "${FS_NGINX}"
-
-  _fsFileCreate_ "${FS_DIR_DATA}"'/nginx/snippets/self-signed.conf' \
-  "ssl_certificate ${FS_DIR_DATA}/ssl/certs/nginx-selfsigned.crt;" \
-  "ssl_certificate_key ${FS_DIR_DATA}/ssl/private/nginx-selfsigned.key;"
+  mkdir -p "${FS_DIR_DATA}${_sslPrivate}"
+  mkdir -p "${FS_DIR_DATA}${_sslCerts}"  
   
-  _fsFileCreate_ "${FS_DIR_DATA}"'/nginx/snippets/ssl-params.conf' \
+  while true; do
+    if [[ "$(_fsFileEmpty_ "${FS_DIR_DATA}${_sslKey}")" -eq 0 ]]; then
+      if [[ "$(_fsCaseConfirmation_ "Skip generating new SSL key?")" -eq 0 ]]; then
+        _fsMsg_ "Skipping..."
+        break
+      else
+        sudo rm -f "${FS_DIR_DATA}${_sslKey}"
+        sudo rm -f "${FS_DIR_DATA}${_sslCert}"
+        sudo rm -f "${FS_DIR_DATA}${_sslParam}"
+      fi
+    fi
+
+    touch "${FS_DIR_DATA}${_sslParam}"
+    
+    _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_NGINX}" \
+    "openssl req -x509 -nodes -days 358000 -newkey rsa:2048" \
+    "-keyout ${_sslKey}" \
+    "-out ${_sslCert}" \
+    "-subj /C=US/ST=Denial/L=Springfield/O=Dis/CN=localhost;" \
+    "openssl dhparam -out ${_sslParam} 4096"
+    
+    break
+  done
+
+  _fsFileCreate_ "${FS_DIR_DATA}${_sslConf}" \
+  "ssl_certificate ${_sslCert};" \
+  "ssl_certificate_key ${_sslKey};"
+  
+  _fsFileCreate_ "${FS_DIR_DATA}${_sslConfParam}" \
   "ssl_protocols TLSv1.2;" \
   "ssl_prefer_server_ciphers on;" \
-  "ssl_dhparam /etc/nginx/dhparam.pem;" \
+  "ssl_dhparam ${_sslParam};" \
   "ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384;" \
   "ssl_ecdh_curve secp384r1; # Requires nginx >= 1.1.0" \
   "ssl_session_timeout  10m;" \
@@ -1728,8 +1771,7 @@ _fsSetupNginxOpenssl_() {
   "add_header X-XSS-Protection \"1; mode=block\";"
 
     # start nginx container
-  _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force' \
-  "${FS_NGINX}"
+  _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force' "${FS_NGINX}"
 }
 
 _setupNginxLetsencrypt_() {
@@ -1812,7 +1854,7 @@ _setupNginxLetsencrypt_() {
     '      - 9999:9999' \
     '      - 9000-9100:9000-9100' \
     '    volumes:' \
-    '      - '"${FS_NGINX_CONFD}"':/etc/nginx/conf.d:ro' \
+    '      - '"${FS_DIR_DATA}${FS_NGINX_CONFD}"':'"${FS_NGINX_CONFD}"':ro' \
     '      - '"${FS_DIR_DATA}"'/certbot/conf:/etc/letsencrypt:ro' \
     '      - '"${FS_DIR_DATA}"'/certbot/www:/var/www/certbot:ro' \
     "    command: \"/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'\"" \
@@ -1837,17 +1879,17 @@ _setupNginxLetsencrypt_() {
     
       # create dummy certificate for domain
     mkdir -p "${FS_DIR_DATA}/conf/live/${_serverDomain}"
-    _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' \
+    _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_CERTBOT}" \
     '--rm --entrypoint' \
     "openssl req -x509 -nodes -newkey rsa:${_rsaKeySize} -days 1" \
-    "-keyout \'${FS_DIR_DATA}/conf/live/${_serverDomain}/privkey.pem\'" \
-    "-out \'${FS_DIR_DATA}/conf/live/${_serverDomain}/fullchain.pem\'" \
-    "-subj '/CN=localhost'" \
-    "${FS_CERTBOT}"
+    "-keyout '/etc/conf/live/${_serverDomain}/privkey.pem'" \
+    "-out '/etc/conf/live/${_serverDomain}/fullchain.pem'" \
+    "-subj '/CN=localhost'"
     
       # create nginx conf for domain ssl    
     _sslCert="/etc/letsencrypt/live/${_serverDomain}/fullchain.pem"
     _sslCertKey="/etc/letsencrypt/live/${_serverDomain}/privkey.pem"
+    
     _fsFileCreate_ "${FS_NGINX_CONFD_DEFAULT}" \
     'map $http_cookie $rate_limit_key {' \
     "    default \$binary_remote_addr;" \
@@ -1904,20 +1946,18 @@ _setupNginxLetsencrypt_() {
     "}"
     
       # start nginx container
-    _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force' \
-    "${FS_NGINX}"
+    _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force' "${FS_NGINX}"
     
       # delete dummy domain certificate
-    _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' \
+    _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_CERTBOT}" \
     "--rm --entrypoint" \
     "rm -Rf /etc/letsencrypt/live/${_serverDomain} &&" \
     "rm -Rf /etc/letsencrypt/archive/${_serverDomain} &&" \
-    "rm -Rf /etc/letsencrypt/renewal/${_serverDomain}.conf" \
-    "${FS_CERTBOT}"
+    "rm -Rf /etc/letsencrypt/renewal/${_serverDomain}.conf"
     
       # DISABLE STAGING
       # create domain certificate
-    _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' \
+    _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_CERTBOT}" \
     '--entrypoint ' \
     'certbot certonly --webroot -w /var/www/certbot' \
     '--staging' \
@@ -1925,8 +1965,7 @@ _setupNginxLetsencrypt_() {
     "-d ${_serverDomain}" \
     "--rsa-key-size ${_rsaKeySize}" \
     '--agree-tos' \
-    '--force-renewal' \
-    "${FS_CERTBOT}"
+    '--force-renewal'
     
       # reload nginx
     docker-compose exec "${FS_NGINX}" nginx -s reload
@@ -2251,6 +2290,8 @@ _fsFileEmpty_() {
   
 	if [[ -z "${_file}" ]]; then
     echo 1
+  elif [[ ! -f "${_file}" ]]; then
+    echo 1
   elif [[ -s "${_file}" ]]; then
     echo 0
   else
@@ -2262,7 +2303,7 @@ _fsFileExist_() {
   local _file="${1:-}" # optional: path to file
   
 	if [[ "$(_fsFile_ "${_file}")" -eq 1 ]]; then
-		_fsMsgExit_ "Cannot create file: ${_file}" '1'
+		_fsMsgExit_ "[FATAL] File does not exist: ${_file}"
   fi
 }
 
@@ -2281,7 +2322,7 @@ _fsFileCreate_() {
   _fileTmp="${FS_TMP}"'/'"${_fileHash}"'_'"${_file}"
 
   _output="$(printf -- '%s\n' "${_input[@]}")"
-  echo "${_output}" | sudo tee "${_fileTmp}" > /dev/null
+  echo "${_output}" | tee "${_fileTmp}" > /dev/null
   
   if [[ ! -d "${_fileDir}" ]]; then
     mkdir -p "${_fileDir}"
@@ -2378,7 +2419,7 @@ _fsValueUpdate_() {
       # credit: https://stackoverflow.com/a/24943373
     _jsonUpdate="$(jq "${_key}"' = $newVal' --arg newVal "${_value}" <<< "${_json}")"
 
-    printf '%s\n' "${_jsonUpdate}" | jq . | sudo tee "${_fileTmp}" > /dev/null
+    printf '%s\n' "${_jsonUpdate}" | jq . | tee "${_fileTmp}" > /dev/null
   else
       # update value for other filetypes
     sudo cp "${_filePath}" "${_fileTmp}"
@@ -2401,7 +2442,7 @@ _fsValueUpdate_() {
   fi
     # override file if different
   if ! cmp --silent "${_fileTmp}" "${_filePath}"; then
-    sudo cp "${_fileTmp}" "${_filePath}"
+    cp "${_fileTmp}" "${_filePath}"
   fi
 }
 
@@ -2723,7 +2764,7 @@ _fsCleanup_() {
 _fsErr_() {
     local _error="${?}"
     printf -- '%s\n' "Error in ${FS_FILE} in function ${1} on line ${2}" >&2
-    exit ${_error}
+    exit "${_error}"
 }
 
 _fsMsg_() {
@@ -2743,7 +2784,7 @@ _fsMsgExit_() {
   local -r _code="${2:-90}" # optional: set to 90
   
   printf -- '%s\n' \
-  "${_msg[*]}" >&2
+  "${_msg}" >&2
   
   exit "${_code}"
 }
