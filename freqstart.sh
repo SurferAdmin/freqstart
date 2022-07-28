@@ -363,12 +363,14 @@ _fsDockerStop_() {
   
 	local _dockerName="${1}"
   
-  sudo docker update --restart=no "${_dockerName}" > /dev/null
-  sudo docker stop "${_dockerName}" > /dev/null
-  sudo docker rm -f "${_dockerName}" > /dev/null
-  
   if [[ "$(_fsDockerPsName_ "${_dockerName}" "all")" -eq 0 ]]; then
-    _fsMsgExit_ "[FATAL] Cannot remove container: ${_dockerName}"
+    sudo docker update --restart=no "${_dockerName}" > /dev/null
+    sudo docker stop "${_dockerName}" > /dev/null
+    sudo docker rm -f "${_dockerName}" > /dev/null
+    
+    if [[ "$(_fsDockerPsName_ "${_dockerName}" "all")" -eq 0 ]]; then
+      _fsMsgExit_ "[FATAL] Cannot remove container: ${_dockerName}"
+    fi
   fi
 }
 
@@ -1083,13 +1085,13 @@ _fsSetup_() {
   
   _fsLogo_
   _fsUser_
-  #_fsSetupPrerequisites_
+  _fsSetupPrerequisites_
   _fsSetupConf_
   _fsSetupNtp_
   _fsSetupFreqtrade_
   _fsSetupFrequi_
-  #_fsSetupBinanceProxy_
-  #_fsSetupKucoinProxy_
+  _fsSetupBinanceProxy_
+  _fsSetupKucoinProxy_
   _fsStats_
   
 	if [[ "$(_fsIsSymlink_ "${FS_SYMLINK}")" -eq 1 ]]; then
@@ -1383,9 +1385,10 @@ _fsSetupFreqtrade_() {
     # create user_data folder
   if [[ ! -d "${FS_DIR_USER_DATA}" ]]; then
     _fsSetupFreqtradeYml_
-    
+        
     cd "${FS_DIR}" && \
     docker-compose --file "$(basename "${_dockerYml}")" run --rm freqtrade create-userdir --userdir "$(basename "${FS_DIR_USER_DATA}")"
+    
     if [[ ! -d "${FS_DIR_USER_DATA}" ]]; then
       _fsMsgExit_ "Directory cannot be created: ${FS_DIR_USER_DATA}"
     else
