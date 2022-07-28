@@ -1192,8 +1192,8 @@ _fsUser_() {
         _fsDockerPurge_
           # credit: https://superuser.com/a/1613980
         sudo adduser --gecos "" "${_newUser}" || sudo passwd "${_newUser}"
-        sudo usermod -aG sudo "${_newUser}"
-        sudo usermod -aG docker "${_newUser}"
+        sudo usermod -aG sudo "${_newUser}" || true
+        sudo usermod -aG docker "${_newUser}" || true
         
           # no password for sudo
         echo "${_newUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
@@ -1226,8 +1226,8 @@ _fsUser_() {
   if [[ "${_currentUserId}" -ne 0 ]]; then
       # add current user to sudo group
     if ! id -nGz "${_currentUser}" | grep -qzxF "sudo"; then
-      sudo usermod -aG sudo "${_currentUser}"
-      sudo newgrp sudo
+      sudo usermod -aG sudo "${_currentUser}" && sudo newgrp sudo || true
+
     fi
     
     if [[ -z "$(sudo -l | grep -o '(ALL : ALL) NOPASSWD: ALL')" ]]; then
@@ -1238,8 +1238,7 @@ _fsUser_() {
     
       # add current user to docker group
     if ! id -nGz "${_currentUser}" | grep -qzxF "docker"; then
-      sudo usermod -aG docker "${_currentUser}"
-      sudo newgrp docker
+      sudo usermod -aG docker "${_currentUser}" && sudo newgrp docker || true
     fi
   fi
 }
@@ -1753,10 +1752,16 @@ _fsSetupNginxOpenssl_() {
     esac
   done
   
+  _fsDockerStop_ "${FS_NGINX}_domain"
+  _fsValueUpdate_ "${FS_CONFIG}" '.domain' ''
+    
+    # public ip routine
   if [[ "${_mode}" = 'public' ]]; then
     _url="https://${_ipPublic}"
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_public' "${_ipPublic}"
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_local' ''
+    
+    # local ip routine
   elif [[ "${_mode}" = 'local' ]]; then
     read -a _ipLocals <<< "$(hostname -I)"
     
@@ -1810,17 +1815,16 @@ _fsSetupNginxOpenssl_() {
     
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_public' ''
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_local' "${_ipLocal}"
+    _fsValueUpdate_ "${FS_CONFIG}" '.url' "${_url}"
   fi
-  
-  _fsValueUpdate_ "${FS_CONFIG}" '.url' "${_url}"
-  
+
     # create nginx docker project file
   _fsFileCreate_ "${FS_NGINX_YML}" \
   "version: '3'" \
   'services:' \
-  "  ${FS_NGINX}:" \
-  "    container_name: ${FS_NGINX}" \
-  "    hostname: ${FS_NGINX}" \
+  "  ${FS_NGINX}_ip:" \
+  "    container_name: ${FS_NGINX}_ip" \
+  "    hostname: ${FS_NGINX}_ip" \
   '    image: amd64/nginx:stable' \
   '    network_mode: host' \
   '    volumes:' \
@@ -1932,6 +1936,7 @@ _fsSetupNginxOpenssl_() {
   "add_header X-Frame-Options DENY;" \
   "add_header X-Content-Type-Options nosniff;" \
   "add_header X-XSS-Protection \"1; mode=block\";"
+  
     # start nginx container
   _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force'
 }
@@ -1950,6 +1955,7 @@ _setupNginxLetsencrypt_() {
   local _sslNginx="${FS_DIR_DATA}/certbot/conf/options-ssl-nginx.conf"
   local _sslDhparams="${FS_DIR_DATA}/certbot/conf/ssl-dhparams.pem"
   local _certEmail=''
+  local _nginxYmlTmp=''
   
   _ipPublic="$(dig +short myip.opendns.com @resolver1.opendns.com)"
   _bypass="$(_fsRandomBase64UrlSafe_ 16)"
@@ -2003,14 +2009,21 @@ _setupNginxLetsencrypt_() {
   
   if [[ -n "${_domain}" ]]; then
     _url="https://${_domain}"
+    
+    _fsDockerStop_ "${FS_NGINX}_ip"
+    _fsValueUpdate_ "${FS_CONFIG}" '.domain' "${_domain}"
+    _fsValueUpdate_ "${FS_CONFIG}" '.ip_public' ''
+    _fsValueUpdate_ "${FS_CONFIG}" '.ip_local' ''
+    _fsValueUpdate_ "${FS_CONFIG}" '.url' "${_url}"
+
       # credit: https://github.com/wmnnd/nginx-certbot/
     _fsFileCreate_ "${FS_NGINX_YML}" \
     "version: '3'" \
     'services:' \
-    '  '"${FS_NGINX}"':' \
+    '  '"${FS_NGINX}"'_ip:' \
     '    image: amd64/nginx:stable' \
-    "    container_name: ${FS_NGINX}" \
-    "    hostname: ${FS_NGINX}" \
+    "    container_name: ${FS_NGINX}_ip" \
+    "    hostname: ${FS_NGINX}_ip" \
     '    network_mode: host' \
     '    volumes:' \
     '      - '"${FS_DIR_DATA}${FS_NGINX_CONFD}"':'"${FS_NGINX_CONFD}"':ro' \
@@ -2027,6 +2040,11 @@ _setupNginxLetsencrypt_() {
     '      - '"${FS_DIR_DATA}"'/certbot/www:/var/www/certbot:rw' \
     "    entrypoint: \"/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'\""
     
+      # create temporary nginx project file without commands
+    _nginxYmlTmp="$(grep -v 'command:' "${FS_NGINX_YML}")"
+    _fsFileCreate_ "${_nginxYmlTmp}"
+    
+    exit 1
       # download recommended TLS parameters
     if [[ ! -f "${_sslNginx}" ]] || [[ ! -f "${_sslDhparams}" ]]; then
       mkdir -p "${FS_DIR_DATA}/certbot/conf"
