@@ -1748,6 +1748,7 @@ _fsSetupNginxOpenssl_() {
   local _url=''
   local _nr=''
   local _mode=''
+  local _ipConf=''
   local _ipLocals=''
   local _ipLocal=''
   local _ipLocalDelete
@@ -1806,9 +1807,11 @@ _fsSetupNginxOpenssl_() {
     # public ip routine
   if [[ "${_mode}" = 'public' ]]; then
     _url="https://${_ipPublic}"
+    _ipConf="${_ipPublic}"
+
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_public' "${_ipPublic}"
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_local' ''
-    
+
     # local ip routine
   elif [[ "${_mode}" = 'local' ]]; then
     read -a _ipLocals <<< "$(hostname -I)"
@@ -1861,6 +1864,7 @@ _fsSetupNginxOpenssl_() {
       fi
     done
     
+    _ipConf="${_ipLocal}"
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_public' ''
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_local' "${_ipLocal}"
   fi
@@ -1892,13 +1896,13 @@ _fsSetupNginxOpenssl_() {
   "limit_req_status 429;" \
   "limit_req_zone \$rate_limit_key zone=auth:10m rate=1r/m;" \
   "server {" \
-  "    listen 80;" \
+  "    listen ${_ipConf}:80;" \
   "    location / {" \
   "        return 301 https://\$host\$request_uri;" \
   "    }" \
   "}" \
   "server {" \
-  "    listen 443 ssl;" \
+  "    listen ${_ipConf}:443 ssl;" \
   "    include ${_sslConf};" \
   "    include ${_sslConfParam};" \
   "    location / {" \
@@ -1918,7 +1922,7 @@ _fsSetupNginxOpenssl_() {
   "    }" \
   "}" \
   "server {" \
-  "    listen 9000-9100 ssl;" \
+  "    listen ${_ipConf}:9000-9100 ssl;" \
   "    include ${_sslConf};" \
   "    include ${_sslConfParam};" \
   "    location / {" \
@@ -2127,7 +2131,7 @@ _setupNginxLetsencrypt_() {
     "limit_req_status 429;" \
     "limit_req_zone \$rate_limit_key zone=auth:10m rate=1r/m;" \
     "server {" \
-    "    listen 80;" \
+    "    listen ${_domain}:80;" \
     "    server_name ${_domain};" \
     "    location / {" \
     "        return 301 https://\$host\$request_uri;" \
@@ -2138,7 +2142,7 @@ _setupNginxLetsencrypt_() {
     "    }" \
     "}" \
     "server {" \
-    "    listen 443 ssl http2;" \
+    "    listen ${_domain}:443 ssl http2;" \
     "    server_name ${_domain};" \
     "    ssl_certificate ${_sslCert};" \
     "    ssl_certificate_key ${_sslKey};" \
@@ -2165,7 +2169,7 @@ _setupNginxLetsencrypt_() {
     "    }" \
     "}" \
     "server {" \
-    "    listen 9000-9100 ssl http2;" \
+    "    listen ${_domain}:9000-9100 ssl http2;" \
     "    server_name ${_domain};" \
     "    ssl_certificate ${_sslCert};" \
     "    ssl_certificate_key ${_sslKey};" \
