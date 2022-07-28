@@ -693,9 +693,9 @@ _fsDockerProject_() {
     
     if [[ "${_error}" -eq 0 ]]; then
       if [[ "${_projectMode}" = 'compose-force' ]]; then
-        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" up --no-start --force-recreate "${_projectService}"
+        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" up --no-start --force-recreate ${_projectService}
       else
-        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" up --no-start --no-recreate "${_projectService}"
+        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" up --no-start --no-recreate ${_projectService}
       fi
     fi
   elif [[ "${_projectMode}" =~ "run" ]]; then
@@ -719,9 +719,9 @@ _fsDockerProject_() {
       if [[ -n "${_projectShell}" ]]; then
         _projectArgs="$(echo -e "${_projectArgs}" | sed 's,/bin/sh -c ,,')"
                 
-        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" run --rm "${_projectService}" /bin/sh -c "${_projectArgs}"
+        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" run --rm ${_projectService} /bin/sh -c "${_projectArgs}"
       else
-        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" run --rm "${_projectService}" "${_projectArgs}"
+        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" run --rm ${_projectService} "${_projectArgs}"
       fi
     fi
   elif [[ "${_projectMode}" = "validate" ]]; then
@@ -1673,25 +1673,27 @@ _fsSetupNginx_() {
     
     while true; do
       if [[ "$(_fsFile_ "${_htpasswd}")" -eq 0 ]]; then
+        _fsMsg_ "FreqUI login data already found."
+        
         if [[ "$(_fsCaseConfirmation_ "Skip generating new FreqUI login data?")" -eq 0 ]]; then
           _fsMsg_ "Skipping..."
           break
         fi
+      else        
+        if [[ "$(_fsCaseConfirmation_ "Create FreqUI login data now?")" -eq 0 ]] && [[ "${FS_OPTS_YES}" -eq 1 ]]; then
+            # create login data to access frequi
+          _loginData="$(_fsLoginData_)"
+          _username="$(_fsLoginDataUsername_ "${_loginData}")"
+          _password="$(_fsLoginDataPassword_ "${_loginData}")"
+        else
+            # generate login data if first time setup is non-interactive
+          _username="$(_fsRandomBase64_ 16)"
+          _password="$(_fsRandomBase64_ 16)"
+          _fsMsg_ '[WARNING] FreqUI login data created automatically: '"${_username}"':'"${_password}"
+          _fsCdown_ 15 'to memorize login data. Restart setup to change!'
+        fi
       fi
       
-      _fsMsg_ "Create your FreqUI login data now!"
-      
-      if [[ "${FS_OPTS_YES}" -eq 1 ]]; then
-          # create login data to access frequi
-        _loginData="$(_fsLoginData_)"
-        _username="$(_fsLoginDataUsername_ "${_loginData}")"
-        _password="$(_fsLoginDataPassword_ "${_loginData}")"
-      else
-          # better then nothing
-        _username='freqstart'
-        _password='freqstart'
-        _fsMsg_ '[WARNING] Created default login data: freqstart:freqstart'
-      fi
         # create htpasswd for frequi access
       mkdir -p "${_htpasswdDir}"
       sh -c "echo -n ${_username}':' > ${_htpasswd}"
@@ -1885,15 +1887,13 @@ _fsSetupNginxOpenssl_() {
   "limit_req_status 429;" \
   "limit_req_zone \$rate_limit_key zone=auth:10m rate=1r/m;" \
   "server {" \
-  "    listen ${_ipLocal}:80;" \
-  "    server_name ${_ipLocal};" \
+  "    listen 80;" \
   "    location / {" \
   "        return 301 https://\$host\$request_uri;" \
   "    }" \
   "}" \
   "server {" \
-  "    listen ${_ipLocal}:443 ssl;" \
-  "    server_name ${_ipLocal};" \
+  "    listen 443 ssl;" \
   "    include ${_sslConf};" \
   "    include ${_sslConfParam};" \
   "    location / {" \
@@ -1913,8 +1913,7 @@ _fsSetupNginxOpenssl_() {
   "    }" \
   "}" \
   "server {" \
-  "    listen ${_ipLocal}:9000-9100 ssl;" \
-  "    server_name ${_ipLocal};" \
+  "    listen 9000-9100 ssl;" \
   "    include ${_sslConf};" \
   "    include ${_sslConfParam};" \
   "    location / {" \
@@ -1979,7 +1978,9 @@ _fsSetupNginxOpenssl_() {
     # start nginx ip container
   _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force'
   
-  [[ "$(_fsDockerPsName_ "${FS_NGINX}_ip")" -eq 1 ]] && _fsMsgExit_ '[FATAL] Nginx container is not running!'
+  if [[ "$(_fsDockerPsName_ "${FS_NGINX}_ip")" -eq 1 ]]; then
+    _fsMsgExit_ '[FATAL] Nginx container is not running!'
+  fi
 }
 
 _setupNginxLetsencrypt_() {
@@ -2121,7 +2122,7 @@ _setupNginxLetsencrypt_() {
     "limit_req_status 429;" \
     "limit_req_zone \$rate_limit_key zone=auth:10m rate=1r/m;" \
     "server {" \
-    "    listen ${_domain}:80;" \
+    "    listen 80;" \
     "    server_name ${_domain};" \
     "    location / {" \
     "        return 301 https://\$host\$request_uri;" \
@@ -2132,7 +2133,7 @@ _setupNginxLetsencrypt_() {
     "    }" \
     "}" \
     "server {" \
-    "    listen ${_domain}:443 ssl http2;" \
+    "    listen 443 ssl http2;" \
     "    server_name ${_domain};" \
     "    ssl_certificate ${_sslCert};" \
     "    ssl_certificate_key ${_sslKey};" \
@@ -2159,7 +2160,7 @@ _setupNginxLetsencrypt_() {
     "    }" \
     "}" \
     "server {" \
-    "    listen ${_domain}:9000-9100 ssl http2;" \
+    "    listen 9000-9100 ssl http2;" \
     "    server_name ${_domain};" \
     "    ssl_certificate ${_sslCert};" \
     "    ssl_certificate_key ${_sslKey};" \
@@ -2181,7 +2182,9 @@ _setupNginxLetsencrypt_() {
       # start nginx domain container
     _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force' "${FS_NGINX}_domain"
     
-    [[ "$(_fsDockerPsName_ "${FS_NGINX}_domain")" -eq 1 ]] && _fsMsgExit_ '[FATAL] Nginx container is not running!'
+    if [[ "$(_fsDockerPsName_ "${FS_NGINX}_domain")" -eq 1 ]]; then
+      _fsMsgExit_ '[FATAL] Nginx container is not running!'
+    fi
     
       # set cron for domain autorenew certificate
     _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
@@ -2235,26 +2238,26 @@ _fsSetupFrequiJson_() {
   
   while true; do
     if [[ -n "${_username}" ]] || [[ -n "${_password}" ]]; then
-      _fsMsg_ "Login data already found."
+      _fsMsg_ "API login data already found."
       
-      if [[ "$(_fsCaseConfirmation_ "Skip generating new FreqUI login data?")" -eq 0 ]]; then
+      if [[ "$(_fsCaseConfirmation_ "Skip generating new API login data?")" -eq 0 ]]; then
         break
       fi
     else
-      if [[ "$(_fsCaseConfirmation_ "Create FreqUI login data now?")" -eq 1 ]]; then
+      if [[ "$(_fsCaseConfirmation_ "Create API login data now?")" -eq 0 ]] && [[ "${FS_OPTS_YES}" -eq 1 ]]; then
+        _loginData="$(_fsLoginData_)"
+        _username="$(_fsLoginDataUsername_ "${_loginData}")"
+        _password="$(_fsLoginDataPassword_ "${_loginData}")"
+      else
           # generate login data if first time setup is non-interactive
         _username="$(_fsRandomBase64_ 16)"
         _password="$(_fsRandomBase64_ 16)"
-        _fsMsg_ '[WARNING] Bot API login data created automatically: '"${_username}"':'"${_password}"
-        break
+        _fsMsg_ '[WARNING] API login data created automatically: '"${_username}"':'"${_password}"
+        _fsCdown_ 15 'to memorize login data. Restart setup to change!'
       fi
     fi
-    
-    _fsMsg_ "Create your bot API login data now!"
-    
-    _loginData="$(_fsLoginData_)"
-    _username="$(_fsLoginDataUsername_ "${_loginData}")"
-    _password="$(_fsLoginDataPassword_ "${_loginData}")"
+
+    break
   done
 
   if [[ -n "${_username}" ]] && [[ -n "${_password}" ]]; then
