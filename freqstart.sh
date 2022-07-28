@@ -1360,7 +1360,7 @@ _fsSetupNtp_() {
   
   if [[ "$(_fsSetupNtpCheck_)" -eq 1 ]]; then
     _fsPkgs_ "chrony"
-    
+
     if [[ "$(_fsSetupNtpCheck_)" -eq 1 ]]; then
       _fsMsgExit_ "[FATAL] Cannot activate or synchronize NTP."
     else
@@ -1376,9 +1376,9 @@ _fsSetupNtpCheck_() {
   local timeutc=''
   local timesyn=''
   
-  timentp="$(sudo timedatectl | grep -o 'NTP service: active')"
-  timeutc="$(sudo timedatectl | grep -o '(UTC, +0000)')"
-  timesyn="$(sudo timedatectl | grep -o 'System clock synchronized: yes')"
+  timentp="$(sudo timedatectl | grep -o 'NTP service: active' || true)"
+  timeutc="$(sudo timedatectl | grep -o '(UTC, +0000)' || true)"
+  timesyn="$(sudo timedatectl | grep -o 'System clock synchronized: yes' || true)"
   
   if [[ -z "${timentp}" ]] || [[ -z  "${timeutc}" ]] || [[ -z  "${timesyn}" ]]; then
     echo 1
@@ -2803,20 +2803,15 @@ _fsPkgs_() {
         sudo sh "${_getDocker}"
         sudo rm -f "${_getDocker}"
         sudo apt install -y -q docker-compose
-      elif [[ "${_pkg}" = 'chrony' ]]; then
-          # ntp setup
-        sudo apt-get install -y -q chrony
-          # thanks: lsiem
-        sudo systemctl unmask systemd-timesyncd.service
-        sudo systemctl stop chronyd
-        sudo timedatectl set-timezone 'UTC'
-        sudo systemctl start chronyd
-        sudo timedatectl set-ntp true
-        sudo systemctl restart chronyd
       elif [[ "${_pkg}" = 'ufw' ]]; then
           # firewall setup
         sudo apt-get install -y -q ufw
         sudo ufw logging medium > /dev/null
+      elif [[ "${_pkg}" = 'chrony' ]]; then
+          # ntp setup
+        sudo apt-get install -y -q chrony
+        sudo timedatectl set-timezone 'UTC'
+        sudo timedatectl set-ntp true
       else
         sudo apt-get install -y -q "${_pkg}"
       fi
@@ -2831,17 +2826,13 @@ _fsPkgs_() {
 }
 
 _fsPkgsStatus_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
-  
-  local _pkg="${1}"
-  local _status=''
-  
-  _status="$(dpkg-query -W --showformat='${Status}\n' "${_pkg}" 2> /dev/null | grep "install ok installed")"
-  
-  if [[ -n "${_status}" ]]; then
-    echo 0
-  else
+  [[ $# -gt 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+
+    # credit: https://stackoverflow.com/a/7522866
+  if ! _status="$(type -p "$@")" || [[ -z $_status ]]; then
     echo 1
+  else
+    echo 0
   fi
 }
 
