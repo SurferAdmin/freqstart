@@ -10,6 +10,7 @@
 * Added run and run-force routine to project function and modified how "force" is handled to compose a project
 * Removed nginx routine without usage of SSL and made IP self-signed the default
 * Added interactive Nginx routine based on docker images for self-signed and letsencrypt domain validated SSL cert
+* Nginx self-signed IP routine offers interactive selection public or local IP adresses excl. docker ip range (For using Freqstart in a local VM)
 
 ## Setup & Docker-Manager for Freqtrade
 
