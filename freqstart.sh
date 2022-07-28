@@ -1662,11 +1662,13 @@ _fsSetupNginx_() {
     
     while true; do
       if [[ "$(_fsFile_ "${_htpasswd}")" -eq 0 ]]; then
-        if [[ "$(_fsCaseConfirmation_ "Skip generating new server login data?")" -eq 0 ]]; then
+        if [[ "$(_fsCaseConfirmation_ "Skip generating new FreqUI login data?")" -eq 0 ]]; then
           _fsMsg_ "Skipping..."
           break
         fi
       fi
+      
+      _fsMsg_ "Create your FreqUI login data now!"
       
       if [[ "${FS_OPTS_YES}" -eq 1 ]]; then
           # create login data to access frequi
@@ -2241,10 +2243,12 @@ _fsSetupFrequiJson_() {
           # generate login data if first time setup is non-interactive
         _username="$(_fsRandomBase64_ 16)"
         _password="$(_fsRandomBase64_ 16)"
-        _fsMsg_ '[WARNING] Login data created automatically: '"${_username}"':'"${_password}"
+        _fsMsg_ '[WARNING] Bot API login data created automatically: '"${_username}"':'"${_password}"
         break
       fi
     fi
+    
+    _fsMsg_ "Create your bot API login data now!"
     
     _loginData="$(_fsLoginData_)"
     _username="$(_fsLoginDataUsername_ "${_loginData}")"
@@ -2863,8 +2867,6 @@ _fsLoginData_() {
     local _username=''
     local _password=''
     local _passwordCompare=''
-    
-    _fsMsg_ "Create your login data now!"
     
       # create username
     while true; do
