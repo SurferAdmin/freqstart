@@ -1284,15 +1284,21 @@ _fsSetupFirewall_() {
   local _status=''
   local _portSSH=22
   
+    # check if ufw is enabled
   _status="$(sudo ufw status | grep -o 'active')"
   
   _fsPkgs_ "ufw"
   
   while true; do
     if [[ -n "${_status}" ]]; then
-      if [[ "$(_fsCaseConfirmation_ 'Skip reconfiguration of firewall?')" -eq 0 ]]; then
-        _fsMsg_ 'Skipping...'
-        break
+        # check if ufw rule for 9999 exists
+      _status="$(sudo ufw status | grep -o '9999')"
+      
+      if [[ -n "${_status}" ]]; then
+        if [[ "$(_fsCaseConfirmation_ 'Skip reconfiguration of firewall?')" -eq 0 ]]; then
+          _fsMsg_ 'Skipping...'
+          break
+        fi
       fi
     else
       if [[ "$(_fsCaseConfirmation_ 'Install firewall for Nginx proxy (recommended)?')" -eq 1 ]]; then
@@ -2047,6 +2053,11 @@ _setupNginxLetsencrypt_() {
     
       # create temporary nginx project file without commands
     _nginxYmlTmp="$(grep -v 'command:' "${FS_NGINX_YML}")"
+    
+    echo 'AAA'
+    echo "${_nginxYmlTmp}"
+    echo 'XXX'
+    
     _fsFileCreate_ "${_nginxYmlTmp}"
     
     exit 1
