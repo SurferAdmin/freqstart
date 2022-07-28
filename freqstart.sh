@@ -1646,7 +1646,7 @@ _fsSetupNginx_() {
   _ipLocal="$(_fsValueGet_ "${FS_CONFIG}" '.ip_local')"
   
   while true; do
-    if [[ "$(_fsDockerPsName_ "${FS_NGINX}")" -eq 0 ]]; then
+    if [[ "$(_fsDockerPsName_ "${FS_NGINX_ip}")" -eq 0 ]] || [[ "$(_fsDockerPsName_ "${FS_NGINX_domain}")" -eq 0 ]]; then
       if [[ -n "${_ipPublic}" ]] || [[ -n "${_ipLocal}" ]]; then
         if [[ -n "${_ipPublic}" ]]; then
           _ipPublicTemp="$(dig +short myip.opendns.com @resolver1.opendns.com)"
@@ -1689,8 +1689,10 @@ _fsSetupNginx_() {
             # generate login data if first time setup is non-interactive
           _username="$(_fsRandomBase64_ 16)"
           _password="$(_fsRandomBase64_ 16)"
-          _fsMsg_ '[WARNING] FreqUI login data created automatically: '"${_username}"':'"${_password}"
-          _fsCdown_ 15 'to memorize login data. Restart setup to change!'
+          _fsMsg_ '[WARNING] FreqUI login data created automatically:'
+          _fsMsg_ "Username: ${_username}"
+          _fsMsg_ "Password: ${_password}"
+          _fsCdown_ 15 'to memorize login data... Restart setup to change!'
         fi
       fi
       
@@ -2202,7 +2204,7 @@ _fsSetupFrequi_() {
   _fsMsgTitle_ "FREQUI"
   
   while true; do
-    if [[ "$(_fsDockerPsName_ "${FS_FREQUI}_ip")" -eq 0 ]] || [[ "$(_fsDockerPsName_ "${FS_FREQUI}_domain")" -eq 0 ]]; then
+    if [[ "$(_fsDockerPsName_ "${FS_FREQUI}")" -eq 0 ]]; then
       _fsMsg_ "Is active: ${_url}"
       if [[ "$(_fsCaseConfirmation_ "Skip update?")" -eq 0 ]]; then
         break
@@ -2252,8 +2254,10 @@ _fsSetupFrequiJson_() {
           # generate login data if first time setup is non-interactive
         _username="$(_fsRandomBase64_ 16)"
         _password="$(_fsRandomBase64_ 16)"
-        _fsMsg_ '[WARNING] API login data created automatically: '"${_username}"':'"${_password}"
-        _fsCdown_ 15 'to memorize login data. Restart setup to change!'
+        _fsMsg_ '[WARNING] API login data created automatically:'
+        _fsMsg_ "Username: ${_username}"
+        _fsMsg_ "Password: ${_password}"
+        _fsCdown_ 15 'to memorize login data... Restart setup to change!'
       fi
     fi
 
