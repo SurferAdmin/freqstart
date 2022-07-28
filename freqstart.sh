@@ -2451,7 +2451,7 @@ _fsUsage_() {
   "" \
   "- USAGE" \
   "  Start: ${FS_FILE} --compose example.yml --yes" \
-  "  Quit: ${FS_FILE} --compose example.yml --quit --yes" \
+  "  Quit: ${FS_FILE} --quit example.yml --yes" \
   "" \
   "- OPTIONS" \
   "  -s, --setup     Install and update" \
@@ -2809,7 +2809,7 @@ _fsPkgs_() {
         sudo ufw logging medium > /dev/null
       elif [[ "${_pkg}" = 'chrony' ]]; then
           # ntp setup
-        sudo apt-get install -y -q chrony
+        sudo apt install -y -q chrony
         sudo timedatectl set-timezone 'UTC'
         sudo timedatectl set-ntp true
       else
