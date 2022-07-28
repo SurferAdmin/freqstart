@@ -1861,9 +1861,10 @@ _fsSetupNginxOpenssl_() {
     
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_public' ''
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_local' "${_ipLocal}"
-    _fsValueUpdate_ "${FS_CONFIG}" '.url' "${_url}"
   fi
-
+  
+  _fsValueUpdate_ "${FS_CONFIG}" '.url' "${_url}"
+  
     # create nginx docker project file
   _fsFileCreate_ "${FS_NGINX_YML}" \
   "version: '3'" \
