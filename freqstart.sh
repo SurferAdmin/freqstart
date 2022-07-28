@@ -1218,6 +1218,8 @@ _fsUser_() {
         _fsMsgTitle_ 'Files can be found in new path: '"${_newPath}"
         
         _fsCdown_ 10 'to log into your new user...'
+        
+        sudo rm -rf "${FS_TMP}"
         sudo su -l "${_newUser}"
       fi
     fi
