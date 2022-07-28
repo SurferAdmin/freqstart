@@ -41,14 +41,15 @@ readonly FS_STRATEGIES="${FS_DIR}/${FS_NAME}.strategies.json"
 readonly FS_NETWORK="${FS_NAME}"'_network'
 readonly FS_NETWORK_SUBNET='172.35.0.0/16'
 readonly FS_NETWORK_GATEWAY='172.35.0.1'
-readonly FS_NETWORK_IP='172.35.0.253'
 
-readonly FS_PROXY_BINANCE='binance_proxy'
+readonly FS_PROXY_BINANCE="${FS_NAME}"'_proxy_binance'
+readonly FS_PROXY_BINANCE_IP='172.35.0.253'
 readonly FS_PROXY_BINANCE_JSON="${FS_DIR_USER_DATA}/${FS_PROXY_BINANCE}.json"
 readonly FS_PROXY_BINANCE_FUTURES_JSON="${FS_DIR_USER_DATA}/${FS_PROXY_BINANCE}_futures.json"
 readonly FS_PROXY_BINANCE_YML="${FS_DIR}/${FS_PROXY_BINANCE}.yml"
 
-readonly FS_PROXY_KUCOIN='kucoin_proxy'
+readonly FS_PROXY_KUCOIN="${FS_NAME}"'_proxy_kucoin'
+readonly FS_PROXY_KUCOIN_IP='172.35.0.252'
 readonly FS_PROXY_KUCOIN_JSON="${FS_DIR_USER_DATA}/${FS_PROXY_KUCOIN}.json"
 readonly FS_PROXY_KUCOIN_YML="${FS_DIR}/${FS_PROXY_KUCOIN}.yml"
 
@@ -748,13 +749,15 @@ _fsDockerProject_() {
           # create docker network if it does not exist; credit: https://stackoverflow.com/a/59878917
         docker network create --subnet="${FS_NETWORK_SUBNET}" --gateway "${FS_NETWORK_GATEWAY}" "${FS_NETWORK}" > /dev/null 2> /dev/null || true
         
-          # connect container to docker network excl. nginx and certbot to avoid port collision
-        if [[ ! "${_containerName}" = "${FS_NGINX}" ]] || [[ ! "${_containerName}" = "${FS_CERTBOT}" ]]; then
-          docker network connect --ip "${FS_NETWORK_IP}" "${FS_NETWORK}" "${_containerName}" > /dev/null 2> /dev/null || true
-        #else
-        #  docker network connect "${FS_NETWORK}" "${_containerName}" > /dev/null 2> /dev/null || true
+          # connect container to docker network excl. nginx and certbot
+        if [[ "${_containerName}" = "${FS_PROXY_BINANCE}" ]]; then
+          docker network connect --ip "${FS_PROXY_BINANCE_IP}" "${FS_NETWORK}" "${_containerName}" > /dev/null 2> /dev/null || true
+        elif [[ "${_containerName}" = "${FS_PROXY_KUCOIN}" ]]; then
+          docker network connect --ip "${FS_PROXY_KUCOIN_IP}" "${FS_NETWORK}" "${_containerName}" > /dev/null 2> /dev/null || true
+        elif [[ ! "${_containerName}" =~ "${FS_NGINX}" ]] || [[ ! "${_containerName}" = "${FS_CERTBOT}" ]]; then
+          docker network connect "${FS_NETWORK}" "${_containerName}" > /dev/null 2> /dev/null || true
         fi
-                
+        
           # set restart to no to filter faulty containers
         docker update --restart=no "${_containerName}" > /dev/null
         
@@ -840,19 +843,19 @@ _fsDockerProject_() {
           _fsMsg_ 'Image is up-to-date: '"${_containerImage}"
         fi
         
-        if [[ "${_containerRunning}" -eq 1 ]]; then
             # start container
-          docker start "${_containerName}"
-        else
+        if [[ "${_containerRunning}" -eq 1 ]]; then
+          docker start "${_containerName}" > /dev/null
+          
             # restart container if necessary
+        else
           if [[ "${_containerRestart}" -eq 0 ]]; then
             if [[ "$(_fsCaseConfirmation_ "Restart container (recommended)?")" -eq 0 ]]; then
                 # set strategy update only when container is restarted
               if [[ -n "${_strategyUpdate}" ]]; then
                 _containerStrategyUpdate="${_strategyUpdate}"
               fi
-                # restart container
-              docker restart "${_containerName}"
+              docker restart "${_containerName}" > /dev/null
             fi
             _containerRestart=1
           fi
@@ -1492,6 +1495,11 @@ _fsSetupBinanceProxy_() {
         _fsMsg_ "Skipping..."
         break
       fi
+    else
+      if [[ "$(_fsCaseConfirmation_ "Install now?")" -eq 1 ]]; then
+        _fsMsg_ "Skipping..."
+        break
+      fi
     fi
       # binance proxy json file
     _fsFileCreate_ "${FS_PROXY_BINANCE_JSON}" \
@@ -1502,7 +1510,7 @@ _fsSetupBinanceProxy_() {
     "            \"enableRateLimit\": false," \
     "            \"urls\": {" \
     "                \"api\": {" \
-    "                    \"public\": \"http://${FS_NETWORK_IP}:8990/api/v3\"" \
+    "                    \"public\": \"http://${FS_PROXY_BINANCE_IP}:8990/api/v3\"" \
     "                }" \
     "            }" \
     "        }," \
@@ -1520,7 +1528,7 @@ _fsSetupBinanceProxy_() {
     "            \"enableRateLimit\": false," \
     "            \"urls\": {" \
     "                \"api\": {" \
-    "                    \"public\": \"http://${FS_NETWORK_IP}:8991/api/v3\"" \
+    "                    \"public\": \"http://${FS_PROXY_BINANCE_IP}:8991/api/v3\"" \
     "                }" \
     "            }" \
     "        }," \
@@ -1543,6 +1551,8 @@ _fsSetupBinanceProxy_() {
     "      --verbose" \
     
     _fsDockerProject_ "$(basename "${FS_PROXY_BINANCE_YML}")" 'compose-force'
+    
+    break
   done
 }
 
@@ -1563,6 +1573,11 @@ _fsSetupKucoinProxy_() {
         _fsMsg_ "Skipping..."
         break
       fi
+    else
+      if [[ "$(_fsCaseConfirmation_ "Install now?")" -eq 1 ]]; then
+        _fsMsg_ "Skipping..."
+        break
+      fi
     fi
       # kucoin proxy json file
     _fsFileCreate_ "${FS_PROXY_KUCOIN_JSON}" \
@@ -1574,8 +1589,8 @@ _fsSetupKucoinProxy_() {
     "            \"timeout\": 60000," \
     "            \"urls\": {" \
     "                \"api\": {" \
-    "                    \"public\": \"http://${FS_NETWORK_IP}:8980/kucoin\"," \
-    "                    \"private\": \"http://${FS_NETWORK_IP}:8980/kucoin\"" \
+    "                    \"public\": \"http://${FS_PROXY_KUCOIN_IP}:8980/kucoin\"," \
+    "                    \"private\": \"http://${FS_PROXY_KUCOIN_IP}:8980/kucoin\"" \
     "                }" \
     "            }" \
     "        }," \
@@ -1598,6 +1613,8 @@ _fsSetupKucoinProxy_() {
     "      -verbose 1"
     
     _fsDockerProject_ "$(basename "${FS_PROXY_KUCOIN_YML}")" 'compose-force'
+    
+    break
   done
 }
 
@@ -1966,10 +1983,12 @@ _setupNginxLetsencrypt_() {
   local _sslNginx="${FS_DIR_DATA}/certbot/conf/options-ssl-nginx.conf"
   local _sslDhparams="${FS_DIR_DATA}/certbot/conf/ssl-dhparams.pem"
   local _certEmail=''
+  local _nginxYml=''
   local _nginxYmlTmp=''
   
   _ipPublic="$(dig +short myip.opendns.com @resolver1.opendns.com)"
   _bypass="$(_fsRandomBase64UrlSafe_ 16)"
+  _domain="$(_fsValueGet_ "${FS_CONFIG}" '.domain')"
   
   while true; do
     if [[ -z "${_domain}" ]]; then
@@ -1987,7 +2006,7 @@ _setupNginxLetsencrypt_() {
         if [[ ! "${_domainIp}" = "${_ipPublic}" ]]; then
           _fsMsg_ "The domain \"${_domain}\" does not point to \"${_ipPublic}\". Review DNS and try again!"
         else
-          _fsValueUpdate_ "${FS_CONFIG}" '.server_domain' "${_domain}"
+          _fsValueUpdate_ "${FS_CONFIG}" '.domain' "${_domain}"
             # register ssl certificate with an email (recommended)
           if [[ "$(_fsCaseConfirmation_ "Register SSL certificate with an email (recommended)?")" -eq 0 ]]; then
             while true; do
@@ -2020,6 +2039,8 @@ _setupNginxLetsencrypt_() {
   
   if [[ -n "${_domain}" ]]; then
     _url="https://${_domain}"
+    _sslCert="/etc/letsencrypt/live/${_domain}/fullchain.pem"
+    _sslCertKey="/etc/letsencrypt/live/${_domain}/privkey.pem"
     
     _fsDockerStop_ "${FS_NGINX}_ip"
     _fsValueUpdate_ "${FS_CONFIG}" '.domain' "${_domain}"
@@ -2028,62 +2049,48 @@ _setupNginxLetsencrypt_() {
     _fsValueUpdate_ "${FS_CONFIG}" '.url' "${_url}"
 
       # credit: https://github.com/wmnnd/nginx-certbot/
-    _fsFileCreate_ "${FS_NGINX_YML}" \
-    "version: '3'" \
-    'services:' \
-    '  '"${FS_NGINX}"'_ip:' \
-    '    image: amd64/nginx:stable' \
-    "    container_name: ${FS_NGINX}_ip" \
-    "    hostname: ${FS_NGINX}_ip" \
-    '    network_mode: host' \
-    '    volumes:' \
-    '      - '"${FS_DIR_DATA}${FS_NGINX_CONFD}"':'"${FS_NGINX_CONFD}"':ro' \
-    '      - '"${FS_DIR_DATA}"'/certbot/conf:/etc/letsencrypt:ro' \
-    '      - '"${FS_DIR_DATA}"'/certbot/www:/var/www/certbot:ro' \
-    "    command: \"/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'\"" \
-    '  '"${FS_CERTBOT}"':' \
-    '    image: certbot/certbot:latest' \
-    "    container_name: ${FS_CERTBOT}" \
-    "    hostname: ${FS_CERTBOT}" \
-    '    network_mode: host' \
-    '    volumes:' \
-    '      - '"${FS_DIR_DATA}"'/certbot/conf:/etc/letsencrypt:rw' \
-    '      - '"${FS_DIR_DATA}"'/certbot/www:/var/www/certbot:rw' \
+    _nginxYml=(
+    "version: '3'"
+    'services:'
+    '  '"${FS_NGINX}"'_domain:'
+    '    image: amd64/nginx:stable'
+    "    container_name: ${FS_NGINX}_domain"
+    "    hostname: ${FS_NGINX}_domain"
+    '    network_mode: host'
+    '    volumes:'
+    '      - '"${FS_DIR_DATA}${FS_NGINX_CONFD}"':'"${FS_NGINX_CONFD}"':ro'
+    '      - '"${FS_DIR_DATA}"'/certbot/conf:/etc/letsencrypt:ro'
+    '      - '"${FS_DIR_DATA}"'/certbot/www:/var/www/certbot:ro'
+    "    command: \"/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'\""
+    '  '"${FS_CERTBOT}"':'
+    '    image: certbot/certbot:latest'
+    "    container_name: ${FS_CERTBOT}"
+    "    hostname: ${FS_CERTBOT}"
+    '    network_mode: host'
+    '    volumes:'
+    '      - '"${FS_DIR_DATA}"'/certbot/conf:/etc/letsencrypt:rw'
+    '      - '"${FS_DIR_DATA}"'/certbot/www:/var/www/certbot:rw'
     "    entrypoint: \"/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'\""
+    )
     
       # create temporary nginx project file without commands
-    _nginxYmlTmp="$(grep -v 'command:' "${FS_NGINX_YML}")"
+    _nginxYmlTmp=("$(printf -- '%s\n' "${_nginxYml[@]}" | grep -vE '(command|entrypoint):')")
+    _fsFileCreate_ "${FS_NGINX_YML}" "${_nginxYmlTmp[@]}"
     
-    echo 'AAA'
-    echo "${_nginxYmlTmp}"
-    echo 'XXX'
-    
-    _fsFileCreate_ "${_nginxYmlTmp}"
-    
-    exit 1
       # download recommended TLS parameters
     if [[ ! -f "${_sslNginx}" ]] || [[ ! -f "${_sslDhparams}" ]]; then
       mkdir -p "${FS_DIR_DATA}/certbot/conf"
       
-      curl -s https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf > "${_sslNginx}"
-      curl -s https://raw.githubusercontent.com/certbot/certbot/master/certbot/certbot/ssl-dhparams.pem > "${_sslDhparams}"
+      curl -s "https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf" > "${_sslNginx}"
+      curl -s "https://raw.githubusercontent.com/certbot/certbot/master/certbot/certbot/ssl-dhparams.pem" > "${_sslDhparams}"
       
       _fsFileExist_ "${_sslNginx}"
       _fsFileExist_ "${_sslDhparams}"
     fi
-      # create dummy certificate for domain
-    mkdir -p "${FS_DIR_DATA}/conf/live/${_domain}"
-    _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_CERTBOT}" \
-    '--rm --entrypoint' \
-    "openssl req -x509 -nodes -newkey rsa:${_rsaKeySize} -days 1" \
-    "-keyout '/etc/conf/live/${_domain}/privkey.pem'" \
-    "-out '/etc/conf/live/${_domain}/fullchain.pem'" \
-    "-subj '/CN=localhost'"
-      # create nginx conf for domain ssl    
-    _sslCert="/etc/letsencrypt/live/${_domain}/fullchain.pem"
-    _sslCertKey="/etc/letsencrypt/live/${_domain}/privkey.pem"
+
+
     
-    _fsFileCreate_ "${FS_NGINX_CONFD_FREQUI}" \
+    _fsFileCreate_ "${FS_DIR_DATA}${FS_NGINX_CONFD_FREQUI}" \
     'map $http_cookie $rate_limit_key {' \
     "    default \$binary_remote_addr;" \
     '    \"~__Secure-rl-bypass='"${_bypass}"'" "";' \
@@ -2137,20 +2144,26 @@ _setupNginxLetsencrypt_() {
     "        return 400;" \
     "    }" \
     "}"
-      # start nginx container
-    _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force' "${FS_NGINX}"
     
-      # delete dummy domain certificate
+
+    echo 'aaaa'
+
+
+
+      # create dummy certificate for domain
+    mkdir -p "${FS_DIR_DATA}/certbot/conf/live/${_domain}"
+    touch "${FS_DIR_DATA}/certbot/conf/live/${_domain}/fullchain.pem"
+    touch "${FS_DIR_DATA}/certbot/conf/live/${_domain}/privkey.pem"
+    
     _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_CERTBOT}" \
-    "--rm --entrypoint" \
-    "rm -Rf /etc/letsencrypt/live/${_domain} &&" \
-    "rm -Rf /etc/letsencrypt/archive/${_domain} &&" \
-    "rm -Rf /etc/letsencrypt/renewal/${_domain}.conf"
+    "openssl req -x509 -nodes -newkey rsa:${_rsaKeySize} -days 1" \
+    "-keyout ${_sslCertKey}" \
+    "-out ${_sslCert}" \
+    "-subj '/CN=localhost'"
     
       # DISABLE STAGING
       # create domain certificate
     _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_CERTBOT}" \
-    '--entrypoint ' \
     'certbot certonly --webroot -w /var/www/certbot' \
     '--staging' \
     "${_certEmail}" \
@@ -2158,8 +2171,16 @@ _setupNginxLetsencrypt_() {
     "--rsa-key-size ${_rsaKeySize}" \
     '--agree-tos' \
     '--force-renewal'
-      # reload nginx
-    docker-compose exec "${FS_NGINX}" nginx -s reload
+        echo 'cccc'
+
+      # create  nginx project file
+    _fsFileCreate_ "${FS_NGINX_YML}" "${_nginxYml[@]}"
+    
+      # start nginx container
+    _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force' "${FS_NGINX}"
+    
+    # reload nginx
+    #docker-compose exec "${FS_NGINX}_domain" nginx -s reload
   fi
 }
 
