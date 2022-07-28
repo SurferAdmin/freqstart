@@ -714,14 +714,14 @@ _fsDockerProject_() {
     
     if [[ "${_error}" -eq 0 ]]; then
         # workaround to execute shell from variable; help: open for suggestions
-      _projectShell="$(echo -e "${_projectArgs}" | grep -oE '^/bin/sh -c')"
+      _projectShell="$(printf -- '%s\s' "${_projectArgs}" | grep -oE '^/bin/sh -c' || true)"
       
       if [[ -n "${_projectShell}" ]]; then
-        _projectArgs="$(echo -e "${_projectArgs}" | sed 's,/bin/sh -c ,,')"
+        _projectArgs="$(printf -- '%s\s' "${_projectArgs}" | sed 's,/bin/sh -c ,,')"
                 
         cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" run --rm ${_projectService} /bin/sh -c "${_projectArgs}"
       else
-        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" run --rm ${_projectService} "${_projectArgs}"
+        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" run --rm ${_projectService} ${_projectArgs}
       fi
     fi
   elif [[ "${_projectMode}" = "validate" ]]; then
@@ -2097,7 +2097,7 @@ _setupNginxLetsencrypt_() {
       _fsFileExist_ "${_sslNginx}"
       _fsFileExist_ "${_sslDhparams}"
     fi
-
+    
       # workaround for first setup while missing cert files
     if [[ "$(_fsFile_ "${_sslCert}")" -eq 1 ]] || [[ "$(_fsFile_ "${_sslKey}")" -eq 1 ]]; then
       _fsFileCreate_ "${FS_DIR_DATA}${FS_NGINX_CONFD_FREQUI}" \
