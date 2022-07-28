@@ -75,6 +75,7 @@ FS_OPTS_AUTO=1
 FS_OPTS_QUIT=1
 FS_OPTS_YES=1
 FS_OPTS_RESET=1
+FS_OPTS_CERT=1
 
 trap _fsCleanup_ EXIT
 trap '_fsErr_ "${FUNCNAME:-.}" ${LINENO}' ERR
@@ -618,6 +619,7 @@ _fsDockerProject_() {
   local _projectContainers=''
   local _projectContainer=''
   local _procjectJson=''
+  local _projectShell=''
   local _containerCmd=''
   local _containerRunning=''
   local _containerRestart=1
@@ -691,9 +693,9 @@ _fsDockerProject_() {
     
     if [[ "${_error}" -eq 0 ]]; then
       if [[ "${_projectMode}" = 'compose-force' ]]; then
-        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" up --no-start --force-recreate
+        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" up --no-start --force-recreate "${_projectService}"
       else
-        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" up --no-start --no-recreate
+        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" up --no-start --no-recreate "${_projectService}"
       fi
     fi
   elif [[ "${_projectMode}" =~ "run" ]]; then
@@ -711,7 +713,16 @@ _fsDockerProject_() {
     [[ "${_projectPorts}" -eq 1 ]] && _error=$((_error+1))
     
     if [[ "${_error}" -eq 0 ]]; then
-      cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" run --rm "${_projectService}" /bin/sh -c "${_projectArgs}"
+        # workaround to execute shell from variable; help: open for suggestions
+      _projectShell="$(echo -e "${_projectArgs}" | grep -oE '^/bin/sh -c')"
+      
+      if [[ -n "${_projectShell}" ]]; then
+        _projectArgs="$(echo -e "${_projectArgs}" | sed 's,/bin/sh -c ,,')"
+                
+        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" run --rm "${_projectService}" /bin/sh -c "${_projectArgs}"
+      else
+        cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" run --rm "${_projectService}" "${_projectArgs}"
+      fi
     fi
   elif [[ "${_projectMode}" = "validate" ]]; then
     _fsMsg_ ''
@@ -1723,8 +1734,6 @@ _fsSetupNginx_() {
       esac
     done
     
-    [[ "$(_fsDockerPsName_ "${FS_NGINX}")" -eq 1 ]] && _fsMsgExit_ '[FATAL] Nginx container is not running!'
-    
     break
   done
 }
@@ -1782,6 +1791,9 @@ _fsSetupNginxOpenssl_() {
     esac
   done
   
+    # remove autorenew certificate for domains
+  _fsCrontabRemove_ "freqstart --cert -y" 
+    # stop nginx domain container
   _fsDockerStop_ "${FS_NGINX}_domain"
   _fsValueUpdate_ "${FS_CONFIG}" '.domain' ''
     
@@ -1858,17 +1870,17 @@ _fsSetupNginxOpenssl_() {
   '    image: amd64/nginx:stable' \
   '    network_mode: host' \
   '    volumes:' \
-  '      - '"${FS_DIR_DATA}${FS_NGINX_CONFD}"':'"${FS_NGINX_CONFD}" \
-  '      - '"${FS_DIR_DATA}${_sslSnippets}"':'"${_sslSnippets}" \
-  '      - '"${FS_DIR_DATA}${_sslParam}"':'"${_sslParam}" \
-  '      - '"${FS_DIR_DATA}${_sslCerts}"':'"${_sslCerts}" \
-  '      - '"${FS_DIR_DATA}${_sslPrivate}"':'"${_sslPrivate}"
+  "      - ${FS_DIR_DATA}${FS_NGINX_CONFD}:${FS_NGINX_CONFD}" \
+  "      - ${FS_DIR_DATA}${_sslSnippets}:${_sslSnippets}" \
+  "      - ${FS_DIR_DATA}${_sslParam}:${_sslParam}" \
+  "      - ${FS_DIR_DATA}${_sslCerts}:${_sslCerts}" \
+  "      - ${FS_DIR_DATA}${_sslPrivate}:${_sslPrivate}"
   
-    # create nginx conf for ip ssl
+    # create nginx conf for ip ssl; credit: https://serverfault.com/a/1060487
   _fsFileCreate_ "${FS_DIR_DATA}${FS_NGINX_CONFD_FREQUI}" \
   'map $http_cookie $rate_limit_key {' \
   "    default \$binary_remote_addr;" \
-  '    \"~__Secure-rl-bypass='"${_bypass}"'" "";' \
+  '    "~__Secure-rl-bypass='"${_bypass}"'" "";' \
   "}" \
   "limit_req_status 429;" \
   "limit_req_zone \$rate_limit_key zone=auth:10m rate=1r/m;" \
@@ -1919,32 +1931,7 @@ _fsSetupNginxOpenssl_() {
   "}"
   
   mkdir -p "${FS_DIR_DATA}${_sslPrivate}"
-  mkdir -p "${FS_DIR_DATA}${_sslCerts}"  
-  
-  while true; do
-    if [[ "$(_fsFileEmpty_ "${FS_DIR_DATA}${_sslKey}")" -eq 0 ]]; then
-      if [[ "$(_fsCaseConfirmation_ "Skip generating new SSL key?")" -eq 0 ]]; then
-        _fsMsg_ "Skipping..."
-        break
-      else
-        sudo rm -f "${FS_DIR_DATA}${_sslKey}"
-        sudo rm -f "${FS_DIR_DATA}${_sslCert}"
-        sudo rm -f "${FS_DIR_DATA}${_sslParam}"
-      fi
-    fi
-    
-    touch "${FS_DIR_DATA}${_sslParam}"
-    
-      # generate self-signed certificate
-    _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_NGINX}" \
-    "openssl req -x509 -nodes -days 358000 -newkey rsa:2048" \
-    "-keyout '${_sslKey}'" \
-    "-out '${_sslCert}'" \
-    "-subj /CN=localhost;" \
-    "openssl dhparam -out '${_sslParam}' 4096"
-    
-    break
-  done
+  mkdir -p "${FS_DIR_DATA}${_sslCerts}"
   
   _fsFileCreate_ "${FS_DIR_DATA}${_sslConf}" \
   "ssl_certificate ${_sslCert};" \
@@ -1967,8 +1954,32 @@ _fsSetupNginxOpenssl_() {
   "add_header X-Content-Type-Options nosniff;" \
   "add_header X-XSS-Protection \"1; mode=block\";"
   
-    # start nginx container
+  while true; do
+    if [[ "$(_fsFileEmpty_ "${FS_DIR_DATA}${_sslKey}")" -eq 0 ]]; then
+      if [[ "$(_fsCaseConfirmation_ "Skip generating new SSL key?")" -eq 0 ]]; then
+        _fsMsg_ "Skipping..."
+        break
+      else
+        sudo rm -f "${FS_DIR_DATA}${_sslKey}"
+        sudo rm -f "${FS_DIR_DATA}${_sslCert}"
+        sudo rm -f "${FS_DIR_DATA}${_sslParam}"
+      fi
+    fi
+    
+    touch "${FS_DIR_DATA}${_sslParam}"
+    
+      # generate self-signed certificate
+    _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_NGINX}_ip" \
+    "/bin/sh -c openssl req -x509 -nodes -days 358000 -newkey rsa:2048 -keyout ${_sslKey} -out ${_sslCert} -subj /CN=localhost;" \
+    "openssl dhparam -out ${_sslParam} 4096"
+    
+    break
+  done
+  
+    # start nginx ip container
   _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force'
+  
+  [[ "$(_fsDockerPsName_ "${FS_NGINX}_ip")" -eq 1 ]] && _fsMsgExit_ '[FATAL] Nginx container is not running!'
 }
 
 _setupNginxLetsencrypt_() {
@@ -1977,16 +1988,13 @@ _setupNginxLetsencrypt_() {
   local _url=''
   local _ipPublic=''
   local _sslCert=''
-  local _sslCertKey=''
-  local _cronCmd="sudo /usr/bin/certbot renew --quiet"
-  local _cronUpdate="0 0 * * *"
+  local _sslKey=''
   local _bypass=''
-  local _rsaKeySize=4096
   local _sslNginx="${FS_DIR_DATA}/certbot/conf/options-ssl-nginx.conf"
   local _sslDhparams="${FS_DIR_DATA}/certbot/conf/ssl-dhparams.pem"
   local _certEmail=''
-  local _nginxYml=''
-  local _nginxYmlTmp=''
+  local _cronCmd="freqstart --cert -y"
+  local _cronUpdate="30 0 * * 0" # update at 0:30am UTC on sunday every week
   
   _ipPublic="$(dig +short myip.opendns.com @resolver1.opendns.com)"
   _bypass="$(_fsRandomBase64UrlSafe_ 16)"
@@ -2013,7 +2021,7 @@ _setupNginxLetsencrypt_() {
           if [[ "$(_fsCaseConfirmation_ "Register SSL certificate with an email (recommended)?")" -eq 0 ]]; then
             while true; do
               read -rp "? Your email: " _certEmail
-              case ${_yesNo} in
+              case ${_certEmail} in
                 '')
                   _fsCaseEmpty_
                   ;;
@@ -2042,47 +2050,41 @@ _setupNginxLetsencrypt_() {
   if [[ -n "${_domain}" ]]; then
     _url="https://${_domain}"
     _sslCert="/etc/letsencrypt/live/${_domain}/fullchain.pem"
-    _sslCertKey="/etc/letsencrypt/live/${_domain}/privkey.pem"
+    _sslKey="/etc/letsencrypt/live/${_domain}/privkey.pem"
     
     _fsDockerStop_ "${FS_NGINX}_ip"
     _fsValueUpdate_ "${FS_CONFIG}" '.domain' "${_domain}"
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_public' ''
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_local' ''
     _fsValueUpdate_ "${FS_CONFIG}" '.url' "${_url}"
-
-      # credit: https://github.com/wmnnd/nginx-certbot/
-    _nginxYml=(
-    "version: '3'"
-    'services:'
-    '  '"${FS_NGINX}"'_domain:'
-    '    image: amd64/nginx:stable'
-    "    container_name: ${FS_NGINX}_domain"
-    "    hostname: ${FS_NGINX}_domain"
-    '    network_mode: host'
-    '    volumes:'
-    '      - '"${FS_DIR_DATA}${FS_NGINX_CONFD}"':'"${FS_NGINX_CONFD}"':ro'
-    '      - '"${FS_DIR_DATA}"'/certbot/conf:/etc/letsencrypt:ro'
-    '      - '"${FS_DIR_DATA}"'/certbot/www:/var/www/certbot:ro'
-    "    command: \"/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'\""
-    '  '"${FS_CERTBOT}"':'
-    '    image: certbot/certbot:latest'
-    "    container_name: ${FS_CERTBOT}"
-    "    hostname: ${FS_CERTBOT}"
-    '    network_mode: host'
-    '    volumes:'
-    '      - '"${FS_DIR_DATA}"'/certbot/conf:/etc/letsencrypt:rw'
-    '      - '"${FS_DIR_DATA}"'/certbot/www:/var/www/certbot:rw'
-    "    entrypoint: \"/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'\""
-    )
     
-      # create temporary nginx project file without commands
-    _nginxYmlTmp=("$(printf -- '%s\n' "${_nginxYml[@]}" | grep -vE '(command|entrypoint):')")
-    _fsFileCreate_ "${FS_NGINX_YML}" "${_nginxYmlTmp[@]}"
+    mkdir -p "${FS_DIR_DATA}/certbot/conf"
+    mkdir -p "${FS_DIR_DATA}/certbot/www"
+    mkdir -p "${FS_DIR_DATA}/certbot/conf/live/${_domain}"
+    
+      # credit: https://github.com/wmnnd/nginx-certbot/
+    _fsFileCreate_ "${FS_NGINX_YML}" \
+    "version: '3'" \
+    'services:' \
+    "  ${FS_NGINX}_domain:" \
+    '    image: amd64/nginx:stable' \
+    "    container_name: ${FS_NGINX}_domain" \
+    "    hostname: ${FS_NGINX}_domain" \
+    '    network_mode: host' \
+    '    volumes:' \
+    "      - ${FS_DIR_DATA}${FS_NGINX_CONFD}:${FS_NGINX_CONFD}" \
+    "      - ${FS_DIR_DATA}/certbot/conf:/etc/letsencrypt" \
+    "      - ${FS_DIR_DATA}/certbot/www:/var/www/certbot" \
+    "  ${FS_CERTBOT}:" \
+    '    image: certbot/certbot:latest' \
+    "    container_name: ${FS_CERTBOT}" \
+    "    hostname: ${FS_CERTBOT}" \
+    '    volumes:' \
+    "      - ${FS_DIR_DATA}/certbot/conf:/etc/letsencrypt" \
+    "      - ${FS_DIR_DATA}/certbot/www:/var/www/certbot"
     
       # download recommended TLS parameters
     if [[ ! -f "${_sslNginx}" ]] || [[ ! -f "${_sslDhparams}" ]]; then
-      mkdir -p "${FS_DIR_DATA}/certbot/conf"
-      
       curl -s "https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf" > "${_sslNginx}"
       curl -s "https://raw.githubusercontent.com/certbot/certbot/master/certbot/certbot/ssl-dhparams.pem" > "${_sslDhparams}"
       
@@ -2090,26 +2092,55 @@ _setupNginxLetsencrypt_() {
       _fsFileExist_ "${_sslDhparams}"
     fi
 
-
+      # workaround for first setup while missing cert files
+    if [[ "$(_fsFile_ "${_sslCert}")" -eq 1 ]] || [[ "$(_fsFile_ "${_sslKey}")" -eq 1 ]]; then
+      _fsFileCreate_ "${FS_DIR_DATA}${FS_NGINX_CONFD_FREQUI}" \
+      "server {" \
+      "    listen ${_domain}:80;" \
+      "    server_name ${_domain};" \
+      "    location /.well-known/acme-challenge {" \
+      "        default_type \"text/plain\";" \
+      "        root /var/www/certbot;" \
+      "    }" \
+      "}"
+    fi
     
+      # start nginx container
+    _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force' "${FS_NGINX}_domain"
+
+      # create letsencrypt certificate
+    _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_CERTBOT}" \
+    "certonly --webroot -w /var/www/certbot ${_certEmail} -d ${_domain} --rsa-key-size 4096 --agree-tos"
+    
+      # create nginx conf for domain ssl; credit: https://serverfault.com/a/1060487
     _fsFileCreate_ "${FS_DIR_DATA}${FS_NGINX_CONFD_FREQUI}" \
     'map $http_cookie $rate_limit_key {' \
     "    default \$binary_remote_addr;" \
-    '    \"~__Secure-rl-bypass='"${_bypass}"'" "";' \
+    '    "~__Secure-rl-bypass='"${_bypass}"'" "";' \
     "}" \
     "limit_req_status 429;" \
     "limit_req_zone \$rate_limit_key zone=auth:10m rate=1r/m;" \
     "server {" \
+    "    listen ${_domain}:80;" \
+    "    server_name ${_domain};" \
+    "    location / {" \
+    "        return 301 https://\$host\$request_uri;" \
+    "    }" \
+    "    location /.well-known/acme-challenge {" \
+    "        default_type \"text/plain\";" \
+    "        root /var/www/certbot;" \
+    "    }" \
+    "}" \
+    "server {" \
     "    listen ${_domain}:443 ssl http2;" \
     "    server_name ${_domain};" \
     "    ssl_certificate ${_sslCert};" \
-    "    ssl_certificate_key ${_sslCertKey};" \
+    "    ssl_certificate_key ${_sslKey};" \
     "    include /etc/letsencrypt/options-ssl-nginx.conf;" \
     "    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;" \
-    "    location '/.well-known/acme-challenge' {" \
-    "        auth_basic off;" \
+    "    location /.well-known/acme-challenge {" \
     "        default_type \"text/plain\";" \
-    "        root /var/www/html;" \
+    "        root /var/www/certbot;" \
     "    }" \
     "    location / {" \
     "        auth_basic \"Restricted\";" \
@@ -2131,7 +2162,7 @@ _setupNginxLetsencrypt_() {
     "    listen ${_domain}:9000-9100 ssl http2;" \
     "    server_name ${_domain};" \
     "    ssl_certificate ${_sslCert};" \
-    "    ssl_certificate_key ${_sslCertKey};" \
+    "    ssl_certificate_key ${_sslKey};" \
     "    include /etc/letsencrypt/options-ssl-nginx.conf;" \
     "    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;" \
     "    location / {" \
@@ -2147,42 +2178,13 @@ _setupNginxLetsencrypt_() {
     "    }" \
     "}"
     
-
-    echo 'aaaa'
-
-
-
-      # create dummy certificate for domain
-    mkdir -p "${FS_DIR_DATA}/certbot/conf/live/${_domain}"
-    touch "${FS_DIR_DATA}/certbot/conf/live/${_domain}/fullchain.pem"
-    touch "${FS_DIR_DATA}/certbot/conf/live/${_domain}/privkey.pem"
+      # start nginx domain container
+    _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force' "${FS_NGINX}_domain"
     
-    _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_CERTBOT}" \
-    "openssl req -x509 -nodes -newkey rsa:${_rsaKeySize} -days 1" \
-    "-keyout ${_sslCertKey}" \
-    "-out ${_sslCert}" \
-    "-subj '/CN=localhost'"
+    [[ "$(_fsDockerPsName_ "${FS_NGINX}_domain")" -eq 1 ]] && _fsMsgExit_ '[FATAL] Nginx container is not running!'
     
-      # DISABLE STAGING
-      # create domain certificate
-    _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_CERTBOT}" \
-    'certbot certonly --webroot -w /var/www/certbot' \
-    '--staging' \
-    "${_certEmail}" \
-    "-d ${_domain}" \
-    "--rsa-key-size ${_rsaKeySize}" \
-    '--agree-tos' \
-    '--force-renewal'
-        echo 'cccc'
-
-      # create  nginx project file
-    _fsFileCreate_ "${FS_NGINX_YML}" "${_nginxYml[@]}"
-    
-      # start nginx container
-    _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force' "${FS_NGINX}"
-    
-    # reload nginx
-    #docker-compose exec "${FS_NGINX}_domain" nginx -s reload
+      # set cron for domain autorenew certificate
+    _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
   fi
 }
 
@@ -2197,7 +2199,7 @@ _fsSetupFrequi_() {
   _fsMsgTitle_ "FREQUI"
   
   while true; do
-    if [[ "$(_fsDockerPsName_ "${FS_FREQUI}")" -eq 0 ]]; then
+    if [[ "$(_fsDockerPsName_ "${FS_FREQUI}_ip")" -eq 0 ]] || [[ "$(_fsDockerPsName_ "${FS_FREQUI}_domain")" -eq 0 ]]; then
       _fsMsg_ "Is active: ${_url}"
       if [[ "$(_fsCaseConfirmation_ "Skip update?")" -eq 0 ]]; then
         break
@@ -2968,7 +2970,7 @@ _fsOptions_() {
   local -r _args=("${@}")
   local _opts
   
-  _opts="$(getopt --options c:,q:,s,a,y,h --long compose:,quit:,setup,auto,yes,help,reset -- "${_args[@]}" 2> /dev/null)" || {
+  _opts="$(getopt --options c:,q:,s,a,y,h --long compose:,quit:,setup,auto,yes,help,reset,cert -- "${_args[@]}" 2> /dev/null)" || {
     _fsUsage_ "[FATAL] Unkown or missing argument."
   }
   
@@ -3003,6 +3005,10 @@ _fsOptions_() {
         FS_OPTS_RESET=0
         shift
         ;;
+      --cert)
+        FS_OPTS_CERT=0
+        shift
+        ;;
       --help|-h)
         break
         ;;
@@ -3023,7 +3029,9 @@ _fsOptions_() {
 _fsScriptLock_
 _fsOptions_ "${@}"
 
-if [[ "${FS_OPTS_SETUP}" -eq 0 ]]; then
+if [[ "${FS_OPTS_CERT}" -eq 0 ]]; then
+  _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_CERTBOT}" "renew"
+elif [[ "${FS_OPTS_SETUP}" -eq 0 ]]; then
   _fsSetup_
 elif [[ "${FS_OPTS_COMPOSE}" -eq 0 ]]; then
   _fsStart_ "${c_arg}"
