@@ -1646,7 +1646,7 @@ _fsSetupNginx_() {
   _ipLocal="$(_fsValueGet_ "${FS_CONFIG}" '.ip_local')"
   
   while true; do
-    if [[ "$(_fsDockerPsName_ "${FS_NGINX_ip}")" -eq 0 ]] || [[ "$(_fsDockerPsName_ "${FS_NGINX_domain}")" -eq 0 ]]; then
+    if [[ "$(_fsDockerPsName_ "${FS_NGINX}_ip")" -eq 0 ]] || [[ "$(_fsDockerPsName_ "${FS_NGINX}_domain")" -eq 0 ]]; then
       if [[ -n "${_ipPublic}" ]] || [[ -n "${_ipLocal}" ]]; then
         if [[ -n "${_ipPublic}" ]]; then
           _ipPublicTemp="$(dig +short myip.opendns.com @resolver1.opendns.com)"
