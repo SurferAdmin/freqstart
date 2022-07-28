@@ -2826,13 +2826,17 @@ _fsPkgs_() {
 }
 
 _fsPkgsStatus_() {
-  [[ $# -gt 0 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  
+  local _pkg="${1}"
+  local _status=''
+  
+  _status="$(dpkg-query -W --showformat='${Status}\n' "${_pkg}" 2> /dev/null | grep "install ok installed" || true)"
 
-    # credit: https://stackoverflow.com/a/7522866
-  if ! _status="$(type -p "$@")" || [[ -z $_status ]]; then
-    echo 1
-  else
+  if [[ -n "${_status}" ]]; then
     echo 0
+  else
+    echo 1
   fi
 }
 
