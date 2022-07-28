@@ -1,16 +1,12 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v1.0.0
+# FREQSTART v1.0.1
 
-`WARNING` DO NOT UPDATE IF YOU HAVE INSTALLED NGINX OR FREQUI! It is heavily recommended to save "user_data" folder and project files and configs locally and do a complete VPS reset or remove those packages. If you did, dont worry, nothing will happen to running containers. Just remove the "freqstart.autostart.sh" file until you have set up everything. If you havent installed Nginx or FreqUI nothing changes at all.
+`WARNING` Nginx proxy has been moved to docker in v1.0.0 and could cause errors if native installation exists. Backup "user_data", reset VPS and run setup again.
 
-`v1.0.0`
-* Modified custom docker network subnet ip range to be in the private ip range
-* Added run and run-force routine to project function and modified how "force" is handled to compose a project
-* Removed nginx routine without usage of SSL and made IP self-signed the default
-* Added interactive Nginx routine based on docker images for self-signed and letsencrypt domain validated SSL cert
-* Nginx self-signed IP routine offers interactive selection public or local IP adresses excl. docker ip range (For using Freqstart in a local VM)
+`v1.0.1`
+* TBA
 
 ## Setup & Docker-Manager for Freqtrade
 
