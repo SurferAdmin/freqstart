@@ -1679,23 +1679,23 @@ _fsSetupNginx_() {
           _fsMsg_ "Skipping..."
           break
         fi
-      else        
-        _fsMsg_ "Create FreqUI login data now!"
-        
-        if [[ "${FS_OPTS_YES}" -eq 1 ]]; then
-            # create login data to access frequi
-          _loginData="$(_fsLoginData_)"
-          _username="$(_fsLoginDataUsername_ "${_loginData}")"
-          _password="$(_fsLoginDataPassword_ "${_loginData}")"
-        else
-            # generate login data if first time setup is non-interactive
-          _username="$(_fsRandomBase64_ 16)"
-          _password="$(_fsRandomBase64_ 16)"
-          _fsMsg_ '[WARNING] FreqUI login data created automatically:'
-          _fsMsg_ "Username: ${_username}"
-          _fsMsg_ "Password: ${_password}"
-          _fsCdown_ 15 'to memorize login data... Restart setup to change!'
-        fi
+      fi        
+      
+      _fsMsg_ "Create FreqUI login data now!"
+      
+      if [[ "${FS_OPTS_YES}" -eq 1 ]]; then
+          # create login data to access frequi
+        _loginData="$(_fsLoginData_)"
+        _username="$(_fsLoginDataUsername_ "${_loginData}")"
+        _password="$(_fsLoginDataPassword_ "${_loginData}")"
+      else
+          # generate login data if first time setup is non-interactive
+        _username="$(_fsRandomBase64_ 16)"
+        _password="$(_fsRandomBase64_ 16)"
+        _fsMsg_ '[WARNING] FreqUI login data created automatically:'
+        _fsMsg_ "Username: ${_username}"
+        _fsMsg_ "Password: ${_password}"
+        _fsCdown_ 15 'to memorize login data... Restart setup to change!'
       fi
       
         # create htpasswd for frequi access
@@ -2248,24 +2248,24 @@ _fsSetupFrequiJson_() {
       if [[ "$(_fsCaseConfirmation_ "Skip generating new API login data?")" -eq 0 ]]; then
         break
       fi
-    else
-      _fsMsg_ "Create API login data now!"
-
-      if [[ "${FS_OPTS_YES}" -eq 1 ]]; then
-        _loginData="$(_fsLoginData_)"
-        _username="$(_fsLoginDataUsername_ "${_loginData}")"
-        _password="$(_fsLoginDataPassword_ "${_loginData}")"
-      else
-          # generate login data if first time setup is non-interactive
-        _username="$(_fsRandomBase64_ 16)"
-        _password="$(_fsRandomBase64_ 16)"
-        _fsMsg_ '[WARNING] API login data created automatically:'
-        _fsMsg_ "Username: ${_username}"
-        _fsMsg_ "Password: ${_password}"
-        _fsCdown_ 15 'to memorize login data... Restart setup to change!'
-      fi
     fi
-
+    
+    _fsMsg_ "Create API login data now!"
+    
+    if [[ "${FS_OPTS_YES}" -eq 1 ]]; then
+      _loginData="$(_fsLoginData_)"
+      _username="$(_fsLoginDataUsername_ "${_loginData}")"
+      _password="$(_fsLoginDataPassword_ "${_loginData}")"
+    else
+        # generate login data if first time setup is non-interactive
+      _username="$(_fsRandomBase64_ 16)"
+      _password="$(_fsRandomBase64_ 16)"
+      _fsMsg_ '[WARNING] API login data created automatically:'
+      _fsMsg_ "Username: ${_username}"
+      _fsMsg_ "Password: ${_password}"
+      _fsCdown_ 15 'to memorize login data... Restart setup to change!'
+    fi
+    
     break
   done
 
