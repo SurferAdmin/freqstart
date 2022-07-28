@@ -1680,7 +1680,9 @@ _fsSetupNginx_() {
           break
         fi
       else        
-        if [[ "$(_fsCaseConfirmation_ "Create FreqUI login data now?")" -eq 0 ]] && [[ "${FS_OPTS_YES}" -eq 1 ]]; then
+        _fsMsg_ "Create FreqUI login data now!"
+        
+        if [[ "${FS_OPTS_YES}" -eq 1 ]]; then
             # create login data to access frequi
           _loginData="$(_fsLoginData_)"
           _username="$(_fsLoginDataUsername_ "${_loginData}")"
@@ -2247,7 +2249,9 @@ _fsSetupFrequiJson_() {
         break
       fi
     else
-      if [[ "$(_fsCaseConfirmation_ "Create API login data now?")" -eq 0 ]] && [[ "${FS_OPTS_YES}" -eq 1 ]]; then
+      _fsMsg_ "Create API login data now!"
+
+      if [[ "${FS_OPTS_YES}" -eq 1 ]]; then
         _loginData="$(_fsLoginData_)"
         _username="$(_fsLoginDataUsername_ "${_loginData}")"
         _password="$(_fsLoginDataPassword_ "${_loginData}")"
