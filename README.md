@@ -119,7 +119,8 @@ With Freqstart you are no longer bound to a single docker-compose.yml and can fr
 
 ### Example Project (example.yml)
 
-1. Project file with NostalgiaForInfinityX and Binance with BUSD
+* Project file based on NostalgiaForInfinityX and Binance (BUSD) with Proxy and FreqUI enabled.
+
    ```yml
    version: '3'
    services:
