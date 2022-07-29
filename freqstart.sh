@@ -849,7 +849,7 @@ _fsDockerProject_() {
         fi
         
           # check for frequi port and config
-        _containerApiPort="$(docker inspect --format="{{json .}}" "${_containerName}" | jq -r '.NetworkSettings.Ports["9999/tcp"][0].HostPort')"
+        _containerApiPort="$(docker inspect --format="{{json .}}" "${_containerName}" | jq -r '.NetworkSettings.Ports["9999/tcp"][0].HostPort // empty')"
         _containerApiJson="$(echo "${_containerCmd}" | grep -os "${FS_FREQUI_JSON##*/}" || true)"
         
         if [[ -n "${_containerApiPort}" ]] && [[ -z "${_containerApiJson}" ]]; then
