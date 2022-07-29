@@ -2439,7 +2439,7 @@ _fsStart_() {
   
     # check if symlink from setup routine exist
 	if [[ "$(_fsIsSymlink_ "${_symlink}")" -eq 1 ]]; then
-		_fsUsage_ "Start setup first!"
+		_fsUsage_ "[WARNING] Start setup first!"
   fi
   
   if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
@@ -2504,24 +2504,24 @@ _fsStats_() {
 _fsUsage_() {
   local _msg="${1:-}"
   
-  if [[ -n "${_msg}" ]]; then
-    printf -- '%s\n' \
-    "  ${_msg}" \
-    "" >&2
-  fi
-  
   _fsLogo_
   
+  if [[ -n "${_msg}" ]]; then
+    printf -- '%s\n' \
+    "  ${_msg}" >&2
+  fi
+  
   printf -- '%s\n' \
-  "  Freqstart simplifies the use of Freqtrade with Docker. Including a setup guide for Freqtrade," \
+  "|" \
+  "+ Freqstart simplifies the use of Freqtrade with Docker. Including a setup guide for Freqtrade," \
   "  configurations and FreqUI with a secured SSL proxy for IP or domain. Freqtrade automatically" \
   "  installs implemented strategies based on Docker Compose files and detects necessary updates." \
-  "" \
-  "- USAGE" \
+  "|" \
+  "+ USAGE" \
   "  Start: ${FS_FILE} --compose example.yml --yes" \
   "  Quit: ${FS_FILE} --quit example.yml --yes" \
-  "" \
-  "- OPTIONS" \
+  "|" \
+  "+ OPTIONS" \
   "  -s, --setup     Install and update" \
   "  -c, --compose   Start docker project" \
   "  -q, --quit      Stop docker project" \
@@ -3041,7 +3041,7 @@ _fsMsgExit_() {
   local -r _code="${2:-90}" # optional: set to 90
   
   printf -- '%s\n' \
-  "${_msg}" >&2
+  "  ${_msg}" >&2
   
   exit "${_code}"
 }
