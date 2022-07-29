@@ -1658,7 +1658,6 @@ _fsSetupNginx_() {
   _ipPublic="$(_fsValueGet_ "${FS_CONFIG}" '.ip_public')"
   _ipLocal="$(_fsValueGet_ "${FS_CONFIG}" '.ip_local')"
   
-  _fsSetupNginxWebservice_
   
   while true; do
     if [[ "$(_fsDockerPsName_ "${FS_NGINX}_ip")" -eq 0 ]] || [[ "$(_fsDockerPsName_ "${FS_NGINX}_domain")" -eq 0 ]]; then
@@ -1768,13 +1767,29 @@ _fsSetupNginxWebservice_() {
   "lighttpd"
   )
   local _webservice=''
+  local ports=(
+  "80"
+  "443"
+  "9999"
+  "9000-9100"
+  )
+  local _port=''
   
   for _webservice in ${_webservices[@]}; do 
-      # credit: https://stackoverflow.com/a/59284117
-    if [[ "$(ps aux | grep -v grep | grep -q "${_webservice}" || true)" -ne 0 ]]; then
+      # credit: https://stackoverflow.com/a/66344638
+    if systemctl status "${_webservice}" 2> /dev/null | grep -Fq "Active: active"; then
       _fsMsg_ '[WARNING] Stopping native webservice to avoid ip/port collisions: '"${_webservice}"
-      sudo systemctl stop "${_webservice}" || true
-      sudo systemctl disable "${_webservice}" || true
+
+      sudo systemctl stop "${_webservice}" > /dev/null 2> /dev/null || true
+      sudo systemctl disable "${_webservice}" > /dev/null 2> /dev/null || true
+    fi
+  done
+  
+  for _port in ${ports[@]}; do 
+    if [[ -n "$(sudo lsof -n -sTCP:LISTEN -i:${_port})" ]]; then
+      _fsMsg_ '[WARNING] Stopping service blocking port: '"${_port}"
+
+      sudo fuser -k ${_port}/tcp > /dev/null 2> /dev/null
     fi
   done
 }
@@ -1837,6 +1852,9 @@ _fsSetupNginxOpenssl_() {
   _fsCrontabRemove_ "freqstart --cert -y" 
     # stop nginx domain container
   _fsDockerRemove_ "${FS_NGINX}_domain"
+    # stop/disable native webservices and free blocked ports
+  _fsSetupNginxWebservice_
+
   _fsValueUpdate_ "${FS_CONFIG}" '.domain' ''
   
     # public ip routine
@@ -2097,7 +2115,11 @@ _setupNginxLetsencrypt_() {
     _sslCert="/etc/letsencrypt/live/${_domain}/fullchain.pem"
     _sslKey="/etc/letsencrypt/live/${_domain}/privkey.pem"
     
+      # stop nginx ip container
     _fsDockerRemove_ "${FS_NGINX}_ip"
+      # stop/disable native webservices and free blocked ports
+    _fsSetupNginxWebservice_
+    
     _fsValueUpdate_ "${FS_CONFIG}" '.domain' "${_domain}"
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_public' ''
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_local' ''
@@ -3074,8 +3096,6 @@ _fsOptions_() {
 
 _fsScriptLock_
 _fsOptions_ "${@}"
-
-_fsWebservice_
 
 if [[ "${FS_OPTS_CERT}" -eq 0 ]]; then
   _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_CERTBOT}" "renew"
