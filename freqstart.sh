@@ -94,8 +94,8 @@ _fsDockerVarsPath_() {
   _dockerName="$(_fsDockerVarsName_ "${_docker}")"
   _dockerTag="$(_fsDockerVarsTag_ "${_docker}")"
   _dockerPath="${_dockerDir}/${_dockerName}_${_dockerTag}.docker"
-
-	echo "${_dockerPath}"
+  
+  echo "${_dockerPath}"
 }
 
 _fsDockerVarsRepo_() {
@@ -104,7 +104,7 @@ _fsDockerVarsRepo_() {
   local _docker="${1}"
   local _dockerRepo="${_docker%:*}"
   
-	echo "${_dockerRepo}"
+  echo "${_dockerRepo}"
 }
 
 _fsDockerVarsCompare_() {
@@ -471,7 +471,7 @@ _fsDockerProjectPorts_() {
       for _dockerPortCompare in "${_dockerPortsCompare[@]}"; do
         if [[ "${_dockerPortCompare}" =~ ^[0-9]+$ ]]; then
           _error=$((_error+1))
-          _fsMsg_ "Port is already allocated: ${_dockerPortCompare}"
+          _fsMsg_ "[ERROR] Port is already allocated: ${_dockerPortCompare}"
         fi
       done
     fi
@@ -515,6 +515,7 @@ _fsDockerProjectStrategies_() {
     while read -r; do
       _strategiesDeduped+=( "$REPLY" )
     done < <(_fsDedupeArray_ "${_strategies[@]}")
+    
       # validate optional strategy paths in project file
     _strategiesDir=()
     while read -r; do
@@ -525,6 +526,7 @@ _fsDockerProjectStrategies_() {
     | sed "s,\s,,g" \
     | sed "s,\-\-strategy-path,,g" \
     | sed "s,^/[^/]*,${FS_DIR}," || true)
+    
       # add default strategy path
     _strategiesDir+=( "${FS_DIR_USER_DATA_STRATEGIES}" )
     
@@ -636,6 +638,8 @@ _fsDockerProject_() {
   local _containerJson=''
   local _containerJsonInner=''
   local _containerConfPath=''
+  local _containerApiPort=''
+  local _containerApiJson=''
   local _containerLogfile=''
   local _containerLogfileTmp=''
   local _containerCount=0
@@ -842,6 +846,20 @@ _fsDockerProject_() {
               _fsMsg_ '[WARNING] Strategy version unkown: '"${_containerStrategy}"
             fi
           fi
+        fi
+        
+          # check for frequi port and config
+        _containerApiPort="$(docker inspect --format="{{json .}}" "${_containerName}" | jq -r '.NetworkSettings.Ports["9999/tcp"][0].HostPort')"
+        _containerApiJson="$(echo "${_containerCmd}" | grep -os "${FS_FREQUI_JSON##*/}" || true)"
+        
+        if [[ -n "${_containerApiPort}" ]] && [[ -z "${_containerApiJson}" ]]; then
+          _fsMsg_ "[WARNING] Port (${_containerApiPort}) is set but confing (${_containerApiJson}) is missing in command for FreqUI access!"
+        elif [[ -z "${_containerApiPort}" ]] && [[ -n "${_containerApiJson}" ]]; then
+          _fsMsg_ "[WARNING] Config (${_containerApiJson}) is set in command but port (9000-9100) is missing for FreqUI access!"
+        elif [[ -z "${_containerApiPort}" ]] && [[ -z "${_containerApiJson}" ]]; then
+          _fsMsg_ "Bot is not exposed to FreqUI."
+        else
+          _fsMsg_ "Bot is accessible via FreqUI on port: ${_containerApiPort}"
         fi
         
           # compare latest docker image with container image
