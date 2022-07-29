@@ -675,8 +675,6 @@ _fsDockerProject_() {
       _fsMsgExit_ "[ERROR] File type is not correct: ${_projectFile}"
     fi
   fi
-   # credit: https://stackoverflow.com/a/52374482
-  docker network create --driver=bridge --subnet 172.17.253.0/30 tombstone > /dev/null 2> /dev/null || true
   
   if [[ "${_projectMode}" =~ "compose" ]]; then
     _fsMsgTitle_ "Compose project: ${_projectFile}"
@@ -685,7 +683,6 @@ _fsDockerProject_() {
       _projectPorts=0    
     else
       _projectPorts="$(_fsDockerProjectPorts_ "${_projectPath}")"
-
     fi
     
     _projectStrategies="$(_fsDockerProjectStrategies_ "${_projectPath}")"
@@ -731,7 +728,6 @@ _fsDockerProject_() {
       fi
     fi
   elif [[ "${_projectMode}" = "validate" ]]; then
-    _fsMsg_ ''
     _fsMsgTitle_ "Validate project: ${_projectFile}"
     _fsCdown_ 30 "for any errors..."
   elif [[ "${_projectMode}" = "quit" ]]; then
@@ -752,7 +748,6 @@ _fsDockerProject_() {
       _containerAutoupdate="$(_fsValueGet_ "${_containerConfPath}" '.'"${_containerName}"'.autoupdate')"
       
       if [[ ! "${_projectMode}" = "validate" ]]; then
-        _fsMsg_ ''
         _fsMsgTitle_ 'Container: '"${_containerName}"
       fi
       
@@ -1778,7 +1773,7 @@ _fsSetupNginxWebservice_() {
   for _webservice in ${_webservices[@]}; do 
       # credit: https://stackoverflow.com/a/66344638
     if systemctl status "${_webservice}" 2> /dev/null | grep -Fq "Active: active"; then
-      _fsMsg_ '[WARNING] Stopping native webservice to avoid ip/port collisions: '"${_webservice}"
+      _fsMsg_ '[WARNING] Stopping webservice to avoid ip/port collisions: '"${_webservice}"
 
       sudo systemctl stop "${_webservice}" > /dev/null 2> /dev/null || true
       sudo systemctl disable "${_webservice}" > /dev/null 2> /dev/null || true
@@ -1787,9 +1782,9 @@ _fsSetupNginxWebservice_() {
   
   for _port in ${ports[@]}; do 
     if [[ -n "$(sudo lsof -n -sTCP:LISTEN -i:${_port})" ]]; then
-      _fsMsg_ '[WARNING] Stopping service blocking port: '"${_port}"
+      _fsMsg_ '[WARNING] Stopping webservice blocking port: '"${_port}"
 
-      sudo fuser -k ${_port}/tcp > /dev/null 2> /dev/null
+      sudo fuser -k "${_port}/tcp" > /dev/null 2> /dev/null
     fi
   done
 }
@@ -2458,7 +2453,7 @@ _fsLogo_() {
   "  |  _| '_/ -_) _\` (__-\  _/ _\` | '_|  _|" \
   "  |_| |_| \___\__, /___/\__\__,_|_|  \__|" \
   "                 |_|               ${FS_VERSION}" \
-  "" >&2
+  "+" >&2
 }
 
 _fsStats_() {
