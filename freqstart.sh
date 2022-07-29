@@ -1658,6 +1658,8 @@ _fsSetupNginx_() {
   _ipPublic="$(_fsValueGet_ "${FS_CONFIG}" '.ip_public')"
   _ipLocal="$(_fsValueGet_ "${FS_CONFIG}" '.ip_local')"
   
+  _fsSetupNginxWebservice_
+  
   while true; do
     if [[ "$(_fsDockerPsName_ "${FS_NGINX}_ip")" -eq 0 ]] || [[ "$(_fsDockerPsName_ "${FS_NGINX}_domain")" -eq 0 ]]; then
       if [[ -n "${_ipPublic}" ]] || [[ -n "${_ipLocal}" ]]; then
@@ -1754,6 +1756,26 @@ _fsSetupNginx_() {
     done
     
     break
+  done
+}
+
+_fsSetupNginxWebservice_() {
+  local _webservices=(
+  "gitlab"
+  "apache"
+  "apache2"
+  "nginx"
+  "lighttpd"
+  )
+  local _webservice=''
+  
+  for _webservice in ${_webservices[@]}; do 
+      # credit: https://stackoverflow.com/a/59284117
+    if [[ "$(ps aux | grep -v grep | grep -q "${_webservice}" || true)" -ne 0 ]]; then
+      _fsMsg_ '[WARNING] Stopping native webservice to avoid ip/port collisions: '"${_webservice}"
+      sudo systemctl stop "${_webservice}" || true
+      sudo systemctl disable "${_webservice}" || true
+    fi
   done
 }
 
@@ -3052,6 +3074,8 @@ _fsOptions_() {
 
 _fsScriptLock_
 _fsOptions_ "${@}"
+
+_fsWebservice_
 
 if [[ "${FS_OPTS_CERT}" -eq 0 ]]; then
   _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_CERTBOT}" "renew"
