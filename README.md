@@ -3,10 +3,9 @@
 <!-- FREQSTART -->
 # FREQSTART v1.0.1
 
-`WARNING` Nginx proxy has been moved to docker in v1.0.0 and could cause errors if native installation exists. Backup "user_data", reset VPS and run setup again.
-
 `v1.0.1`
-* TBA
+* Implemented routine to check for existing webservices that may block FreqUI and/or Nginx proxy ports.
+* Compose now validates json and port for FreqUI within container incl. verbose response.
 
 ## Setup & Docker-Manager for Freqtrade
 
