@@ -57,7 +57,6 @@ readonly FS_NGINX="${FS_NAME}"'_nginx'
 readonly FS_NGINX_YML="${FS_DIR}"'/'"${FS_NAME}"'_nginx.yml'
 readonly FS_NGINX_CONFD="/etc/nginx/conf.d"
 readonly FS_NGINX_CONFD_FREQUI="${FS_NGINX_CONFD}"'/frequi.conf'
-readonly FS_NGINX_CONFD_DEFAULT="${FS_NGINX_CONFD}"'/default.conf'
 readonly FS_NGINX_CONFD_HTPASSWD="${FS_NGINX_CONFD}"'/.htpasswd'
 readonly FS_CERTBOT="${FS_NAME}"'_certbot'
 
@@ -766,7 +765,7 @@ _fsDockerProject_() {
           docker network connect --ip "${FS_PROXY_BINANCE_IP}" "${FS_NETWORK}" "${_containerName}" > /dev/null 2> /dev/null || true
         elif [[ "${_containerName}" = "${FS_PROXY_KUCOIN}" ]]; then
           docker network connect --ip "${FS_PROXY_KUCOIN_IP}" "${FS_NETWORK}" "${_containerName}" > /dev/null 2> /dev/null || true
-        elif [[ ! "${_containerName}" =~ "${FS_NGINX}" ]] || [[ ! "${_containerName}" = "${FS_CERTBOT}" ]]; then
+        elif [[ ! "${_containerName}" =~ ${FS_NGINX} ]] || [[ ! "${_containerName}" = "${FS_CERTBOT}" ]]; then
           docker network connect "${FS_NETWORK}" "${_containerName}" > /dev/null 2> /dev/null || true
         fi
         
@@ -1770,7 +1769,7 @@ _fsSetupNginxWebservice_() {
   )
   local _port=''
   
-  for _webservice in ${_webservices[@]}; do 
+  for _webservice in "${_webservices[@]}"; do 
       # credit: https://stackoverflow.com/a/66344638
     if systemctl status "${_webservice}" 2> /dev/null | grep -Fq "Active: active"; then
       _fsMsg_ '[WARNING] Stopping webservice to avoid ip/port collisions: '"${_webservice}"
@@ -1780,7 +1779,7 @@ _fsSetupNginxWebservice_() {
     fi
   done
   
-  for _port in ${ports[@]}; do 
+  for _port in "${ports[@]}"; do 
     if [[ -n "$(sudo lsof -n -sTCP:LISTEN -i:${_port})" ]]; then
       _fsMsg_ '[WARNING] Stopping webservice blocking port: '"${_port}"
 
