@@ -1,16 +1,11 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v1.0.0
+# FREQSTART v1.0.1
 
-`WARNING` DO NOT UPDATE IF YOU HAVE INSTALLED NGINX OR FREQUI! It is heavily recommended to save "user_data" folder and project files and configs locally and do a complete VPS reset or remove those packages. If you did, dont worry, nothing will happen to running containers. Just remove the "freqstart.autostart.sh" file until you have set up everything. If you havent installed Nginx or FreqUI nothing changes at all.
-
-`v1.0.0`
-* Modified custom docker network subnet ip range to be in the private ip range
-* Added run and run-force routine to project function and modified how "force" is handled to compose a project
-* Removed nginx routine without usage of SSL and made IP self-signed the default
-* Added interactive Nginx routine based on docker images for self-signed and letsencrypt domain validated SSL cert
-* Nginx self-signed IP routine offers interactive selection public or local IP adresses excl. docker ip range (For using Freqstart in a local VM)
+`v1.0.1`
+* Implemented routine to check for existing webservices that may block FreqUI and/or Nginx proxy ports.
+* Compose now validates json and port for FreqUI within container incl. verbose response.
 
 ## Setup & Docker-Manager for Freqtrade
 
@@ -53,7 +48,7 @@ Freqstart provides an interactive setup guide for server security, Freqtrade inc
 
 Freqstart installs server packages and configurations tailored to the needs of Freqtrade and may overwrite existing installations and configurations. It is recommended to set it up in a new and clean environment!
 
-Packages: git, curl, jq, docker-ce, chrony, nginx, certbot, python3-certbot-nginx, ufw, openssl
+Packages: git, curl, jq, docker-ce, chrony, ufw
 
 ### Recommended VPS
 
@@ -113,9 +108,18 @@ Vultr (AMD High Performance / Tokyo): [www.vultr.com](https://www.vultr.com/?ref
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 <!-- EXAMPLE PROJECT -->
-## Example Project (example.yml)
+## Pojects
 
-1. Project file with NostalgiaForInfinityX and Binance with BUSD
+With Freqstart you are no longer bound to a single docker-compose.yml and can freely structure and link your Freqtrade bots.
+
+* Have multiple container (services) in one project file
+* Have a single container (service) in multiple project files
+* Have multiple container (services) in multiple project files
+
+### Example Project (example.yml)
+
+* Project file based on NostalgiaForInfinityX and Binance (BUSD) with Proxy and FreqUI enabled.
+
    ```yml
    version: '3'
    services:
