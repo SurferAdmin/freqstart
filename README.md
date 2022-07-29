@@ -49,7 +49,7 @@ Freqstart provides an interactive setup guide for server security, Freqtrade inc
 
 Freqstart installs server packages and configurations tailored to the needs of Freqtrade and may overwrite existing installations and configurations. It is recommended to set it up in a new and clean environment!
 
-Packages: git, curl, jq, docker-ce, chrony, nginx, certbot, python3-certbot-nginx, ufw, openssl
+Packages: git, curl, jq, docker-ce, chrony, ufw
 
 ### Recommended VPS
 
@@ -109,7 +109,15 @@ Vultr (AMD High Performance / Tokyo): [www.vultr.com](https://www.vultr.com/?ref
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 <!-- EXAMPLE PROJECT -->
-## Example Project (example.yml)
+## Pojects
+
+With Freqstart you are no longer bound to a single docker-compose.yml and can freely structure and link your Freqtrade bots.
+
+* Have multiple container (services) in one project file
+* Have a single container (service) in multiple project files
+* Have multiple container (services) in multiple project files
+
+### Example Project (example.yml)
 
 1. Project file with NostalgiaForInfinityX and Binance with BUSD
    ```yml
