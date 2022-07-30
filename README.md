@@ -1,11 +1,15 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v1.0.1
+# FREQSTART v1.0.2
 
-`v1.0.1`
-* Implemented routine to check for existing webservices that may block FreqUI and/or Nginx proxy ports.
-* Compose now validates json and port for FreqUI within container incl. verbose response.
+`v1.0.2`
+* Changed folder "/data" to "/proxy" to avoid confusions with "/user_data" (Rename existing folder and re-run FreqUI setup)
+* Improved freqtrade setup routine to utilize project function
+* Improved project validate functions to ignore lines starting with comments (ignored: #example; not ignored: example #comment)
+* Added check for empty files in strategy function
+* Raised auto-update from 4 to every 6 hours
+* Adopted user function and moved add group docker to prerequisites routine
 
 ## Setup & Docker-Manager for Freqtrade
 
