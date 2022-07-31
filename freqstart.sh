@@ -62,8 +62,8 @@ readonly FS_NGINX_CONFD_HTPASSWD="${FS_NGINX_CONFD}"'/.htpasswd'
 readonly FS_CERTBOT="${FS_NAME}"'_certbot'
 
 readonly FS_FREQUI="${FS_NAME}"'_frequi'
-readonly FS_FREQUI_JSON="${FS_DIR_USER_DATA}/frequi.json"
-readonly FS_FREQUI_SERVER_JSON="${FS_DIR_USER_DATA}/frequi_server.json"
+readonly FS_FREQUI_JSON="${FS_DIR_USER_DATA}/${FS_FREQUI}.json"
+readonly FS_FREQUI_SERVER_JSON="${FS_DIR_USER_DATA}/${FS_FREQUI}_server.json"
 readonly FS_FREQUI_YML="${FS_DIR}/${FS_NAME}_frequi.yml"
 
 FS_HASH="$(xxd -l 8 -ps /dev/urandom)"
@@ -858,17 +858,19 @@ _fsDockerProject_() {
         fi
         
           # check for frequi port and config
-        _containerApiPort="$(docker inspect --format="{{json .}}" "${_containerName}" | jq -r '.NetworkSettings.Ports["9999/tcp"][0].HostPort // empty')"
-        _containerApiJson="$(echo "${_containerCmd}" | grep -os "${FS_FREQUI_JSON##*/}" || true)"
-        
-        if [[ -n "${_containerApiPort}" ]] && [[ -z "${_containerApiJson}" ]]; then
-          _fsMsg_ "[WARNING] Port (${_containerApiPort}) is set but confing (${_containerApiJson}) is missing in command for FreqUI access!"
-        elif [[ -z "${_containerApiPort}" ]] && [[ -n "${_containerApiJson}" ]]; then
-          _fsMsg_ "[WARNING] Config (${_containerApiJson}) is set in command but port (9000-9100) is missing for FreqUI access!"
-        elif [[ -z "${_containerApiPort}" ]] && [[ -z "${_containerApiJson}" ]]; then
-          _fsMsg_ "Bot is not exposed to FreqUI."
-        else
-          _fsMsg_ "Bot is accessible via FreqUI on port: ${_containerApiPort}"
+        if [[ ! "${_containerName}" = "${FS_FREQUI}" ]]; then
+          _containerApiPort="$(docker inspect --format="{{json .}}" "${_containerName}" | jq -r '.NetworkSettings.Ports["9999/tcp"][0].HostPort // empty')"
+          _containerApiJson="$(echo "${_containerCmd}" | grep -os "${FS_FREQUI_JSON##*/}" || true)"
+          
+          if [[ -n "${_containerApiPort}" ]] && [[ -z "${_containerApiJson}" ]]; then
+            _fsMsg_ "[WARNING] Port (${_containerApiPort}) is set but confing (${_containerApiJson}) is missing in command for FreqUI access!"
+          elif [[ -z "${_containerApiPort}" ]] && [[ -n "${_containerApiJson}" ]]; then
+            _fsMsg_ "[WARNING] Config (${_containerApiJson}) is set in command but port (9000-9100) is missing for FreqUI access!"
+          elif [[ -z "${_containerApiPort}" ]] && [[ -z "${_containerApiJson}" ]]; then
+            _fsMsg_ "Bot is not exposed to FreqUI."
+          else
+            _fsMsg_ "Bot is accessible via FreqUI on port: ${_containerApiPort}"
+          fi
         fi
         
           # compare latest docker image with container image
