@@ -84,7 +84,7 @@ trap '_fsErr_ "${FUNCNAME:-.}" ${LINENO}' ERR
 # DOCKER
 
 _fsDockerVarsPath_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _docker="${1}"
   local _dockerDir="${FS_DIR_DOCKER}"
@@ -100,7 +100,7 @@ _fsDockerVarsPath_() {
 }
 
 _fsDockerVarsRepo_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _docker="${1}"
   local _dockerRepo="${_docker%:*}"
@@ -109,7 +109,7 @@ _fsDockerVarsRepo_() {
 }
 
 _fsDockerVarsCompare_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _docker="${1}"
   local _dockerRepo=''
@@ -138,7 +138,7 @@ _fsDockerVarsCompare_() {
 }
 
 _fsDockerVarsName_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
 	local _docker="${1}"
 	local _dockerRepo=''
@@ -151,7 +151,7 @@ _fsDockerVarsName_() {
 }
 
 _fsDockerVarsTag_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
 	local _docker="${1}"
 	local _dockerTag="${_docker##*:}"
@@ -164,7 +164,7 @@ _fsDockerVarsTag_() {
 }
 
 _fsDockerVersionLocal_() {
-  [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _dockerRepo="${1}"
   local _dockerTag="${2}"
@@ -181,7 +181,7 @@ _fsDockerVersionLocal_() {
 }
 
 _fsDockerVersionHub_() {
-  [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _dockerRepo="${1}"
   local _dockerTag="${2}"
@@ -219,7 +219,7 @@ _fsDockerVersionHub_() {
 }
 
 _fsDockerImage_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
 	local _dockerImage="${1}"
   local _dockerRepo=''
@@ -299,12 +299,12 @@ _fsDockerImage_() {
     echo "${_dockerVersionLocal}"
   else
       # if image could not be installed
-    _fsMsgExit_ "Image not found: ${_dockerRepo}:${_dockerTag}"
+    _fsMsgError_ "Image not found: ${_dockerRepo}:${_dockerTag}"
   fi
 }
 
 _fsDockerImageInstalled_() {
-  [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
 	local _dockerRepo="${1}"
 	local _dockerTag="${2}"
@@ -322,7 +322,7 @@ _fsDockerImageInstalled_() {
 }
 
 _fsDockerPsName_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _dockerName="${1}"
   local _dockerMode="${2:-}" # optional: all
@@ -352,7 +352,7 @@ _fsDockerPsName_() {
 }
 
 _fsDockerId2Name_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
 	local _dockerId="${1}"
 	local _dockerName=''
@@ -366,7 +366,7 @@ _fsDockerId2Name_() {
 }
 
 _fsDockerRemove_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
 	local _dockerName="${1}"
     
@@ -377,13 +377,13 @@ _fsDockerRemove_() {
     sudo docker rm -f "${_dockerName}" > /dev/null
     
     if [[ "$(_fsDockerPsName_ "${_dockerName}" "all")" -eq 0 ]]; then
-      _fsMsgExit_ "Cannot remove container: ${_dockerName}"
+      _fsMsgError_ "Cannot remove container: ${_dockerName}"
     fi
   fi
 }
 
 _fsDockerProjectImages_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
 	local _ymlPath="${1}"
 	local _ymlImages=''
@@ -428,7 +428,7 @@ _fsDockerProjectImages_() {
 }
 
 _fsDockerProjectPorts_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _ymlPath="${1}"
   local _dockerPorts=''
@@ -490,7 +490,7 @@ _fsDockerProjectPorts_() {
 }
 
 _fsDockerProjectStrategies_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
 	local _ymlPath="${1}"
 	local _strategies=''
@@ -571,7 +571,7 @@ _fsDockerProjectStrategies_() {
 }
 
 _fsDockerProjectConfigs_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _ymlPath="${1}"
   local _configs=''
@@ -615,7 +615,7 @@ _fsDockerProjectConfigs_() {
 }
 
 _fsDockerProject_() {
-  [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _projectPath="${FS_DIR}/${1##*/}"
   local _projectMode="${2}" # compose, compose-force, run, run-force, validate, quit
@@ -677,14 +677,14 @@ _fsDockerProject_() {
   
     # validate project file
   if [[ -z "${_projectFileType}" ]]; then
-    _fsMsgExit_ "File type is missing: ${_projectFile}"
+    _fsMsgError_ "File type is missing: ${_projectFile}"
   else
     if [[ "${_projectFileType}" = 'yml' ]]; then
       if [[ "$(_fsFile_ "${_projectPath}")" -eq 1 ]]; then
-        _fsMsgExit_ "File not found: ${_projectFile}"
+        _fsMsgError_ "File not found: ${_projectFile}"
       fi
     else
-      _fsMsgExit_ "File type is not correct: ${_projectFile}"
+      _fsMsgError_ "File type is not correct: ${_projectFile}"
     fi
   fi
   
@@ -985,7 +985,7 @@ _fsDockerProject_() {
 }
 
 _fsDockerStrategy_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _strategyName="${1}"
   local _strategyFile=''
@@ -1086,7 +1086,7 @@ _fsDockerStrategy_() {
 }
 
 _fsDockerAutoupdate_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _projectFile="${1}"
   local _projectAutoupdate='freqstart -c '"${_projectFile}"' -a -y'
@@ -1147,7 +1147,7 @@ _fsSetup_() {
 	fi
 	
 	if [[ "$(_fsIsSymlink_ "${FS_SYMLINK}")" -eq 1 ]]; then
-		_fsMsgExit_ "Cannot create symlink: ${FS_SYMLINK}"
+		_fsMsgError_ "Cannot create symlink: ${FS_SYMLINK}"
 	fi
 }
 
@@ -1388,7 +1388,7 @@ _fsSetupNtp_() {
     _fsPkgs_ "chrony"
 
     if [[ "$(_fsSetupNtpCheck_)" -eq 1 ]]; then
-      _fsMsgExit_ "Cannot activate or synchronize NTP."
+      _fsMsgError_ "Cannot activate or synchronize NTP."
     else
       _fsMsg_ "NTP is activated and synchronized."
     fi
@@ -1445,7 +1445,7 @@ _fsSetupFreqtrade_() {
         # validate if directory exists and is not empty
       if [[ ! "$(ls -A "${FS_DIR_USER_DATA}")" ]]; then
         sudo rm -rf "${FS_DIR_USER_DATA}"
-        _fsMsgExit_ "Cannot create directory: ${FS_DIR_USER_DATA}"
+        _fsMsgError_ "Cannot create directory: ${FS_DIR_USER_DATA}"
       else
         _fsMsg_ "Directory created: ${FS_DIR_USER_DATA}"
       fi
@@ -2052,7 +2052,7 @@ _fsSetupNginxOpenssl_() {
   _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force'
   
   if [[ "$(_fsDockerPsName_ "${FS_NGINX}_ip")" -eq 1 ]]; then
-    _fsMsgExit_ 'Nginx container is not running!'
+    _fsMsgError_ 'Nginx container is not running!'
   fi
 }
 
@@ -2265,7 +2265,7 @@ _setupNginxLetsencrypt_() {
     _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force' "${FS_NGINX}_domain"
     
     if [[ "$(_fsDockerPsName_ "${FS_NGINX}_domain")" -eq 1 ]]; then
-      _fsMsgExit_ 'Nginx container is not running!'
+      _fsMsgError_ 'Nginx container is not running!'
     fi
     
       # set cron for domain autorenew certificate
@@ -2362,7 +2362,7 @@ _fsSetupFrequiJson_() {
     '    }' \
     '}'
   else
-    _fsMsgExit_ 'Passwort or username missing!'
+    _fsMsgError_ 'Passwort or username missing!'
   fi
 }
 
@@ -2445,15 +2445,15 @@ _fsStart_() {
   
     # check if symlink from setup routine exist
 	if [[ "$(_fsIsSymlink_ "${_symlink}")" -eq 1 ]]; then
-		_fsMsgExit_ "Start setup first!"
+		_fsMsgError_ "Start setup first!"
   fi
   
   if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
-    _fsMsgExit_ "Option -a or --auto cannot be used with -q or --quit."
+    _fsMsgError_ "Option -a or --auto cannot be used with -q or --quit."
   elif [[ "${FS_OPTS_QUIT}" -eq 0 ]] && [[ "${FS_OPTS_COMPOSE}" -eq 0 ]]; then
-    _fsMsgExit_ "Option -c or --compose cannot be used with -q or --quit."
+    _fsMsgError_ "Option -c or --compose cannot be used with -q or --quit."
   elif [[ -z "${_yml}" ]]; then
-    _fsMsgExit_ "Setting an \"example.yml\" file with -c or --compose is required."
+    _fsMsgError_ "Setting an \"example.yml\" file with -c or --compose is required."
   else
     if [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
       _fsDockerProject_ "${_yml}" "quit"
@@ -2563,12 +2563,12 @@ _fsFileExit_() {
   local _file="${1:-}" # optional: path to file
   
 	if [[ "$(_fsFile_ "${_file}")" -eq 1 ]]; then
-		_fsMsgExit_ "File does not exist: ${_file}"
+		_fsMsgError_ "File does not exist: ${_file}"
   fi
 }
 
 _fsFileCreate_() {
-  [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _filePath="${1}"; shift
   local _input=("${@}")
@@ -2596,7 +2596,7 @@ _fsFileCreate_() {
 }
 
 _fsCrontab_() {
-  [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _cronCmd="${1}"
   local _cronJob="${2} ${_cronCmd}"
@@ -2604,12 +2604,12 @@ _fsCrontab_() {
   ( crontab -l 2> /dev/null | grep -v -F "${_cronCmd}" || : ; echo "${_cronJob}" ) | crontab -
   
   if [[ "$(_fsCrontabValidate_ "${_cronCmd}")" -eq 1 ]]; then
-    _fsMsgExit_ "Cron not set: ${_cronCmd}"
+    _fsMsgError_ "Cron not set: ${_cronCmd}"
   fi
 }
 
 _fsCrontabRemove_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _cronCmd="${1}"
     # credit: https://stackoverflow.com/a/17975418
@@ -2617,13 +2617,13 @@ _fsCrontabRemove_() {
     ( crontab -l 2> /dev/null | grep -v -F "${_cronCmd}" || : ) | crontab -
     
     if [[ "$(_fsCrontabValidate_ "${_cronCmd}")" -eq 0 ]]; then
-      _fsMsgExit_ "Cron not removed: ${_cronCmd}"
+      _fsMsgError_ "Cron not removed: ${_cronCmd}"
     fi
   fi
 }
 
 _fsCrontabValidate_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _cronCmd="${1}"
   
@@ -2631,7 +2631,7 @@ _fsCrontabValidate_() {
 }
 
 _fsValueGet_() {
-  [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _filePath="${1}"
   local _fileType="${_filePath##*.}"
@@ -2658,7 +2658,7 @@ _fsValueGet_() {
 }
 
 _fsValueUpdate_() {
-  [[ $# -lt 3 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 3 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _filePath="${1}"
   local _file="${_filePath##*/}"
@@ -2699,7 +2699,7 @@ _fsValueUpdate_() {
         # key: value
       sudo sed -i "s,${_key}: .*,${_key}: ${_value}," "${_fileTmp}"
     else
-      _fsMsgExit_ 'Cannot find key "'"${_key}"'" in: '"${_filePath}"
+      _fsMsgError_ 'Cannot find key "'"${_key}"'" in: '"${_filePath}"
     fi
   fi
     # override file if different
@@ -2709,7 +2709,7 @@ _fsValueUpdate_() {
 }
 
 _fsCaseConfirmation_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _question="${1}"
   local _yesNo=''
@@ -2746,7 +2746,7 @@ _fsCaseEmpty_() {
 }
 
 _fsIsUrl_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _url="${1}"
     # credit: https://stackoverflow.com/a/55267709
@@ -2763,12 +2763,12 @@ _fsIsUrl_() {
       echo 1
     fi
   else
-    _fsMsgExit_ "Url is not valid: ${_url}"
+    _fsMsgError_ "Url is not valid: ${_url}"
   fi
 }
 
 _fsCdown_() {
-  [[ $# -lt 2 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _secs="${1}"; shift
   local _text="${*}"
@@ -2787,7 +2787,7 @@ _fsCdown_() {
 }
 
 _fsIsAlphaDash_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _string="${1}"
   local _regex='^[[:alnum:]_-]+$'
@@ -2800,7 +2800,7 @@ _fsIsAlphaDash_() {
 }
 
 _fsDedupeArray_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   declare -A _tmpArray
   declare -a _uniqueArray
@@ -2859,7 +2859,7 @@ _fsReset_() {
 }
 
 _fsPkgs_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _pkgs=("$@")
   local _pkg=''
@@ -2894,14 +2894,14 @@ _fsPkgs_() {
       if [[ "$(_fsPkgsStatus_ "${_pkg}")" -eq 0 ]]; then
         _fsMsg_ "Installed: ${_pkg}"
       else
-        _fsMsgExit_ "Cannot install: ${_pkg}"
+        _fsMsgError_ "Cannot install: ${_pkg}"
       fi
     fi
   done
 }
 
 _fsPkgsStatus_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _pkg="${1}"
   local _status=''
@@ -2916,7 +2916,7 @@ _fsPkgsStatus_() {
 }
 
 _fsIsSymlink_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
 	local _symlink="${1}"
     # credit: https://stackoverflow.com/a/36180056
@@ -2942,12 +2942,12 @@ _fsScriptLock_() {
   if [[ -n "${FS_TMP}" ]]; then
     if [[ -d "${_lockDir}" ]]; then
         # error 99 to not remove temp dir
-      _fsMsgExit_ "Script is already running! Delete folder if this is an error: sudo rm -rf ${FS_TMP}" 99
+      _fsMsgError_ "Script is already running! Delete folder if this is an error: sudo rm -rf ${FS_TMP}" 99
     elif ! mkdir -p "${_lockDir}" 2> /dev/null; then
-      _fsMsgExit_ "Unable to acquire script lock: ${_lockDir}"
+      _fsMsgError_ "Unable to acquire script lock: ${_lockDir}"
     fi
   else
-    _fsMsgExit_ "Temporary directory is not defined!"
+    _fsMsgError_ "Temporary directory is not defined!"
   fi
 }
 
@@ -2997,14 +2997,14 @@ _fsLoginData_() {
 }
 
 _fsLoginDataUsername_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _username="${1}"
   echo "$(cut -d':' -f1 <<< "${_username}")"
 }
 
 _fsLoginDataPassword_() {
-  [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _password="${1}"
   echo "$(cut -d':' -f2 <<< "${_password}")"
@@ -3050,7 +3050,7 @@ _fsMsgWarning_() {
   "! [WARNING] ${_msg}" >&2
 }
 
-_fsMsgExit_() {
+_fsMsgError_() {
   local _msg="${1}"
   local -r _code="${2:-90}" # optional: set to 90
   
@@ -3067,7 +3067,7 @@ _fsOptions_() {
   
   _opts="$(getopt --options c:,q:,s,a,y,h --long compose:,quit:,setup,auto,yes,help,reset,cert -- "${_args[@]}" 2> /dev/null)" || {
     _fsLogo_
-    _fsMsgExit_ "Unkown or missing argument."
+    _fsMsgError_ "Unkown or missing argument."
   }
   
   eval set -- "${_opts}"
