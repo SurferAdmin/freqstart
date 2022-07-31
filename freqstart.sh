@@ -1132,8 +1132,7 @@ _fsSetup_() {
   
   _fsLogo_
   _fsUser_
-  echo 'XXXXXXXX'
-  #_fsSetupPrerequisites_
+  _fsSetupPrerequisites_
   _fsSetupConf_
   _fsSetupNtp_
   _fsSetupFreqtrade_
