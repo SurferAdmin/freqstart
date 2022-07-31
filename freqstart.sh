@@ -210,11 +210,11 @@ _fsDockerVersionHub_() {
       if [[ -n "${_dockerVersionHub}" ]]; then
         echo "${_dockerVersionHub}"
       else
-        _fsMsg_ '[WARNING] Cannot retrieve docker manifest.'
+        _fsMsgWarning_ 'Cannot retrieve docker manifest.'
       fi
     fi
   else
-    _fsMsg_ '[WARNING] Cannot connect to docker hub.'
+    _fsMsgWarning_ 'Cannot connect to docker hub.'
   fi
 }
 
@@ -299,7 +299,7 @@ _fsDockerImage_() {
     echo "${_dockerVersionLocal}"
   else
       # if image could not be installed
-    _fsMsgExit_ "[FATAL] Image not found: ${_dockerRepo}:${_dockerTag}"
+    _fsMsgExit_ "Image not found: ${_dockerRepo}:${_dockerTag}"
   fi
 }
 
@@ -377,7 +377,7 @@ _fsDockerRemove_() {
     sudo docker rm -f "${_dockerName}" > /dev/null
     
     if [[ "$(_fsDockerPsName_ "${_dockerName}" "all")" -eq 0 ]]; then
-      _fsMsgExit_ "[FATAL] Cannot remove container: ${_dockerName}"
+      _fsMsgExit_ "Cannot remove container: ${_dockerName}"
     fi
   fi
 }
@@ -476,7 +476,7 @@ _fsDockerProjectPorts_() {
       for _dockerPortCompare in "${_dockerPortsCompare[@]}"; do
         if [[ "${_dockerPortCompare}" =~ ^[0-9]+$ ]]; then
           _error=$((_error+1))
-          _fsMsg_ "[ERROR] Port is already allocated: ${_dockerPortCompare}"
+          _fsMsgWarning_ "Port is already allocated: ${_dockerPortCompare}"
         fi
       done
     fi
@@ -555,7 +555,7 @@ _fsDockerProjectStrategies_() {
       done
       
       if [[ "${_strategyPathFound}" -eq 1 ]]; then
-        _fsMsg_ '[ERROR] Strategy file not found: '"${_strategyFile}"
+        _fsMsgWarning_ 'Strategy file not found: '"${_strategyFile}"
         _error=$((_error+1))
       fi
       
@@ -677,14 +677,14 @@ _fsDockerProject_() {
   
     # validate project file
   if [[ -z "${_projectFileType}" ]]; then
-    _fsMsgExit_ "[ERROR] File type is missing: ${_projectFile}"
+    _fsMsgExit_ "File type is missing: ${_projectFile}"
   else
     if [[ "${_projectFileType}" = 'yml' ]]; then
       if [[ "$(_fsFile_ "${_projectPath}")" -eq 1 ]]; then
-        _fsMsgExit_ "[ERROR] File not found: ${_projectFile}"
+        _fsMsgExit_ "File not found: ${_projectFile}"
       fi
     else
-      _fsMsgExit_ "[ERROR] File type is not correct: ${_projectFile}"
+      _fsMsgExit_ "File type is not correct: ${_projectFile}"
     fi
   fi
   
@@ -846,13 +846,13 @@ _fsDockerProject_() {
             if [[ -n "${_containerStrategyUpdate}" ]]; then
               if [[ "${_containerRunning}" -eq 0 ]] && [[ ! "${_containerStrategyUpdate}" = "${_strategyUpdate}" ]]; then
                 _containerRestart=0
-                _fsMsg_ '[WARNING] Strategy is outdated: '"${_containerStrategy}"
+                _fsMsgWarning_ 'Strategy is outdated: '"${_containerStrategy}"
               else
                 _fsMsg_ 'Strategy is up-to-date: '"${_containerStrategy}"
               fi
             else
               _containerStrategyUpdate="${_strategyUpdate}"
-              _fsMsg_ '[WARNING] Strategy version unkown: '"${_containerStrategy}"
+              _fsMsgWarning_ 'Strategy version unkown: '"${_containerStrategy}"
             fi
           fi
         fi
@@ -876,7 +876,7 @@ _fsDockerProject_() {
         _containerImageVersion="$(sudo docker inspect --format="{{.Image}}" "${_projectContainer}")"
         _dockerImageVersion="$(docker inspect --format='{{.Id}}' "${_containerImage}")"
         if [[ "${_containerRunning}" -eq 0 ]] && [[ ! "${_containerImageVersion}" = "${_dockerImageVersion}" ]]; then
-          _fsMsg_ '[WARNING] Image is outdated: '"${_containerImage}"
+          _fsMsgWarning_ 'Image is outdated: '"${_containerImage}"
           _containerRestart=0
         else
           _fsMsg_ 'Image is up-to-date: '"${_containerImage}"
@@ -931,7 +931,7 @@ _fsDockerProject_() {
         else
           _fsValueUpdate_ "${_containerConfPath}" '.'"${_containerName}"'.autoupdate' 'false'
           _fsDockerRemove_ "${_containerName}"
-          _fsMsg_ '[ERROR] Container is not active: '"${_containerName}"
+          _fsMsgWarning_ 'Container is not active: '"${_containerName}"
         fi
         
         # stop container
@@ -942,7 +942,7 @@ _fsDockerProject_() {
           if [[ "$(_fsDockerPsName_ "${_containerName}")" -eq 1 ]]; then
             _fsMsg_ "[SUCCESS] Container is removed: ${_containerName}"
           else
-            _fsMsg_ "[ERROR] Container not removed: ${_containerName}"
+            _fsMsgWarning_ "Container not removed: ${_containerName}"
           fi
         else
           _fsMsg_ 'Skipping...'
@@ -963,7 +963,7 @@ _fsDockerProject_() {
         # validate project
       _fsDockerProject_ "${_projectPath}" "validate"
     else
-      _fsMsg_ "[ERROR] Cannot start: ${_projectFile}"
+      _fsMsgWarning_ "Cannot start: ${_projectFile}"
     fi
   elif [[ "${_projectMode}" = "validate" ]]; then
       # add or remove project from autoupdate
@@ -1059,15 +1059,15 @@ _fsDockerStrategy_() {
             _fsFileExit_ "${_strategyPath}"
           fi
         else
-          _fsMsg_ '[WARNING] Downloaded strategy file was empty.'
+          _fsMsgWarning_ 'Downloaded strategy file was empty.'
         fi
       else
-        _fsMsg_ '[WARNING] Cannot connect to strategy url.'
+        _fsMsgWarning_ 'Cannot connect to strategy url.'
       fi
     done
         
     if [[ "${_error}" -gt 0 ]]; then
-      _fsMsg_ "[ERROR] Failed to install or update: ${_strategyName}"
+      _fsMsgWarning_ "Failed to install or update: ${_strategyName}"
     elif [[ "${_setup}" -gt 0 ]]; then
       _fsMsg_ "Strategy updated: ${_strategyName}"
       _strategyUpdate="$(_fsTimestamp_)"
@@ -1171,10 +1171,10 @@ _fsSetupConf_() {
       _ipPublicTemp="$(dig +short myip.opendns.com @resolver1.opendns.com)"
       if [[ -n "${_ipPublicTemp}" ]]; then
         if [[ ! "${_ipPublic}" = "${_ipPublicTemp}" ]]; then
-          _fsMsg_ '[WARNING] Public IP has been changed. Run FreqUI setup again!'
+          _fsMsgWarning_ 'Public IP has been changed. Run FreqUI setup again!'
         fi
       else
-        _fsMsg_ '[WARNING] Cannot retrieve public IP. Run FreqUI setup again!'
+        _fsMsgWarning_ 'Cannot retrieve public IP. Run FreqUI setup again!'
       fi
     fi    
   fi
@@ -1388,7 +1388,7 @@ _fsSetupNtp_() {
     _fsPkgs_ "chrony"
 
     if [[ "$(_fsSetupNtpCheck_)" -eq 1 ]]; then
-      _fsMsgExit_ "[FATAL] Cannot activate or synchronize NTP."
+      _fsMsgExit_ "Cannot activate or synchronize NTP."
     else
       _fsMsg_ "NTP is activated and synchronized."
     fi
@@ -1445,7 +1445,7 @@ _fsSetupFreqtrade_() {
         # validate if directory exists and is not empty
       if [[ ! "$(ls -A "${FS_DIR_USER_DATA}")" ]]; then
         sudo rm -rf "${FS_DIR_USER_DATA}"
-        _fsMsgExit_ "[FATAL] Cannot create directory: ${FS_DIR_USER_DATA}"
+        _fsMsgExit_ "Cannot create directory: ${FS_DIR_USER_DATA}"
       else
         _fsMsg_ "Directory created: ${FS_DIR_USER_DATA}"
       fi
@@ -1673,7 +1673,7 @@ _fsSetupNginx_() {
           _ipPublicTemp="$(dig +short myip.opendns.com @resolver1.opendns.com)"
           if [[ -n "${_ipPublicTemp}" ]]; then
             if [[ ! "${_ipPublic}" = "${_ipPublicTemp}" ]]; then
-              _fsMsg_ '[WARNING] Public IP has been changed. Run FreqUI setup again!'
+              _fsMsgWarning_ 'Public IP has been changed. Run FreqUI setup again!'
             else
               if [[ "$(_fsCaseConfirmation_ "Skip reconfiguration of Nginx proxy?")" -eq 0 ]]; then
                 _fsMsg_ "Skipping..."
@@ -1681,7 +1681,7 @@ _fsSetupNginx_() {
               fi
             fi
           else
-            _fsMsg_ '[WARNING] Cannot retrieve public IP. Run FreqUI setup again!'
+            _fsMsgWarning_ 'Cannot retrieve public IP. Run FreqUI setup again!'
           fi
         else
           if [[ "$(_fsCaseConfirmation_ "Skip reconfiguration of Nginx proxy?")" -eq 0 ]]; then
@@ -1713,7 +1713,7 @@ _fsSetupNginx_() {
           # generate login data if first time setup is non-interactive
         _username="$(_fsRandomBase64_ 16)"
         _password="$(_fsRandomBase64_ 16)"
-        _fsMsg_ '[WARNING] FreqUI login data created automatically:'
+        _fsMsgWarning_ 'FreqUI login data created automatically:'
         _fsMsg_ "Username: ${_username}"
         _fsMsg_ "Password: ${_password}"
         _fsCdown_ 15 'to memorize login data... Restart setup to change!'
@@ -1738,7 +1738,7 @@ _fsSetupNginx_() {
       if [[ "${FS_OPTS_YES}" -eq 1 ]]; then
         read -rp "  Choose number (default: 1): " _nr
       elif  [[ -z "${_ipPublicTemp}" ]]; then
-        _fsMsg_ '[WARNING] Cannot access public IP!'
+        _fsMsgWarning_ 'Cannot access public IP!'
         local _nr="1"
       else
         local _nr="1"
@@ -1785,7 +1785,7 @@ _fsSetupNginxWebservice_() {
   for _webservice in "${_webservices[@]}"; do 
       # credit: https://stackoverflow.com/a/66344638
     if systemctl status "${_webservice}" 2> /dev/null | grep -Fq "Active: active"; then
-      _fsMsg_ '[WARNING] Stopping webservice to avoid ip/port collisions: '"${_webservice}"
+      _fsMsgWarning_ 'Stopping webservice to avoid ip/port collisions: '"${_webservice}"
 
       sudo systemctl stop "${_webservice}" > /dev/null 2> /dev/null || true
       sudo systemctl disable "${_webservice}" > /dev/null 2> /dev/null || true
@@ -1794,7 +1794,7 @@ _fsSetupNginxWebservice_() {
   
   for _port in "${ports[@]}"; do 
     if [[ -n "$(sudo lsof -n -sTCP:LISTEN -i:${_port})" ]]; then
-      _fsMsg_ '[WARNING] Stopping webservice blocking port: '"${_port}"
+      _fsMsgWarning_ 'Stopping webservice blocking port: '"${_port}"
 
       sudo fuser -k "${_port}/tcp" > /dev/null 2> /dev/null
     fi
@@ -1832,7 +1832,7 @@ _fsSetupNginxOpenssl_() {
     if [[ "${FS_OPTS_YES}" -eq 1 ]]; then
       read -rp "  Choose number (default: 1): " _nr
     elif  [[ -z "${_ipPublic}" ]]; then
-      _fsMsg_ '[WARNING] Cannot access public IP!'
+      _fsMsgWarning_ 'Cannot access public IP!'
       local _nr="2"
     else
       local _nr="1"
@@ -2052,7 +2052,7 @@ _fsSetupNginxOpenssl_() {
   _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force'
   
   if [[ "$(_fsDockerPsName_ "${FS_NGINX}_ip")" -eq 1 ]]; then
-    _fsMsgExit_ '[FATAL] Nginx container is not running!'
+    _fsMsgExit_ 'Nginx container is not running!'
   fi
 }
 
@@ -2265,7 +2265,7 @@ _setupNginxLetsencrypt_() {
     _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force' "${FS_NGINX}_domain"
     
     if [[ "$(_fsDockerPsName_ "${FS_NGINX}_domain")" -eq 1 ]]; then
-      _fsMsgExit_ '[FATAL] Nginx container is not running!'
+      _fsMsgExit_ 'Nginx container is not running!'
     fi
     
       # set cron for domain autorenew certificate
@@ -2336,7 +2336,7 @@ _fsSetupFrequiJson_() {
         # generate login data if first time setup is non-interactive
       _username="$(_fsRandomBase64_ 16)"
       _password="$(_fsRandomBase64_ 16)"
-      _fsMsg_ '[WARNING] API login data created automatically:'
+      _fsMsgWarning_ 'API login data created automatically:'
       _fsMsg_ "Username: ${_username}"
       _fsMsg_ "Password: ${_password}"
       _fsCdown_ 15 'to memorize login data... Restart setup to change!'
@@ -2362,7 +2362,7 @@ _fsSetupFrequiJson_() {
     '    }' \
     '}'
   else
-    _fsMsgExit_ '[FATAL] Passwort or username missing!'
+    _fsMsgExit_ 'Passwort or username missing!'
   fi
 }
 
@@ -2441,20 +2441,20 @@ _fsStart_() {
 	local _yml="${1:-}"
   local _symlink="${FS_SYMLINK}"
   
+  _fsLogo_
+  
     # check if symlink from setup routine exist
 	if [[ "$(_fsIsSymlink_ "${_symlink}")" -eq 1 ]]; then
-		_fsUsage_ "[WARNING] Start setup first!"
+		_fsMsgExit_ "Start setup first!"
   fi
   
   if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
-    _fsUsage_ "[ERROR] Option -a or --auto cannot be used with -q or --quit."
+    _fsMsgExit_ "Option -a or --auto cannot be used with -q or --quit."
   elif [[ "${FS_OPTS_QUIT}" -eq 0 ]] && [[ "${FS_OPTS_COMPOSE}" -eq 0 ]]; then
-    _fsUsage_ "[ERROR] Option -c or --compose cannot be used with -q or --quit."
+    _fsMsgExit_ "Option -c or --compose cannot be used with -q or --quit."
   elif [[ -z "${_yml}" ]]; then
-    _fsUsage_ "[ERROR] Setting an \"example.yml\" file with -c or --compose is required."
+    _fsMsgExit_ "Setting an \"example.yml\" file with -c or --compose is required."
   else
-    _fsLogo_
-    
     if [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
       _fsDockerProject_ "${_yml}" "quit"
     elif [[ "${FS_OPTS_COMPOSE}" -eq 0 ]]; then
@@ -2563,7 +2563,7 @@ _fsFileExit_() {
   local _file="${1:-}" # optional: path to file
   
 	if [[ "$(_fsFile_ "${_file}")" -eq 1 ]]; then
-		_fsMsgExit_ "[FATAL] File does not exist: ${_file}"
+		_fsMsgExit_ "File does not exist: ${_file}"
   fi
 }
 
@@ -2699,7 +2699,7 @@ _fsValueUpdate_() {
         # key: value
       sudo sed -i "s,${_key}: .*,${_key}: ${_value}," "${_fileTmp}"
     else
-      _fsMsgExit_ '[FATAL] Cannot find key "'"${_key}"'" in: '"${_filePath}"
+      _fsMsgExit_ 'Cannot find key "'"${_key}"'" in: '"${_filePath}"
     fi
   fi
     # override file if different
@@ -2894,7 +2894,7 @@ _fsPkgs_() {
       if [[ "$(_fsPkgsStatus_ "${_pkg}")" -eq 0 ]]; then
         _fsMsg_ "Installed: ${_pkg}"
       else
-        _fsMsgExit_ "[FATAL] Cannot install: ${_pkg}"
+        _fsMsgExit_ "Cannot install: ${_pkg}"
       fi
     fi
   done
@@ -2942,12 +2942,12 @@ _fsScriptLock_() {
   if [[ -n "${FS_TMP}" ]]; then
     if [[ -d "${_lockDir}" ]]; then
         # error 99 to not remove temp dir
-      _fsMsgExit_ "[FATAL] Script is already running! Delete folder if this is an error: sudo rm -rf ${FS_TMP}" 99
+      _fsMsgExit_ "Script is already running! Delete folder if this is an error: sudo rm -rf ${FS_TMP}" 99
     elif ! mkdir -p "${_lockDir}" 2> /dev/null; then
-      _fsMsgExit_ "[FATAL] Unable to acquire script lock: ${_lockDir}"
+      _fsMsgExit_ "Unable to acquire script lock: ${_lockDir}"
     fi
   else
-    _fsMsgExit_ "[FATAL] Temporary directory is not defined!"
+    _fsMsgExit_ "Temporary directory is not defined!"
   fi
 }
 
@@ -3029,27 +3029,34 @@ _fsErr_() {
 }
 
 _fsMsg_() {
-  local -r _msg="${1}"
+  local _msg="${1}"
   
   printf -- '%s\n' \
   "  ${_msg}" >&2
 }
 
 _fsMsgTitle_() {
-  local -r _msg="${1}"
+  local _msg="${1}"
   
   printf -- '%s\n' \
   '' \
   "+ ${_msg}" >&2
 }
 
+_fsMsgWarning_() {
+  local _msg="${1}"
+  
+  printf -- '%s\n' \
+  "! [WARNING] ${_msg}" >&2
+}
+
 _fsMsgExit_() {
-  local -r _msg="${1}"
+  local _msg="${1}"
   local -r _code="${2:-90}" # optional: set to 90
   
   printf -- '%s\n' \
   '' \
-  "!  ${_msg}" >&2
+  "! [ERROR] ${_msg}" >&2
   
   exit "${_code}"
 }
@@ -3059,7 +3066,8 @@ _fsOptions_() {
   local _opts
   
   _opts="$(getopt --options c:,q:,s,a,y,h --long compose:,quit:,setup,auto,yes,help,reset,cert -- "${_args[@]}" 2> /dev/null)" || {
-    _fsUsage_ "[FATAL] Unkown or missing argument."
+    _fsLogo_
+    _fsMsgExit_ "Unkown or missing argument."
   }
   
   eval set -- "${_opts}"
