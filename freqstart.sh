@@ -37,6 +37,7 @@ readonly FS_DIR_USER_DATA_LOGS="${FS_DIR_USER_DATA}/logs"
 
 readonly FS_CONFIG="${FS_DIR}/${FS_NAME}.conf.json"
 readonly FS_STRATEGIES="${FS_DIR}/${FS_NAME}.strategies.json"
+readonly FS_AUTOUPDATE="${FS_DIR}/${FS_NAME}.autoupdate.sh"
 
 readonly FS_NETWORK="${FS_NAME}"'_network'
 readonly FS_NETWORK_SUBNET='172.35.0.0/16'
@@ -1087,21 +1088,18 @@ _fsDockerStrategy_() {
 _fsDockerAutoupdate_() {
   [[ $# -lt 1 ]] && _fsMsgExit_ "Missing required argument to ${FUNCNAME[0]}"
   
-  local _file="freqstart.autoupdate.sh"
-  local _path="${FS_DIR}"'/'"${_file}"
   local _projectFile="${1}"
   local _projectAutoupdate='freqstart -c '"${_projectFile}"' -a -y'
   local _projectAutoupdateMode="${2:-}" # optional: remove
   local _projectAutoupdates=""
-  local _cronCmd="${_path}"
   local _cronUpdate="0 */6 * * *" # update every 6 hours
   
   _projectAutoupdates=()
   _projectAutoupdates+=("#!/usr/bin/env bash")
-  if [[ "$(_fsFile_ "${_path}")" -eq 0 ]]; then
+  if [[ "$(_fsFile_ "${FS_AUTOUPDATE}")" -eq 0 ]]; then
     while read -r; do
     _projectAutoupdates+=("$REPLY")
-    done < <(grep -v "${_projectAutoupdate}" "${_path}" | sed "s,#!/usr/bin/env bash,," | sed "/^$/d")
+    done < <(grep -v "${_projectAutoupdate}" "${FS_AUTOUPDATE}" | sed "s,#!/usr/bin/env bash,," | sed "/^$/d")
   fi
   
   if [[ ! "${_projectAutoupdateMode}" = "remove" ]]; then
@@ -1109,12 +1107,12 @@ _fsDockerAutoupdate_() {
   fi
   
   if [[ "${#_projectAutoupdates[@]}" -lt 2 ]]; then
-    _fsCrontabRemove_ "${_cronCmd}"
-    sudo rm -f "${_path}"
+    _fsCrontabRemove_ "${FS_AUTOUPDATE}"
+    sudo rm -f "${FS_AUTOUPDATE}"
   else
-    printf '%s\n' "${_projectAutoupdates[@]}" | tee "${_path}" > /dev/null
-    sudo chmod +x "${_path}"
-    _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
+    printf '%s\n' "${_projectAutoupdates[@]}" | tee "${FS_AUTOUPDATE}" > /dev/null
+    sudo chmod +x "${FS_AUTOUPDATE}"
+    _fsCrontab_ "${FS_AUTOUPDATE}" "${_cronUpdate}"
   fi
 }
 
@@ -2853,6 +2851,10 @@ _fsReset_() {
   _fsMsgTitle_ '[WARNING] Stopp and remove all containers, networks and images!'
   
   if [[ "$(_fsCaseConfirmation_ "Are you sure you want to continue?")" -eq 0 ]]; then
+      # disable and remove autoupdate
+    _fsCrontabRemove_ "${FS_AUTOUPDATE}"
+    sudo rm -f "${FS_AUTOUPDATE}"
+      # stop and remove docker images, container and networks but keeps all files
     _fsDockerPurge_
   fi
 }
