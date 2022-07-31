@@ -10,6 +10,7 @@
 * Added check for empty files in strategy function
 * Raised auto-update from 4 to every 6 hours
 * Adopted user function and moved add group docker to prerequisites routine
+* FreqUI proxy json and exchange proxy json files have been renamed (Review project files to match new filenames, see example below)
 
 ## Setup & Docker-Manager for Freqtrade
 
@@ -145,8 +146,8 @@ With Freqstart you are no longer bound to a single docker-compose.yml and can fr
          --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/exampleconfig.json
          --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/pairlist-volume-binance-busd.json
          --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/blacklist-binance.json
-         --config /freqtrade/user_data/frequi.json # OPTIONAL: If you want to manage bot via FreqUI.
-         --config /freqtrade/user_data/binance_proxy.json
+         --config /freqtrade/user_data/freqstart_frequi.json # OPTIONAL: If you want to manage bot via FreqUI.
+         --config /freqtrade/user_data/freqstart_binance_proxy.json
    ```
 
 <p align="right">(<a href="#top">back to top</a>)</p>
