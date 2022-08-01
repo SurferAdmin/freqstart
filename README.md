@@ -1,11 +1,19 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v1.0.1
+# FREQSTART v1.0.2
 
-`v1.0.1`
-* Implemented routine to check for existing webservices that may block FreqUI and/or Nginx proxy ports.
-* Compose now validates json and port for FreqUI within container incl. verbose response.
+`v1.0.2`
+* Changed folder "/data" to "/proxy" to avoid confusions with "/user_data" (Rename existing folder and re-run FreqUI setup)
+* Improved freqtrade setup routine to utilize project function
+* Improved project validate functions to ignore lines starting with comments (ignored: #example; not ignored: example #comment)
+* Added check for empty files in strategy function
+* Raised auto-update from 4 to every 6 hours
+* Adopted user function and moved add group docker to prerequisites routine
+* FreqUI proxy json and exchange proxy json files have been renamed (Review project files to match new filenames, see example below)
+* Fixed error creating ssl key with openssl in Nginx IP routine (Thanks: lsiem)
+* Fixed false container port bindings check in combination FreqUI json
+* Added interactive start of container in compose routine for projects function
 
 ## Setup & Docker-Manager for Freqtrade
 
@@ -141,8 +149,8 @@ With Freqstart you are no longer bound to a single docker-compose.yml and can fr
          --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/exampleconfig.json
          --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/pairlist-volume-binance-busd.json
          --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/blacklist-binance.json
-         --config /freqtrade/user_data/frequi.json # OPTIONAL: If you want to manage bot via FreqUI.
-         --config /freqtrade/user_data/binance_proxy.json
+         --config /freqtrade/user_data/freqstart_frequi.json # OPTIONAL: If you want to manage bot via FreqUI.
+         --config /freqtrade/user_data/freqstart_proxy_binance.json
    ```
 
 <p align="right">(<a href="#top">back to top</a>)</p>
