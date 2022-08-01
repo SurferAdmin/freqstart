@@ -294,7 +294,9 @@ _fsDockerImage_() {
     
     sudo rm -f "${_dockerPath}"
     docker save -o "${_dockerPath}" "${_dockerRepo}"':'"${_dockerTag}"
-    [[ "$(_fsFile_ "${_dockerPath}")" -eq 1 ]] && _fsMsg_ "[WARNING] Cannot create backup for: ${_dockerRepo}:${_dockerTag}"
+    if [[ "$(_fsFile_ "${_dockerPath}")" -eq 1 ]]; then
+      _fsMsgWarning_ "Cannot create backup for: ${_dockerRepo}:${_dockerTag}"
+    fi
       # return local image version
     echo "${_dockerVersionLocal}"
   else
@@ -409,7 +411,6 @@ _fsDockerProjectImages_() {
     done < <(_fsDedupeArray_ "${_ymlImages[@]}")
     
     for _ymlImage in "${_ymlImagesDeduped[@]}"; do
-      _fsMsg_ "_ymlImage: ${_ymlImage}"
         _dockerImage="$(_fsDockerImage_ "${_ymlImage}")"
         
         if [[ -z "${_dockerImage}" ]]; then
@@ -636,7 +637,7 @@ _fsDockerProject_() {
   local _procjectJson=''
   local _projectShell=''
   local _containerCmd=''
-  local _containerRunning=''
+  local _containerActive=''
   local _containerRestart=1
   local _containerName=''
   local _containerConfigs=''
@@ -729,7 +730,7 @@ _fsDockerProject_() {
     
     if [[ "${_error}" -eq 0 ]]; then
         # workaround to execute shell from variable; help: open for suggestions
-      _projectShell="$(printf -- '%s\s' "${_projectArgs}" | grep -oE '^/bin/sh -c' || true)"
+      _projectShell="$(printf -- '%s' "${_projectArgs}" | grep -oE '^/bin/sh -c' || true)"
       
       if [[ -n "${_projectShell}" ]]; then
         _projectArgs="$(printf -- '%s' "${_projectArgs}" | sed 's,/bin/sh -c ,,')"
@@ -753,7 +754,7 @@ _fsDockerProject_() {
     
     for _projectContainer in "${_projectContainers[@]}"; do
       _containerName="$(_fsDockerId2Name_ "${_projectContainer}")"
-      _containerRunning="$(_fsDockerPsName_ "${_containerName}")"
+      _containerActive="$(_fsDockerPsName_ "${_containerName}")"
       _containerJsonInner=''
       _strategyUpdate=''
       _containerStrategyUpdate=''
@@ -768,6 +769,13 @@ _fsDockerProject_() {
           # skip container if autostart is active but not true
         if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ ! "${_containerAutoupdate}" = 'true' ]]; then
           continue
+        fi
+        
+        if [[ "${_containerActive}" -eq 1 ]]; then
+          if [[ "$(_fsCaseConfirmation_ "Start container?")" -eq 1 ]]; then
+            _fsDockerRemove_ "${_containerName}"
+            continue
+          fi
         fi
         
           # create docker network if it does not exist; credit: https://stackoverflow.com/a/59878917
@@ -844,7 +852,7 @@ _fsDockerProject_() {
             fi
             
             if [[ -n "${_containerStrategyUpdate}" ]]; then
-              if [[ "${_containerRunning}" -eq 0 ]] && [[ ! "${_containerStrategyUpdate}" = "${_strategyUpdate}" ]]; then
+              if [[ "${_containerActive}" -eq 0 ]] && [[ ! "${_containerStrategyUpdate}" = "${_strategyUpdate}" ]]; then
                 _containerRestart=0
                 _fsMsgWarning_ 'Strategy is outdated: '"${_containerStrategy}"
               else
@@ -859,13 +867,13 @@ _fsDockerProject_() {
         
           # check for frequi port and config
         if [[ ! "${_containerName}" = "${FS_FREQUI}" ]]; then
-          _containerApiPort="$(docker inspect --format="{{json .}}" "${_containerName}" | jq -r '.NetworkSettings.Ports["9999/tcp"][0].HostPort // empty')"
-          _containerApiJson="$(echo "${_containerCmd}" | grep -os "${FS_FREQUI_JSON##*/}" || true)"
+          _containerApiPort="$(docker inspect --format="{{json .}}" "${_containerName}" | jq -r '.HostConfig.PortBindings["9999/tcp"][0].HostPort // empty')"
+          _containerApiJson="$(echo "${_containerCmd}" | grep -o "${FS_FREQUI_JSON##*/}" || true)"
           
           if [[ -n "${_containerApiPort}" ]] && [[ -z "${_containerApiJson}" ]]; then
-            _fsMsg_ "[WARNING] Port (${_containerApiPort}) is set but confing (${_containerApiJson}) is missing in command for FreqUI access!"
+            _fsMsgWarning_ "Port (${_containerApiPort}) is set but confing (${_containerApiJson}) is missing in command for FreqUI access!"
           elif [[ -z "${_containerApiPort}" ]] && [[ -n "${_containerApiJson}" ]]; then
-            _fsMsg_ "[WARNING] Config (${_containerApiJson}) is set in command but port (9000-9100) is missing for FreqUI access!"
+            _fsMsgWarning_ "Config (${_containerApiJson}) is set in command but port (9000-9100) is missing for FreqUI access!"
           elif [[ -z "${_containerApiPort}" ]] && [[ -z "${_containerApiJson}" ]]; then
             _fsMsg_ "Bot is not exposed to FreqUI."
           else
@@ -877,7 +885,7 @@ _fsDockerProject_() {
         _containerImage="$(sudo docker inspect --format="{{.Config.Image}}" "${_projectContainer}")"
         _containerImageVersion="$(sudo docker inspect --format="{{.Image}}" "${_projectContainer}")"
         _dockerImageVersion="$(docker inspect --format='{{.Id}}' "${_containerImage}")"
-        if [[ "${_containerRunning}" -eq 0 ]] && [[ ! "${_containerImageVersion}" = "${_dockerImageVersion}" ]]; then
+        if [[ "${_containerActive}" -eq 0 ]] && [[ ! "${_containerImageVersion}" = "${_dockerImageVersion}" ]]; then
           _fsMsgWarning_ 'Image is outdated: '"${_containerImage}"
           _containerRestart=0
         else
@@ -885,7 +893,7 @@ _fsDockerProject_() {
         fi
         
           # start container
-        if [[ "${_containerRunning}" -eq 1 ]]; then
+        if [[ "${_containerActive}" -eq 1 ]]; then
           docker start "${_containerName}" > /dev/null
           
           # restart container if necessary
@@ -921,7 +929,7 @@ _fsDockerProject_() {
         
         # validate container
       elif [[ "${_projectMode}" = "validate" ]]; then
-        if [[ "${_containerRunning}" -eq 0 ]]; then
+        if [[ "${_containerActive}" -eq 0 ]]; then
             # set restart to unless-stopped
           docker update --restart=unless-stopped "${_containerName}" > /dev/null
           
@@ -1083,7 +1091,7 @@ _fsDockerStrategy_() {
       _fsMsg_ "Strategy is installed: ${_strategyName}"
     fi
   else
-    _fsMsg_ "[WARNING] Strategy is not implemented: ${_strategyName}"
+    _fsMsgWarning_ "Strategy is not implemented: ${_strategyName}"
   fi
 }
 
@@ -1207,7 +1215,7 @@ _fsUser_() {
   
   if [[ "${_currentUserId}" -eq 0 ]]; then
 
-    _fsMsg_ "[WARNING] Your are logged in as root."
+    _fsMsgWarning_ "Your are logged in as root."
     
       # confirmation has to be no because of non-interactive mode
     if [[ "$(_fsCaseConfirmation_ 'Skip creating a new user (not recommended)?')" -eq 1 ]]; then
@@ -2849,7 +2857,7 @@ _fsRandomBase64UrlSafe_() {
 _fsReset_() {
   _fsLogo_
   
-  _fsMsgTitle_ '[WARNING] Stopp and remove all containers, networks and images!'
+  _fsMsgWarning_ 'Stopp and remove all containers, networks and images!'
   
   if [[ "$(_fsCaseConfirmation_ "Are you sure you want to continue?")" -eq 0 ]]; then
       # disable and remove autoupdate
