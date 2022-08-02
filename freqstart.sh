@@ -1275,25 +1275,15 @@ _fsUser_() {
       fi
     fi
   fi
-
+  
   if [[ "${_currentUserId}" -ne 0 ]]; then
-      # add current user to sudo group
-    if ! id -nGz "${_currentUser}" | grep -qzxF "sudo"; then
-      sudo usermod -aG sudo "${_currentUser}" && sudo newgrp sudo || true
-    fi
-    
-    if [[ -z "$(sudo -l | grep -o '(ALL : ALL) NOPASSWD: ALL')" ]]; then
-      if [[ "$(_fsCaseConfirmation_ "Give permissions without entering password everytime (recommended)?")" -eq 0 ]]; then
-        echo "${_currentUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
-      fi
-    fi
+    _fsUserGroup_ 'sudo'
   fi
 }
 
 # PREREQUISITES
 
 _fsSetupPrerequisites_() {
-  local _currentUser=''
   
   _fsMsgTitle_ "PREREQUISITES"
   
@@ -1302,10 +1292,7 @@ _fsSetupPrerequisites_() {
   _fsPkgs_ "curl" "jq" "docker-ce"
   
     # add current user to docker group
-  _currentUser="$(id -u -n)"
-  if ! id -nGz "${_currentUser}" | grep -qzxF "docker"; then
-    sudo usermod -aG docker "${_currentUser}" && sudo newgrp docker || true
-  fi
+  _fsUserGroup_ 'docker'
   
   _fsMsg_ "Update server and install unattended-upgrades? Reboot may be required!"
   
@@ -2922,6 +2909,36 @@ _fsPkgsStatus_() {
     echo 0
   else
     echo 1
+  fi
+}
+
+_fsUserGroup_() {
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
+  
+  local _group="${1}"
+  local _user=''
+  
+  _user="$(id -u -n)"
+  
+  if ! id -nGz "${_user}" | grep -qzxF "${_group}"; then
+    sudo usermod -aG docker "${_user}" || true
+    
+    if id -nGz "${_user}" | grep -qzxF "${_group}"; then
+      _fsMsg_ 'User "'"${_user}"'" added to user group: '"${_group}"
+      
+      if [[ "${_group}" = 'sudo' ]] && [[ -z "$(sudo -l | grep -o '(ALL : ALL) NOPASSWD: ALL')" ]]; then
+        if [[ "$(_fsCaseConfirmation_ "Grant permissions without entering the password every time (recommended)?")" -eq 0 ]]; then
+          echo "${_currentUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
+        fi
+      fi
+      
+        # remove scriptlock
+      _fsCleanup_
+        # login user to new group
+      sudo su "${_user}"
+    else
+      _fsMsgError_ 'Cannot add user "'"${_user}"'" to user group: '"${_group}"
+    fi
   fi
 }
 
