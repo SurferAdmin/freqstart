@@ -1096,7 +1096,7 @@ _fsDockerAutoupdate_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _projectFile="${1}"
-  local _projectAutoupdate='freqstart -c '"${_projectFile}"' -a -y'
+  local _projectAutoupdate='freqstart --compose '"${_projectFile}"' --auto --yes'
   local _projectAutoupdateMode="${2:-}" # optional: remove
   local _projectAutoupdates=""
   local _cronUpdate="0 */6 * * *" # update every 6 hours
@@ -1124,6 +1124,9 @@ _fsDockerAutoupdate_() {
 }
 
 _fsDockerPurge_() {
+  _fsCrontabRemove_ "${FS_AUTOUPDATE}"
+  rm -f "${FS_AUTOUPDATE}"
+    
   if [[ "$(_fsPkgsStatus_ "docker-ce")" -eq 0 ]]; then
     docker ps -a -q | xargs -I {} sudo docker rm -f {}
     docker network prune --force
@@ -1235,7 +1238,7 @@ _fsUser_() {
       if [[ -n "${_newUser}" ]]; then
           # stop everything on current user; credit: https://superuser.com/a/1613980
         _fsDockerPurge_
-        
+
         sudo adduser --gecos "" "${_newUser}" || sudo passwd "${_newUser}"
         sudo usermod -aG sudo "${_newUser}" || true
         sudo usermod -aG docker "${_newUser}" || true
@@ -1264,11 +1267,11 @@ _fsUser_() {
         
         _fsCdown_ 10 'to log into your new user...'
           
-          # remove temporary folder incl. scriptlock 
-        sudo rm -rf "${FS_TMP}"
+          # remove temporary folder incl. scriptlock
+        rm -rf "${FS_TMP}"
         
           # switch to new user
-        sudo su -l "${_newUser}"
+        sudo su "${_newUser}"
       fi
     fi
   fi
@@ -1778,7 +1781,7 @@ _fsSetupNginxWebservice_() {
   
   for _webservice in "${_webservices[@]}"; do 
       # credit: https://stackoverflow.com/a/66344638
-    if systemctl status "${_webservice}" 2> /dev/null | grep -Fq "Active: active"; then
+    if sudo systemctl status "${_webservice}" 2> /dev/null | grep -Fq "Active: active"; then
       _fsMsgWarning_ 'Stopping webservice to avoid ip/port collisions: '"${_webservice}"
 
       sudo systemctl stop "${_webservice}" > /dev/null 2> /dev/null || true
@@ -1850,7 +1853,7 @@ _fsSetupNginxOpenssl_() {
   done
   
     # remove autorenew certificate for domains
-  _fsCrontabRemove_ "freqstart --cert -y" 
+  _fsCrontabRemove_ "freqstart --cert --yes" 
     # stop nginx domain container
   _fsDockerRemove_ "${FS_NGINX}_domain"
     # stop/disable native webservices and free blocked ports
