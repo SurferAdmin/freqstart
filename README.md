@@ -5,6 +5,7 @@
 
 `v1.0.3`
 * Fixed and improved user add to group routine for sudo and docker
+* Improved reset routine to remove crontab and autoupdate file
 
 ## Setup & Docker-Manager for Freqtrade
 
