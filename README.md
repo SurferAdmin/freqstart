@@ -6,6 +6,7 @@
 `v1.0.3`
 * Fixed and improved user add to group routine for sudo and docker
 * Improved reset routine to remove crontab and autoupdate file
+* Set autoupdate for compose to every 6 hours an 3 minutes to give strategy as much time as possible (Thanks: ECO)
 
 ## Setup & Docker-Manager for Freqtrade
 
