@@ -144,20 +144,20 @@ _fsDockerVarsName_() {
   _dockerRepo="$(_fsDockerVarsRepo_ "${_docker}")"
   _dockerName="${FS_NAME}"'_'"$(echo "${_dockerRepo}" | sed "s,\/,_,g" | sed "s,\-,_,g")"
   
-	echo "${_dockerName}"
+  echo "${_dockerName}"
 }
 
 _fsDockerVarsTag_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-	local _docker="${1}"
-	local _dockerTag="${_docker##*:}"
+  local _docker="${1}"
+  local _dockerTag="${_docker##*:}"
   
-	if [[ "${_dockerTag}" = "${_docker}" ]]; then
-		_dockerTag="latest"
-	fi
+  if [[ "${_dockerTag}" = "${_docker}" ]]; then
+    _dockerTag="latest"
+  fi
   
-	echo "${_dockerTag}"
+  echo "${_dockerTag}"
 }
 
 _fsDockerVersionLocal_() {
@@ -167,14 +167,14 @@ _fsDockerVersionLocal_() {
   local _dockerTag="${2}"
   local _dockerVersionLocal=''
   
-	if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" -eq 0 ]]; then
-		_dockerVersionLocal="$(docker inspect --format='{{index .RepoDigests 0}}' "${_dockerRepo}:${_dockerTag}" \
-		| sed 's/.*@//')"
+  if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" -eq 0 ]]; then
+    _dockerVersionLocal="$(docker inspect --format='{{index .RepoDigests 0}}' "${_dockerRepo}:${_dockerTag}" \
+    | sed 's/.*@//')"
     
     if [[ -n "${_dockerVersionLocal}" ]]; then
       echo "${_dockerVersionLocal}"
     fi
-	fi
+  fi
 }
 
 _fsDockerVersionHub_() {
@@ -188,8 +188,8 @@ _fsDockerVersionHub_() {
   local _dockerName=''
   local _dockerManifest=''
   
-	_dockerName="$(_fsDockerVarsName_ "${_dockerRepo}")"
-	_dockerManifest="${FS_TMP}"'/'"${FS_HASH}"'_'"${_dockerName}"'_'"${_dockerTag}"'.md'
+  _dockerName="$(_fsDockerVarsName_ "${_dockerRepo}")"
+  _dockerManifest="${FS_TMP}"'/'"${FS_HASH}"'_'"${_dockerName}"'_'"${_dockerTag}"'.md'
   _token="$(curl -s "https://auth.docker.io/token?scope=repository:${_dockerRepo}:pull&service=registry.docker.io"  | jq -r '.token')"
   
   if [[ -n "${_token}" ]]; then
@@ -218,7 +218,7 @@ _fsDockerVersionHub_() {
 _fsDockerImage_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-	local _dockerImage="${1}"
+  local _dockerImage="${1}"
   local _dockerRepo=''
   local _dockerTag=''
   local _dockerName=''
@@ -305,19 +305,17 @@ _fsDockerImage_() {
 _fsDockerImageInstalled_() {
   [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-	local _dockerRepo="${1}"
-	local _dockerTag="${2}"
+  local _dockerRepo="${1}"
+  local _dockerTag="${2}"
   local _dockerImages=''
   
   _dockerImages="$(docker images -q "${_dockerRepo}:${_dockerTag}" 2> /dev/null)"
   
-	if [[ -n "${_dockerImages}" ]]; then
-      # docker image is installed
-		echo 0
-	else
-      # docker image is not installed
-		echo 1
-	fi
+  if [[ -n "${_dockerImages}" ]]; then
+    echo 0 # docker image is installed
+  else
+    echo 1 # docker image is not installed
+  fi
 }
 
 _fsDockerPsName_() {
@@ -329,47 +327,46 @@ _fsDockerPsName_() {
   local _dockerPsAll=''
   local _dockerMatch=1
   
-    # credit: https://serverfault.com/a/733498
-    # credit: https://stackoverflow.com/a/44731522
-	if [[ "${_dockerMode}" = "all" ]]; then
+  # credit: https://serverfault.com/a/733498
+  # credit: https://stackoverflow.com/a/44731522
+  if [[ "${_dockerMode}" = "all" ]]; then
     _dockerPsAll="$(docker ps -a --format '{{.Names}}' | grep -ow "${_dockerName}")" \
     || _dockerPsAll=""
+    
     [[ -n "${_dockerPsAll}" ]] && _dockerMatch=0
   else
     _dockerPs="$(docker ps --format '{{.Names}}' | grep -ow "${_dockerName}")" \
     || _dockerPs=""
+    
     [[ -n "${_dockerPs}" ]] && _dockerMatch=0
-	fi
+  fi
   
-	if [[ "${_dockerMatch}" -eq 0 ]]; then
-      # docker container exist
-		echo 0
-	else
-      # docker container does not exist
-		echo 1
-	fi
+  if [[ "${_dockerMatch}" -eq 0 ]]; then
+    echo 0 # docker container exist
+  else
+    echo 1 # docker container does not exist
+  fi
 }
 
 _fsDockerId2Name_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-	local _dockerId="${1}"
-	local _dockerName=''
+  local _dockerId="${1}"
+  local _dockerName=''
   
-	_dockerName="$(docker inspect --format="{{.Name}}" "${_dockerId}" | sed "s,\/,,")"
+  _dockerName="$(docker inspect --format="{{.Name}}" "${_dockerId}" | sed "s,\/,,")"
   
-	if [[ -n "${_dockerName}" ]]; then
-      # return docker container name
-		echo "${_dockerName}"
-	fi
+  if [[ -n "${_dockerName}" ]]; then
+    echo "${_dockerName}" # return docker container name
+  fi
 }
 
 _fsDockerRemove_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-	local _dockerName="${1}"
-    
-    # stop and remove active and non-active docker container
+  local _dockerName="${1}"
+  
+  # stop and remove active and non-active docker container
   if [[ "$(_fsDockerPsName_ "${_dockerName}" "all")" -eq 0 ]]; then
     docker update --restart=no "${_dockerName}" > /dev/null
     docker stop "${_dockerName}" > /dev/null
@@ -384,13 +381,13 @@ _fsDockerRemove_() {
 _fsDockerProjectImages_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-	local _ymlPath="${1}"
-	local _ymlImages=''
-	local _ymlImagesDeduped=''
-	local _ymlImage=''
-	local _dockerImage=''
-	local _dockerImage=''
-	local _error=0
+  local _ymlPath="${1}"
+  local _ymlImages=''
+  local _ymlImagesDeduped=''
+  local _ymlImage=''
+  local _dockerImage=''
+  local _dockerImage=''
+  local _error=0
   
     # credit: https://stackoverflow.com/a/39612060
   _ymlImages=()
@@ -408,11 +405,11 @@ _fsDockerProjectImages_() {
     done < <(_fsDedupeArray_ "${_ymlImages[@]}")
     
     for _ymlImage in "${_ymlImagesDeduped[@]}"; do
-        _dockerImage="$(_fsDockerImage_ "${_ymlImage}")"
-        
-        if [[ -z "${_dockerImage}" ]]; then
-          _error=$((_error+1))
-        fi
+      _dockerImage="$(_fsDockerImage_ "${_ymlImage}")"
+      
+      if [[ -z "${_dockerImage}" ]]; then
+        _error=$((_error+1))
+      fi
     done
     
     if [[ "${_error}" -eq 0 ]]; then
@@ -480,26 +477,26 @@ _fsDockerProjectPorts_() {
     fi
   fi
   
-	if [[ "${_error}" -eq 0 ]]; then
+  if [[ "${_error}" -eq 0 ]]; then
     echo 0
   else
     echo 1
-	fi
+  fi
 }
 
 _fsDockerProjectStrategies_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-	local _ymlPath="${1}"
-	local _strategies=''
-	local _strategiesDeduped=''
-	local _strategy=''
-	local _strategiesDir=''
-	local _strategiesDirDeduped=''
-	local _strategyDir=''
-	local _strategyPath=''
-	local _strategyFile=''
-	local _strategyPathFound=1
+  local _ymlPath="${1}"
+  local _strategies=''
+  local _strategiesDeduped=''
+  local _strategy=''
+  local _strategiesDir=''
+  local _strategiesDirDeduped=''
+  local _strategyDir=''
+  local _strategyPath=''
+  local _strategyFile=''
+  local _strategyPathFound=1
   local _error=0
   
     # download or update implemented strategies
@@ -1151,26 +1148,26 @@ _fsSetup_() {
   _fsSetupKucoinProxy_
   _fsStats_
   
-	if [[ "$(_fsIsSymlink_ "${FS_SYMLINK}")" -eq 1 ]]; then
+  if [[ "$(_fsIsSymlink_ "${FS_SYMLINK}")" -eq 1 ]]; then
     sudo rm -f "${FS_SYMLINK}"
-		sudo ln -sfn "${_symlinkSource}" "${FS_SYMLINK}"
-	fi
-	
-	if [[ "$(_fsIsSymlink_ "${FS_SYMLINK}")" -eq 1 ]]; then
-		_fsMsgError_ "Cannot create symlink: ${FS_SYMLINK}"
-	fi
+    sudo ln -sfn "${_symlinkSource}" "${FS_SYMLINK}"
+  fi
+  
+  if [[ "$(_fsIsSymlink_ "${FS_SYMLINK}")" -eq 1 ]]; then
+    _fsMsgError_ "Cannot create symlink: ${FS_SYMLINK}"
+  fi
 }
 
 # CONF
 
 _fsSetupConf_() {
-	local _domain=''
-	local _url=''
-	local _ipPublic=''
-	local _ipPublicTemp=''
-	local _ipLocal=''
+  local _domain=''
+  local _url=''
+  local _ipPublic=''
+  local _ipPublicTemp=''
+  local _ipLocal=''
   
-	if [[ "$(_fsFile_ "${FS_CONFIG}")" -eq 0 ]]; then
+  if [[ "$(_fsFile_ "${FS_CONFIG}")" -eq 0 ]]; then
     _domain="$(_fsValueGet_ "${FS_CONFIG}" '.domain' 2> /dev/null || true)"
     _url="$(_fsValueGet_ "${FS_CONFIG}" '.url' 2> /dev/null || true)"
     _ipPublic="$(_fsValueGet_ "${FS_CONFIG}" '.ip_public' 2> /dev/null || true)"
@@ -1252,8 +1249,8 @@ _fsUser_() {
           mkdir -p "${_newPath}"
         fi
           # copy script and content to new user and set permissions
-				cp -R "${_dir}"/* "${_newPath}"
-				sudo chown -R "${_newUser}":"${_newUser}" "${_newPath}"
+        cp -R "${_dir}"/* "${_newPath}"
+        sudo chown -R "${_newUser}":"${_newUser}" "${_newPath}"
         
           # remove symlink and current script and content
         rm -f "${_symlink}"
@@ -1434,12 +1431,11 @@ _fsSetupFreqtrade_() {
     mkdir -p "${FS_DIR_USER_DATA}"
     
   	if [[ ! "$(ls -A "${FS_DIR_USER_DATA}")" ]]; then
-      
         # create user_data folder
       _fsDockerProject_ "${_dockerYml}" 'run-force' 'freqtrade' \
       "create-userdir --userdir /freqtrade/${FS_DIR_USER_DATA##*/}"
       
-        # validate if directory exists and is not empty
+      # validate if directory exists and is not empty
       if [[ ! "$(ls -A "${FS_DIR_USER_DATA}")" ]]; then
         sudo rm -rf "${FS_DIR_USER_DATA}"
         _fsMsgError_ "Cannot create directory: ${FS_DIR_USER_DATA}"
@@ -2435,14 +2431,14 @@ _fsSetupFrequiCompose_() {
 # START
 
 _fsStart_() {
-	local _yml="${1:-}"
+  local _yml="${1:-}"
   local _symlink="${FS_SYMLINK}"
   
   _fsLogo_
   
-    # check if symlink from setup routine exist
-	if [[ "$(_fsIsSymlink_ "${_symlink}")" -eq 1 ]]; then
-		_fsMsgError_ "Start setup first!"
+  # check if symlink from setup routine exist
+  if [[ "$(_fsIsSymlink_ "${_symlink}")" -eq 1 ]]; then
+    _fsMsgError_ "Start setup first!"
   fi
   
   if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
@@ -2474,15 +2470,15 @@ _fsLogo_() {
 }
 
 _fsStats_() {
-	local _time=''
-	local _memory=''
-	local _disk=''
-	local _cpuCores=''
-	local _cpuLoad=''
-	local _cpuUsage=''
+  local _time=''
+  local _memory=''
+  local _disk=''
+  local _cpuCores=''
+  local _cpuLoad=''
+  local _cpuUsage=''
   
     # some handy stats to get you an impression how your server compares to the current possibly best location for binance
-	_time="$( (time curl --connect-timeout 10 -X GET "https://api.binance.com/api/v3/exchangeInfo?symbol=BNBBTC") 2>&1 > /dev/null \
+  _time="$( (time curl --connect-timeout 10 -X GET "https://api.binance.com/api/v3/exchangeInfo?symbol=BNBBTC") 2>&1 > /dev/null \
   | grep -o "real.*s" \
   | sed "s#real$(echo '\t')##" )"
   _memory="$(free -m | awk 'NR==2{printf "%s/%sMB (%.2f%%)", $3,$2,$3*100/$2 }')"
@@ -2527,19 +2523,19 @@ _fsUsage_() {
 _fsFile_() {
   local _file="${1:-}" # optional: path to file
   
-	if [[ -z "${_file}" ]]; then
+  if [[ -z "${_file}" ]]; then
     echo 1
   elif [[ -f "${_file}" ]]; then
     echo 0
   else
     echo 1
-	fi
+  fi
 }
 
 _fsFileEmpty_() {
   local _file="${1:-}" # optional: path to file
   
-	if [[ "$(_fsFile_ "${_file}")" -eq 0 ]]; then
+  if [[ "$(_fsFile_ "${_file}")" -eq 0 ]]; then
     if [[ -s "${_file}" ]]; then
       echo 0
     else
@@ -2553,8 +2549,8 @@ _fsFileEmpty_() {
 _fsFileExit_() {
   local _file="${1:-}" # optional: path to file
   
-	if [[ "$(_fsFile_ "${_file}")" -eq 1 ]]; then
-		_fsMsgError_ "File does not exist: ${_file}"
+  if [[ "$(_fsFile_ "${_file}")" -eq 1 ]]; then
+    _fsMsgError_ "File does not exist: ${_file}"
   fi
 }
 
@@ -2938,18 +2934,19 @@ _fsUserGroup_() {
 _fsIsSymlink_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-	local _symlink="${1}"
+  local _symlink="${1}"
+  
     # credit: https://stackoverflow.com/a/36180056
   if [ -L "${_symlink}" ] ; then
     if [ -e "${_symlink}" ] ; then
-			echo 0
+      echo 0
     else
-			sudo rm -f "${_symlink}"
+      sudo rm -f "${_symlink}"
       echo 1
     fi
   elif [ -e "${_symlink}" ] ; then
-			sudo rm -f "${_symlink}"
-      echo 1
+    sudo rm -f "${_symlink}"
+    echo 1
   else
     sudo rm -f "${_symlink}"
     echo 1
