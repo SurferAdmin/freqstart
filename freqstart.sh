@@ -359,7 +359,7 @@ _fsDockerId2Name_() {
 	local _dockerId="${1}"
 	local _dockerName=''
   
-	_dockerName="$(sudo docker inspect --format="{{.Name}}" "${_dockerId}" | sed "s,\/,,")"
+	_dockerName="$(docker inspect --format="{{.Name}}" "${_dockerId}" | sed "s,\/,,")"
   
 	if [[ -n "${_dockerName}" ]]; then
       # return docker container name
@@ -374,9 +374,9 @@ _fsDockerRemove_() {
     
     # stop and remove active and non-active docker container
   if [[ "$(_fsDockerPsName_ "${_dockerName}" "all")" -eq 0 ]]; then
-    sudo docker update --restart=no "${_dockerName}" > /dev/null
-    sudo docker stop "${_dockerName}" > /dev/null
-    sudo docker rm -f "${_dockerName}" > /dev/null
+    docker update --restart=no "${_dockerName}" > /dev/null
+    docker stop "${_dockerName}" > /dev/null
+    docker rm -f "${_dockerName}" > /dev/null
     
     if [[ "$(_fsDockerPsName_ "${_dockerName}" "all")" -eq 0 ]]; then
       _fsMsgError_ "Cannot remove container: ${_dockerName}"
@@ -803,7 +803,7 @@ _fsDockerProject_() {
         fi
         
           # get container command
-        _containerCmd="$(sudo docker inspect --format="{{.Config.Cmd}}" "${_projectContainer}" \
+        _containerCmd="$(docker inspect --format="{{.Config.Cmd}}" "${_projectContainer}" \
         | sed "s,\[, ,g" \
         | sed "s,\], ,g" \
         | sed "s,\",,g" \
@@ -882,8 +882,8 @@ _fsDockerProject_() {
         fi
         
           # compare latest docker image with container image
-        _containerImage="$(sudo docker inspect --format="{{.Config.Image}}" "${_projectContainer}")"
-        _containerImageVersion="$(sudo docker inspect --format="{{.Image}}" "${_projectContainer}")"
+        _containerImage="$(docker inspect --format="{{.Config.Image}}" "${_projectContainer}")"
+        _containerImageVersion="$(docker inspect --format="{{.Image}}" "${_projectContainer}")"
         _dockerImageVersion="$(docker inspect --format='{{.Id}}' "${_containerImage}")"
         if [[ "${_containerActive}" -eq 0 ]] && [[ ! "${_containerImageVersion}" = "${_dockerImageVersion}" ]]; then
           _fsMsgWarning_ 'Image is outdated: '"${_containerImage}"
