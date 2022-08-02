@@ -1099,7 +1099,7 @@ _fsDockerAutoupdate_() {
   local _projectAutoupdate='freqstart --compose '"${_projectFile}"' --auto --yes'
   local _projectAutoupdateMode="${2:-}" # optional: remove
   local _projectAutoupdates=""
-  local _cronUpdate="0 */6 * * *" # update every 6 hours
+  local _cronUpdate="3 */6 * * *" # update every 6 hours and 3 minutes; thanks: ECO
   
   _projectAutoupdates=()
   _projectAutoupdates+=("#!/usr/bin/env bash")
@@ -2931,9 +2931,7 @@ _fsUserGroup_() {
   fi
   
   if [[ "${_group}" = 'sudo' ]] && [[ -z "$(sudo -l | grep -o '(ALL : ALL) NOPASSWD: ALL' || true)" ]]; then
-    if [[ "$(_fsCaseConfirmation_ "Grant permissions without entering the password every time (recommended)?")" -eq 0 ]]; then
       echo "${_currentUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
-    fi
   fi
 }
 
