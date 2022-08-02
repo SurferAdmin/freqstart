@@ -118,34 +118,31 @@ _fsDockerVarsCompare_() {
   local _dockerVersionHub=''
   
   _dockerRepo="$(_fsDockerVarsRepo_ "${_docker}")"
-	_dockerTag="$(_fsDockerVarsTag_ "${_docker}")"
-	_dockerVersionHub="$(_fsDockerVersionHub_ "${_dockerRepo}" "${_dockerTag}")"
-	_dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerRepo}" "${_dockerTag}")"
+  _dockerTag="$(_fsDockerVarsTag_ "${_docker}")"
+  _dockerVersionHub="$(_fsDockerVersionHub_ "${_dockerRepo}" "${_dockerTag}")"
+  _dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerRepo}" "${_dockerTag}")"
   
-    # compare versions
-	if [[ -z "${_dockerVersionHub}" ]]; then
-      # unkown
-		echo 2
-	else
-		if [[ "${_dockerVersionHub}" = "${_dockerVersionLocal}" ]]; then
-        # equal
-			echo 0
-		else
-        # greater
-			echo 1
-		fi
-	fi
+  # compare versions
+  if [[ -z "${_dockerVersionHub}" ]]; then
+    echo 2 # unkown
+  else
+    if [[ "${_dockerVersionHub}" = "${_dockerVersionLocal}" ]]; then
+      echo 0 # equal
+    else
+      echo 1 # greater
+    fi
+  fi
 }
 
 _fsDockerVarsName_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-	local _docker="${1}"
-	local _dockerRepo=''
-	local _dockerName=''
+  local _docker="${1}"
+  local _dockerRepo=''
+  local _dockerName=''
   
-	_dockerRepo="$(_fsDockerVarsRepo_ "${_docker}")"
-	_dockerName="${FS_NAME}"'_'"$(echo "${_dockerRepo}" | sed "s,\/,_,g" | sed "s,\-,_,g")"
+  _dockerRepo="$(_fsDockerVarsRepo_ "${_docker}")"
+  _dockerName="${FS_NAME}"'_'"$(echo "${_dockerRepo}" | sed "s,\/,_,g" | sed "s,\-,_,g")"
   
 	echo "${_dockerName}"
 }
@@ -292,7 +289,7 @@ _fsDockerImage_() {
       mkdir -p "${FS_DIR_DOCKER}"
     fi
     
-    sudo rm -f "${_dockerPath}"
+    rm -f "${_dockerPath}"
     docker save -o "${_dockerPath}" "${_dockerRepo}"':'"${_dockerTag}"
     if [[ "$(_fsFile_ "${_dockerPath}")" -eq 1 ]]; then
       _fsMsgWarning_ "Cannot create backup for: ${_dockerRepo}:${_dockerTag}"
@@ -967,7 +964,7 @@ _fsDockerProject_() {
       if (( ${#_procjectJson[@]} )); then
         printf -- '%s\n' "${_procjectJson[@]}" | jq . | tee "${_containerConfPath}" > /dev/null
       else
-        sudo rm -f "${_containerConfPath}"
+        rm -f "${_containerConfPath}"
       fi
       
         # validate project
@@ -1118,7 +1115,7 @@ _fsDockerAutoupdate_() {
   
   if [[ "${#_projectAutoupdates[@]}" -lt 2 ]]; then
     _fsCrontabRemove_ "${FS_AUTOUPDATE}"
-    sudo rm -f "${FS_AUTOUPDATE}"
+    rm -f "${FS_AUTOUPDATE}"
   else
     printf '%s\n' "${_projectAutoupdates[@]}" | tee "${FS_AUTOUPDATE}" > /dev/null
     sudo chmod +x "${FS_AUTOUPDATE}"
@@ -1128,9 +1125,9 @@ _fsDockerAutoupdate_() {
 
 _fsDockerPurge_() {
   if [[ "$(_fsPkgsStatus_ "docker-ce")" -eq 0 ]]; then
-    sudo docker ps -a -q | xargs -I {} sudo docker rm -f {}
-    sudo docker network prune --force
-    sudo docker image ls -q | xargs -I {} sudo docker image rm -f {}
+    docker ps -a -q | xargs -I {} sudo docker rm -f {}
+    docker network prune --force
+    docker image ls -q | xargs -I {} sudo docker image rm -f {}
   fi
 }
 
@@ -2500,14 +2497,8 @@ _fsStats_() {
 	"  Disk Usage: ${_disk}" >&2
 }
 
-_fsUsage_() {
-  local _msg="${1:-}"
-  
+_fsUsage_() {  
   _fsLogo_
-  
-  if [[ -n "${_msg}" ]]; then
-    _fsMsgTitle_ "${_msg}"
-  fi
   
   printf -- '%s\n' \
   "" \
@@ -2670,7 +2661,7 @@ _fsValueUpdate_() {
   _fsFileExit_ "${_filePath}"
   
   _fileHash="$(_fsRandomHex_ 8)"
-  _fileTmp="${FS_TMP}"'/'"${_fileHash}"'_'"${_file}"
+  _fileTmp="${FS_TMP}/${_fileHash}_${_file}"
   
   if [[ "${_fileType}" = 'json' ]]; then
       # update value for json
@@ -2681,20 +2672,16 @@ _fsValueUpdate_() {
     printf '%s\n' "${_jsonUpdate}" | jq . | tee "${_fileTmp}" > /dev/null
   else
       # update value for other filetypes
-    sudo cp "${_filePath}" "${_fileTmp}"
+    cp "${_filePath}" "${_fileTmp}"
     
-    if grep -qow "\"${_key}\": \".*\"" "${_fileTmp}"; then
-        # "key": "value"
-      sudo sed -i "s,\"${_key}\": \".*\",\"${_key}\": \"${_value}\"," "${_fileTmp}"
-    elif grep -qow "\"${_key}\": \".*\"" "${_fileTmp}"; then
-        # "key": value
-      sudo sed -i "s,\"${_key}\": .*,\"${_key}\": ${_value}," "${_fileTmp}"
-    elif grep -qow "${_key}: \".*\"" "${_fileTmp}"; then
-        # key: "value"
-      sudo sed -i "s,${_key}: \".*\",${_key}: \"${_value}\"," "${_fileTmp}"
-    elif grep -qow "${_key}: \".*\"" "${_fileTmp}"; then
-        # key: value
-      sudo sed -i "s,${_key}: .*,${_key}: ${_value}," "${_fileTmp}"
+    if grep -qow "\"${_key}\": \".*\"" "${_fileTmp}"; then # "key": "value"
+      sed -i "s,\"${_key}\": \".*\",\"${_key}\": \"${_value}\"," "${_fileTmp}"
+    elif grep -qow "\"${_key}\": \".*\"" "${_fileTmp}"; then # "key": value
+      sed -i "s,\"${_key}\": .*,\"${_key}\": ${_value}," "${_fileTmp}"
+    elif grep -qow "${_key}: \".*\"" "${_fileTmp}"; then # key: "value"
+      sed -i "s,${_key}: \".*\",${_key}: \"${_value}\"," "${_fileTmp}"
+    elif grep -qow "${_key}: \".*\"" "${_fileTmp}"; then # key: value
+      sed -i "s,${_key}: .*,${_key}: ${_value}," "${_fileTmp}"
     else
       _fsMsgError_ 'Cannot find key "'"${_key}"'" in: '"${_filePath}"
     fi
@@ -2873,7 +2860,7 @@ _fsPkgs_() {
         sudo chmod +x "${_getDocker}"
         _fsMsg_ 'Installing docker can take some time, please be patient!'
         sudo sh "${_getDocker}"
-        sudo rm -f "${_getDocker}"
+        rm -f "${_getDocker}"
         sudo apt install -y -q docker-compose
       elif [[ "${_pkg}" = 'ufw' ]]; then
           # firewall setup
@@ -2920,13 +2907,18 @@ _fsUserGroup_() {
   
   _user="$(id -u -n)"
   
+    # credit: https://stackoverflow.com/a/46651233
   if ! id -nGz "${_user}" | grep -qzxF "${_group}"; then
-    sudo usermod -aG docker "${_user}" || true
+    if [[ ! "$(getent group "${_group}")" ]]; then
+      sudo groupadd "${_group}"
+    fi
+    
+    sudo usermod -aG docker "${_user}"
     
     if id -nGz "${_user}" | grep -qzxF "${_group}"; then
       _fsMsg_ 'User "'"${_user}"'" added to user group: '"${_group}"
       
-      if [[ "${_group}" = 'sudo' ]] && [[ -z "$(sudo -l | grep -o '(ALL : ALL) NOPASSWD: ALL')" ]]; then
+      if [[ "${_group}" = 'sudo' ]] && [[ -z "$(sudo -l | grep -o '(ALL : ALL) NOPASSWD: ALL' || true)" ]]; then
         if [[ "$(_fsCaseConfirmation_ "Grant permissions without entering the password every time (recommended)?")" -eq 0 ]]; then
           echo "${_currentUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
         fi
