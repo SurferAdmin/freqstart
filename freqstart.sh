@@ -2921,18 +2921,18 @@ _fsUserGroup_() {
     if id -nGz "${_user}" | grep -qzxF "${_group}"; then
       _fsMsg_ 'User "'"${_user}"'" added to user group: '"${_group}"
       
-      if [[ "${_group}" = 'sudo' ]] && [[ -z "$(sudo -l | grep -o '(ALL : ALL) NOPASSWD: ALL' || true)" ]]; then
-        if [[ "$(_fsCaseConfirmation_ "Grant permissions without entering the password every time (recommended)?")" -eq 0 ]]; then
-          echo "${_currentUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
-        fi
-      fi
-      
         # remove scriptlock
       _fsCleanup_
         # login user to new group
       sudo su "${_user}"
     else
       _fsMsgError_ 'Cannot add user "'"${_user}"'" to user group: '"${_group}"
+    fi
+  fi
+  
+  if [[ "${_group}" = 'sudo' ]] && [[ -z "$(sudo -l | grep -o '(ALL : ALL) NOPASSWD: ALL' || true)" ]]; then
+    if [[ "$(_fsCaseConfirmation_ "Grant permissions without entering the password every time (recommended)?")" -eq 0 ]]; then
+      echo "${_currentUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
     fi
   fi
 }
