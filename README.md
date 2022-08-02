@@ -4,7 +4,7 @@
 # FREQSTART v1.0.3
 
 `v1.0.3`
-* TBA
+* Fixed and improved user add to group routine for sudo and docker
 
 ## Setup & Docker-Manager for Freqtrade
 
