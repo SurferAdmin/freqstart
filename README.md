@@ -1,19 +1,13 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v1.0.2
+# FREQSTART v1.0.3
 
-`v1.0.2`
-* Changed folder "/data" to "/proxy" to avoid confusions with "/user_data" (Rename existing folder and re-run FreqUI setup)
-* Improved freqtrade setup routine to utilize project function
-* Improved project validate functions to ignore lines starting with comments (ignored: #example; not ignored: example #comment)
-* Added check for empty files in strategy function
-* Raised auto-update from 4 to every 6 hours
-* Adopted user function and moved add group docker to prerequisites routine
-* FreqUI proxy json and exchange proxy json files have been renamed (Review project files to match new filenames, see example below)
-* Fixed error creating ssl key with openssl in Nginx IP routine (Thanks: lsiem)
-* Fixed false container port bindings check in combination FreqUI json
-* Added interactive start of container in compose routine for projects function
+`v1.0.3`
+* Fixed and improved user add to group routine for sudo and docker (Thanks: lsiem)
+* Improved reset routine to remove crontab and autoupdate file
+* Set autoupdate for compose to every 6 hours an 3 minutes to give strategy as much time as possible (Thanks: ECO)
+* Simplified server time sync validation
 
 ## Setup & Docker-Manager for Freqtrade
 
@@ -141,7 +135,6 @@ With Freqstart you are no longer bound to a single docker-compose.yml and can fr
        command: >
          trade
          --dry-run
-         --dry-run-wallet
          --db-url sqlite:////freqtrade/user_data/example_dryrun.sqlite
          --logfile /freqtrade/user_data/logs/example_dryrun.log
          --strategy NostalgiaForInfinityX
