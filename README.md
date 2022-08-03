@@ -3,7 +3,7 @@
 <!-- FREQSTART -->
 # FREQSTART v1.0.4
 
-* TBA
+* Fixed permission error for server where docker is started as ubuntu (Vultr)
 
 ## Setup & Docker-Manager for Freqtrade
 
