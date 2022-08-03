@@ -135,7 +135,6 @@ With Freqstart you are no longer bound to a single docker-compose.yml and can fr
        command: >
          trade
          --dry-run
-         --dry-run-wallet
          --db-url sqlite:////freqtrade/user_data/example_dryrun.sqlite
          --logfile /freqtrade/user_data/logs/example_dryrun.log
          --strategy NostalgiaForInfinityX
