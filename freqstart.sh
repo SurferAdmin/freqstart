@@ -1367,6 +1367,9 @@ _fsSetupFirewall_() {
     sudo ufw allow 443/tcp
     sudo ufw allow 9999/tcp
     sudo ufw allow 9000:9100/tcp
+      # allow ntp sync on port 123
+    sudo ufw allow 123/udp
+    sudo ufw allow out 123/udp
     yes $'y' | sudo ufw enable || true
     
     break
@@ -1657,7 +1660,6 @@ _fsSetupNginx_() {
   
   _ipPublic="$(_fsValueGet_ "${FS_CONFIG}" '.ip_public')"
   _ipLocal="$(_fsValueGet_ "${FS_CONFIG}" '.ip_local')"
-  
   
   while true; do
     if [[ "$(_fsDockerPsName_ "${FS_NGINX}_ip")" -eq 0 ]] || [[ "$(_fsDockerPsName_ "${FS_NGINX}_domain")" -eq 0 ]]; then
@@ -2489,11 +2491,11 @@ _fsStats_() {
   _cpuUsage="$(echo | awk -v c="${_cpuCores}" -v l="${_cpuLoad}" '{print l*100/c}' | awk -F. '{print $1}')"
   
   printf -- '%s\n' \
-	"" \
-	"  Time to API (Binance): ${_time}" \
-	"  CPU Usage: ${_cpuUsage}% (avg. 15min)" \
-	"  Memory Usage: ${_memory}" \
-	"  Disk Usage: ${_disk}" >&2
+  "" \
+  "  Time to API (Binance): ${_time}" \
+  "  CPU Usage: ${_cpuUsage}% (avg. 15min)" \
+  "  Memory Usage: ${_memory}" \
+  "  Disk Usage: ${_disk}" >&2
 }
 
 _fsUsage_() {  
@@ -2916,11 +2918,8 @@ _fsUserGroup_() {
     
     if id -nGz "${_user}" | grep -qzxF "${_group}"; then
       _fsMsg_ 'User "'"${_user}"'" added to user group: '"${_group}"
-      
-        # remove scriptlock
-      _fsCleanup_
-        # login user to new group
-      sudo su "${_user}"
+        # login user to new group; # credit https://superuser.com/a/853897
+      sg "${_group}" "newgrp `id -gn`"
     else
       _fsMsgError_ 'Cannot add user "'"${_user}"'" to user group: '"${_group}"
     fi
