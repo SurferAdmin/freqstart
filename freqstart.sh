@@ -1280,7 +1280,7 @@ _fsSetupPrerequisites_() {
   
   _fsMsgTitle_ "PREREQUISITES"
   
-  sudo apt-get update || true # workaround if you have manually installed packages that are causing errors
+  sudo apt update || true # workaround if you have manually installed packages that are causing errors
   
   _fsPkgs_ "curl" "jq" "docker-ce"
   
@@ -2841,10 +2841,10 @@ _fsPkgs_() {
         sudo apt install -y -q docker-compose
       elif [[ "${_pkg}" = 'ufw' ]]; then
           # firewall setup
-        sudo apt-get install -y -q ufw
+        sudo apt install -y -q ufw
         sudo ufw logging medium > /dev/null
       else
-        sudo apt-get install -y -q "${_pkg}"
+        sudo apt install -y -q "${_pkg}"
       fi
         # validate installation
       if [[ "$(_fsPkgsStatus_ "${_pkg}")" -eq 0 ]]; then
