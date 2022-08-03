@@ -1235,7 +1235,7 @@ _fsUser_() {
       if [[ -n "${_newUser}" ]]; then
           # stop everything on current user; credit: https://superuser.com/a/1613980
         _fsDockerPurge_
-
+        
         sudo adduser --gecos "" "${_newUser}" || sudo passwd "${_newUser}"
         sudo usermod -aG sudo "${_newUser}" || true
         sudo usermod -aG docker "${_newUser}" || true
@@ -1248,27 +1248,23 @@ _fsUser_() {
         if [[ ! -d "${_newPath}" ]]; then
           mkdir -p "${_newPath}"
         fi
+        
           # copy script and content to new user and set permissions
         cp -R "${_dir}"/* "${_newPath}"
         sudo chown -R "${_newUser}":"${_newUser}" "${_newPath}"
-        
-          # remove symlink and current script and content
-        rm -f "${_symlink}"
-        rm -rf "${_dir}"
         
         if [[ "$(_fsCaseConfirmation_ "Disable \"${_currentUser}\" user (recommended)?")" -eq 0 ]]; then
           sudo usermod -L "${_currentUser}"
         fi
         
         _fsMsgTitle_ 'Files can be found in new path: '"${_newPath}"
-        
-        _fsCdown_ 10 'to log into your new user...'
-          
-          # remove temporary folder incl. scriptlock
-        rm -rf "${FS_TMP}"
+                
+          # remove symlink, tmp folder incl. scriptlock and change dir
+        rm -f "${_symlink}" && rm -rf "${FS_TMP}" && cd "${_newPath}"
         
           # switch to new user
-        sudo su "${_newUser}"
+        sudo su - "${_newUser}"
+        exit 0
       fi
     fi
   fi
