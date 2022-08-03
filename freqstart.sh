@@ -1243,7 +1243,12 @@ _fsSetupUser_() {
         
         sudo adduser --gecos "" "${_newUser}" || sudo passwd "${_newUser}"
         sudo usermod -aG sudo "${_newUser}" || true
+        
+        sudo groupadd docker || true
+        sudo groupadd ubuntu || true
+        
         sudo usermod -aG docker "${_newUser}" || true
+        sudo usermod -aG ubuntu "${_newUser}" || true
         
           # no password for sudo
         echo "${_newUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
@@ -1279,8 +1284,12 @@ _fsSetupUser_() {
     fi
   fi
   
+  sudo groupadd docker || true
+  sudo groupadd ubuntu || true
+  
   [[ "$(_fsSetupUserGroup_ "${_currentUser}" 'sudo')" -eq 1 ]] && _logout=$((_logout+1))
   [[ "$(_fsSetupUserGroup_ "${_currentUser}" 'docker')" -eq 1 ]] && _logout=$((_logout+1))
+  [[ "$(_fsSetupUserGroup_ "${_currentUser}" 'ubuntu')" -eq 1 ]] && _logout=$((_logout+1))
   
   if [[ "${_currentUserId}" -ne 0 ]] && [[ -z "$(sudo -l | grep -o '(ALL : ALL) NOPASSWD: ALL' || true)" ]]; then
     echo "${_currentUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
@@ -1437,7 +1446,10 @@ _fsSetupFreqtrade_() {
   local _configName=''
   local _configFile=''
   local _configFileTmp=''
+  local _user=''
   
+  _user="$(id -u -n)"
+
   _fsMsgTitle_ "FREQTRADE"
   
     # download original freqtrade docker project file from git repo
@@ -1463,7 +1475,7 @@ _fsSetupFreqtrade_() {
       fi
     fi
   fi
-  
+    
     # optional creation of freqtrade config
   if [[ "$(_fsCaseConfirmation_ "Skip creating a config?")" -eq 0 ]]; then
      _fsMsg_ "Skipping..."
