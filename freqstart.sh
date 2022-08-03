@@ -653,6 +653,7 @@ _fsDockerProject_() {
   local _strategyDir=''
   local _strategyPath=''
   local _dockerCmd=''
+  local _regex="(${FS_PROXY_KUCOIN}|${FS_PROXY_BINANCE}|${FS_NGINX}|${FS_FREQUI})"
   local _error=0
   
   if [[ -n "${_projectArgs}" ]]; then
@@ -767,9 +768,11 @@ _fsDockerProject_() {
         fi
         
         if [[ "${_containerActive}" -eq 1 ]]; then
-          if [[ "$(_fsCaseConfirmation_ "Start container?")" -eq 1 ]]; then
-            _fsDockerRemove_ "${_containerName}"
-            continue
+          if [[ ! $_containerName =~ $_regex ]]; then
+            if [[ "$(_fsCaseConfirmation_ "Start container?")" -eq 1 ]]; then
+              _fsDockerRemove_ "${_containerName}"
+              continue
+            fi
           fi
         fi
         
