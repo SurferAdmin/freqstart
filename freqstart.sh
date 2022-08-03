@@ -1141,7 +1141,7 @@ _fsSetup_() {
   _fsUser_
   _fsSetupPrerequisites_
   _fsSetupConf_
-  _fsSetupNtp_
+  _fsSetupChrony_
   _fsSetupFreqtrade_
   _fsSetupFrequi_
   _fsSetupBinanceProxy_
@@ -1376,37 +1376,17 @@ _fsSetupFirewall_() {
   done
 }
 
-# NTP
+# CHRONY
 
-_fsSetupNtp_() {
-  _fsMsgTitle_ "NTP (Timezone: UTC)"
+_fsSetupChrony_() {
+  _fsMsgTitle_ "CHRONY"
   
-  if [[ "$(_fsSetupNtpCheck_)" -eq 1 ]]; then
-    _fsPkgs_ "chrony"
-
-    if [[ "$(_fsSetupNtpCheck_)" -eq 1 ]]; then
-      _fsMsgError_ "Cannot activate or synchronize NTP."
-    else
-      _fsMsg_ "NTP is activated and synchronized."
-    fi
+  _fsPkgs_ "chrony"
+  
+  if [[ -n "$(chronyc activity | grep -o "200 OK" || true)" ]]; then
+    _fsMsg_ "Server time is synchronized."
   else
-    _fsMsg_ "NTP is active and synchronized."
-  fi
-}
-
-_fsSetupNtpCheck_() {
-  local timentp=''
-  local timeutc=''
-  local timesyn=''
-  
-  timentp="$(sudo timedatectl | grep -o 'NTP service: active' || true)"
-  timeutc="$(sudo timedatectl | grep -o '(UTC, +0000)' || true)"
-  timesyn="$(sudo timedatectl | grep -o 'System clock synchronized: yes' || true)"
-  
-  if [[ -z "${timentp}" ]] || [[ -z  "${timeutc}" ]] || [[ -z  "${timesyn}" ]]; then
-    echo 1
-  else
-    echo 0
+    _fsMsgWarning_ "Server time may not be synchronized."
   fi
 }
 
@@ -2867,11 +2847,6 @@ _fsPkgs_() {
           # firewall setup
         sudo apt-get install -y -q ufw
         sudo ufw logging medium > /dev/null
-      elif [[ "${_pkg}" = 'chrony' ]]; then
-          # ntp setup
-        sudo apt install -y -q chrony
-        sudo timedatectl set-timezone 'UTC'
-        sudo timedatectl set-ntp true
       else
         sudo apt-get install -y -q "${_pkg}"
       fi
