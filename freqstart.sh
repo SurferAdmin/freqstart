@@ -29,6 +29,7 @@ readonly FS_SYMLINK="/usr/local/bin/${FS_NAME}"
 
 FS_DIR="$(dirname "$(readlink --canonicalize-existing "${0}" 2> /dev/null)")"
 readonly FS_DIR
+readonly FS_PATH="${FS_DIR}/${FS_FILE}"
 readonly FS_DIR_PROXY="${FS_DIR}/proxy"
 readonly FS_DIR_DOCKER="${FS_DIR}/docker"
 readonly FS_DIR_USER_DATA="${FS_DIR}/user_data"
@@ -1138,8 +1139,8 @@ _fsSetup_() {
   local _symlinkSource="${FS_DIR}/${FS_NAME}.sh"
   
   _fsLogo_
-  _fsUser_
   _fsSetupPrerequisites_
+  _fsSetupUser_
   _fsSetupConf_
   _fsSetupChrony_
   _fsSetupFreqtrade_
@@ -1198,20 +1199,21 @@ _fsSetupConf_() {
 
 # USER
 
-_fsUser_() {
+_fsSetupUser_() {
   local	_currentUser=''
   local	_currentUserId=''
   local _dir="${FS_DIR}"
   local _symlink="${FS_SYMLINK}"
   local _newUser=''
-  local _newPath=''
-  local _logout=1
+  local _newDir=''
+  local _logout=0
+  
+  _fsMsgTitle_ "USER"
   
   _currentUser="$(id -u -n)"
   _currentUserId="$(id -u)"
   
   if [[ "${_currentUserId}" -eq 0 ]]; then
-
     _fsMsgWarning_ "Your are logged in as root."
     
       # confirmation has to be no because of non-interactive mode
@@ -1243,34 +1245,70 @@ _fsUser_() {
           # no password for sudo
         echo "${_newUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
         
-        _newPath="$(bash -c "cd ~$(printf %q "${_newUser}") && pwd")"'/'"${FS_NAME}"
+        _newDir="$(bash -c "cd ~$(printf %q "${_newUser}") && pwd")"'/'"${FS_NAME}"
+        _newPath="${_newDir}/${FS_NAME}.sh"
         
-        if [[ ! -d "${_newPath}" ]]; then
-          mkdir -p "${_newPath}"
+        if [[ ! -d "${_newDir}" ]]; then
+          mkdir -p "${_newDir}"
         fi
         
           # copy script and content to new user and set permissions
-        cp -R "${_dir}"/* "${_newPath}"
-        sudo chown -R "${_newUser}":"${_newUser}" "${_newPath}"
+        cp -R "${_dir}"/* "${_newDir}"
+        sudo chown -R "${_newUser}":"${_newUser}" "${_newDir}"
+        sudo chmod +x "${_newPath}"
+        
+          # remove symlink, tmp folder incl. scriptlock
+        rm -f "${_symlink}"
+        rm -f "${FS_PATH}"
+        rm -rf "${FS_TMP}"
         
         if [[ "$(_fsCaseConfirmation_ "Disable \"${_currentUser}\" user (recommended)?")" -eq 0 ]]; then
           sudo usermod -L "${_currentUser}"
         fi
         
-        _fsMsgTitle_ 'Files can be found in new path: '"${_newPath}"
-                
-          # remove symlink, tmp folder incl. scriptlock and change dir
-        rm -f "${_symlink}" && rm -rf "${FS_TMP}" && cd "${_newPath}"
-        
+        _fsMsgTitle_ 'Files can be found in new path: '"${_newDir}"
+        cd "${_newDir}"
           # switch to new user
+        _fsMsgWarning_ 'Restart script: '"${FS_FILE}"' --setup'
         sudo su - "${_newUser}"
         exit 0
       fi
     fi
   fi
   
-  if [[ "${_currentUserId}" -ne 0 ]]; then
-    _fsUserGroup_ 'sudo'
+  [[ "$(_fsSetupUserGroup_ "${_currentUser}" 'sudo')" -eq 1 ]] && _logout=$((_logout+1))
+  [[ "$(_fsSetupUserGroup_ "${_currentUser}" 'docker')" -eq 1 ]] && _logout=$((_logout+1))
+  
+  if [[ "${_currentUserId}" -ne 0 ]] && [[ -z "$(sudo -l | grep -o '(ALL : ALL) NOPASSWD: ALL' || true)" ]]; then
+    echo "${_currentUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
+  fi
+  
+  if [[ "${_logout}" -gt 0 ]]; then
+   _fsMsgWarning_ 'Restart script: '"${FS_FILE}"' --setup'
+    rm -rf "${FS_TMP}"
+    sudo su - "${_currentUser}"
+    exit 0
+  fi
+}
+
+_fsSetupUserGroup_() {
+  [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
+  
+  local _user="${1}"
+  local _group="${2}"
+  
+    # credit: https://stackoverflow.com/a/46651233
+  if ! id -nGz "${_user}" | grep -qzxF "${_group}"; then
+    sudo usermod -aG "${_group}" "${_user}"
+    _fsMsg_ 'User "'"${_user}"'" added to user group: '"${_group}"
+    
+    if id -nGz "${_user}" | grep -qzxF "${_group}"; then
+      echo 1
+    else
+      _fsMsgError_ 'Cannot add user to group: '"${_group}"
+    fi
+  else
+    _fsMsg_ 'User has access to group: '"${_group}"
   fi
 }
 
@@ -1285,7 +1323,6 @@ _fsSetupPrerequisites_() {
   _fsPkgs_ "curl" "jq" "docker-ce"
   
     # add current user to docker group
-  _fsUserGroup_ 'docker'
   
   _fsMsg_ "Update server and install unattended-upgrades? Reboot may be required!"
   
@@ -2868,36 +2905,6 @@ _fsPkgsStatus_() {
     echo 0
   else
     echo 1
-  fi
-}
-
-_fsUserGroup_() {
-  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
-  
-  local _group="${1}"
-  local _user=''
-  
-  _user="$(id -u -n)"
-  
-    # credit: https://stackoverflow.com/a/46651233
-  if ! id -nGz "${_user}" | grep -qzxF "${_group}"; then
-    if [[ ! "$(getent group "${_group}")" ]]; then
-      sudo groupadd "${_group}"
-    fi
-    
-    sudo usermod -aG docker "${_user}"
-    
-    if id -nGz "${_user}" | grep -qzxF "${_group}"; then
-      _fsMsg_ 'User "'"${_user}"'" added to user group: '"${_group}"
-        # login user to new group; # credit https://superuser.com/a/853897
-      sg "${_group}" "newgrp `id -gn`"
-    else
-      _fsMsgError_ 'Cannot add user "'"${_user}"'" to user group: '"${_group}"
-    fi
-  fi
-  
-  if [[ "${_group}" = 'sudo' ]] && [[ -z "$(sudo -l | grep -o '(ALL : ALL) NOPASSWD: ALL' || true)" ]]; then
-      echo "${_currentUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
   fi
 }
 
