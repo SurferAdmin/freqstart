@@ -1,13 +1,9 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v1.0.3
+# FREQSTART v1.0.4
 
-`v1.0.3`
-* Fixed and improved user add to group routine for sudo and docker (Thanks: lsiem)
-* Improved reset routine to remove crontab and autoupdate file
-* Set autoupdate for compose to every 6 hours an 3 minutes to give strategy as much time as possible (Thanks: ECO)
-* Simplified server time sync validation
+* Fixed permission error for server where docker is started as ubuntu (Vultr)
 
 ## Setup & Docker-Manager for Freqtrade
 
