@@ -1133,7 +1133,6 @@ _fsDockerPurge_() {
 _fsSetup_() {
   local _symlinkSource="${FS_DIR}/${FS_NAME}.sh"
   
-  _fsLogo_
   _fsSetupPrerequisites_
   _fsSetupConf_
   _fsSetupRootless_
@@ -1232,10 +1231,11 @@ _fsSetupRootless_() {
   local _userId=''
   local _userLinger=1
   
-  sudo loginctl disable-linger "${FS_ROOTLESS}" || true
-  sudo killall -u "${FS_ROOTLESS}" || true
-  sudo userdel "${FS_ROOTLESS}" || true
-  sudo rm -rf "${FS_ROOTLESS_DIR}" || true
+  #sudo loginctl disable-linger "${FS_ROOTLESS}" || true
+  #sudo killall -u "${FS_ROOTLESS}" || true
+  #sleep 2
+  #sudo userdel "${FS_ROOTLESS}" || true
+  #sudo rm -rf "${FS_ROOTLESS_DIR}" || true
   
   _userId="$(id -u "${FS_ROOTLESS}" || true)"
   if ! sudo loginctl show-user "${FS_ROOTLESS}" 2> /dev/null | grep -q 'Linger=yes'; then
@@ -1250,7 +1250,9 @@ _fsSetupRootless_() {
     rm /var/run/docker.sock 2> /dev/null || true
     
       # only root can log into user without password
-    useradd -m -d "${FS_ROOTLESS_DIR}" -s "$(which bash)" "${FS_ROOTLESS}"
+    if [[ -z "${_userId}" ]]; then
+      useradd -m -d "${FS_ROOTLESS_DIR}" -s "$(which bash)" "${FS_ROOTLESS}"
+    fi
     
     _userId="$(id -u "${FS_ROOTLESS}")"
     _path="${FS_ROOTLESS_DIR}/${FS_ROOTLESS}.sh"
@@ -1259,10 +1261,12 @@ _fsSetupRootless_() {
     "#!/usr/bin/env bash" \
     "dockerd-rootless-setuptool.sh install" \
     "if ! cat ~/.bashrc | grep -q '# ${FS_NAME}'; then" \
-    "echo "" >> ~/.bashrc" \
-    "echo '# ${FS_NAME}' >> ~/.bashrc" \
-    "echo 'export PATH=/usr/bin:\$PATH' >> ~/.bashrc" \
-    "echo 'export DOCKER_HOST=unix:///run/user/${_userId}/docker.sock' >> ~/.bashrc" \
+    "  printf -- '%s\n' \\" \
+    "  '' \\" \
+    "  '# ${FS_NAME}' \\" \
+    "  'export PATH=/usr/bin:\$PATH' \\" \
+    "  'export DOCKER_HOST=unix:///run/user/${_userId}/docker.sock' \\" \
+    "  '' >> ~/.bashrc" \
     "fi" \
     "export PATH=/usr/bin:\$PATH" \
     "export DOCKER_HOST=unix:///run/user/${_userId}/docker.sock" \
@@ -1291,9 +1295,11 @@ _fsSetupRootless_() {
   fi
 
   if ! cat ~/.bashrc | grep -q "# ${FS_NAME}"; then
-    echo "" >> ~/.bashrc
-    echo "# ${FS_NAME}" >> ~/.bashrc
-    echo "export DOCKER_HOST=unix:///run/user/${_userId}/docker.sock" >> ~/.bashrc
+    printf -- '%s\n' \
+    '' \
+    "# ${FS_NAME}" \
+    "export DOCKER_HOST=unix:///run/user/${_userId}/docker.sock" \
+    '' >> ~/.bashrc
   fi
   
   export "DOCKER_HOST=unix:///run/user/${_userId}/docker.sock"
@@ -1404,17 +1410,14 @@ _fsSetupFreqtrade_() {
   
   _fsFileExit_ "${_dockerYml}"
   
-  #[[ ! -d "${FS_ROOTLESS_DIR_USER_DATA}" ]] && mkdir -p "${FS_ROOTLESS_DIR_USER_DATA}"
-  
-    
-  if [[ ! "$(ls -A "${FS_ROOTLESS_DIR_USER_DATA}")" ]]; then
+  if [[ ! -d "${FS_ROOTLESS_DIR_USER_DATA}" ]]; then
       # create user_data folder
     _fsDockerProject_ "${_dockerYml}" 'run-force' 'freqtrade' \
     "create-userdir --userdir /freqtrade/${FS_ROOTLESS_DIR_USER_DATA##*/}"
     
     # validate if directory exists and is not empty
-    if [[ ! "$(ls -A "${FS_ROOTLESS_DIR_USER_DATA}")" ]]; then
-      sudo rm -rf "${FS_ROOTLESS_DIR_USER_DATA}"
+    if [[ ! "$(ls -A "${FS_ROOTLESS_DIR_USER_DATA}" 2> /dev/null)" ]]; then
+      rm -rf "${FS_ROOTLESS_DIR_USER_DATA}"
       _fsMsgError_ "Cannot create directory: ${FS_ROOTLESS_DIR_USER_DATA}"
     else
       _fsMsg_ "Directory created: ${FS_ROOTLESS_DIR_USER_DATA}"
@@ -1422,7 +1425,6 @@ _fsSetupFreqtrade_() {
   fi
   
   #sudo chown -R rootless:rootless "${FS_ROOTLESS_DIR_USER_DATA}"
-
   #sudo chmod -R g+w "${FS_ROOTLESS_DIR_USER_DATA}"
   
     # optional creation of freqtrade config
@@ -1636,6 +1638,7 @@ _fsSetupNginx_() {
   local _ipLocal=''
   local _htpasswd="${FS_ROOTLESS_DIR_PROXY}${FS_NGINX_CONFD_HTPASSWD}"
   local _htpasswdDir="${FS_ROOTLESS_DIR_PROXY}${FS_NGINX_CONFD_HTPASSWD%/*}"
+  local _sysctl="/etc/sysctl.conf/99-${FS_NAME}.conf"
   
   _ipPublic="$(_fsValueGet_ "${FS_CONFIG}" '.ip_public')"
   _ipLocal="$(_fsValueGet_ "${FS_CONFIG}" '.ip_local')"
@@ -1665,6 +1668,13 @@ _fsSetupNginx_() {
         fi
       fi
     fi
+    
+      # set unprivileged ports to start with 80 for rootles nginx proxy
+    _fsFileCreate_ "${_sysctl}" \
+    "# ${FS_NAME}"
+    '# set unprivileged ports to start with 80 for rootles nginx proxy'
+    'net.ipv4.ip_unprivileged_port_start = 80'
+    sysctl -p "${_sysctl}"
     
     while true; do
       if [[ "$(_fsFile_ "${_htpasswd}")" -eq 0 ]]; then
@@ -2420,9 +2430,7 @@ _fsSetupFrequiCompose_() {
 _fsStart_() {
   local _yml="${1:-}"
   local _symlink="${FS_SYMLINK}"
-  
-  _fsLogo_
-  
+    
   # check if symlink from setup routine exist
   if [[ "$(_fsIsSymlink_ "${_symlink}")" -eq 1 ]]; then
     _fsMsgError_ "Start setup first!"
@@ -2475,9 +2483,7 @@ _fsStats_() {
   "  Disk Usage: ${_disk}" >&2
 }
 
-_fsUsage_() {  
-  _fsLogo_
-  
+_fsUsage_() {
   printf -- '%s\n' \
   "" \
   "  Freqstart simplifies the use of Freqtrade with Docker. Including a setup guide for Freqtrade," \
@@ -2806,9 +2812,7 @@ _fsRandomBase64UrlSafe_() {
   echo "${_string}"
 }
 
-_fsReset_() {
-  _fsLogo_
-  
+_fsReset_() {  
   _fsMsgWarning_ 'Stopp and remove all containers, networks and images!'
   
   if [[ "$(_fsCaseConfirmation_ "Are you sure you want to continue?")" -eq 0 ]]; then
@@ -3096,6 +3100,7 @@ _fsOptions_() {
 
 _fsScriptLock_
 _fsOptions_ "${@}"
+_fsLogo_
 
   # validate arguments
 if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
