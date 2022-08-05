@@ -22,53 +22,42 @@ set -o nounset
 set -o pipefail
 
 readonly FS_NAME="freqstart"
-readonly FS_VERSION='v1.0.4'
-readonly FS_FILE="${0##*/}"
+readonly FS_VERSION='v2.0.0'
 readonly FS_TMP="/tmp/${FS_NAME}"
 readonly FS_SYMLINK="/usr/local/bin/${FS_NAME}"
 
-FS_DIR="$(dirname "$(readlink --canonicalize-existing "${0}" 2> /dev/null)")"
-readonly FS_DIR
+readonly FS_DIR="$(dirname "$(readlink --canonicalize-existing "${0}" 2> /dev/null)")"
+readonly FS_FILE="${0##*/}"
 readonly FS_PATH="${FS_DIR}/${FS_FILE}"
-readonly FS_DIR_PROXY="${FS_DIR}/proxy"
 readonly FS_DIR_DOCKER="${FS_DIR}/docker"
-readonly FS_DIR_USER_DATA="${FS_DIR}/user_data"
-readonly FS_DIR_USER_DATA_STRATEGIES="${FS_DIR_USER_DATA}/strategies"
-readonly FS_DIR_USER_DATA_LOGS="${FS_DIR_USER_DATA}/logs"
+
+readonly FS_ROOTLESS='rootless'
+readonly FS_ROOTLESS_DIR="/home/${FS_ROOTLESS}"
+readonly FS_ROOTLESS_DIR_PROXY="${FS_ROOTLESS_DIR}/proxy"
+readonly FS_ROOTLESS_DIR_USER_DATA="${FS_ROOTLESS_DIR}/user_data"
 
 readonly FS_CONFIG="${FS_DIR}/${FS_NAME}.conf.json"
 readonly FS_STRATEGIES="${FS_DIR}/${FS_NAME}.strategies.json"
 readonly FS_AUTOUPDATE="${FS_DIR}/${FS_NAME}.autoupdate.sh"
 
-readonly FS_NETWORK="${FS_NAME}"'_network'
+readonly FS_NETWORK="${FS_NAME}_network"
 readonly FS_NETWORK_SUBNET='172.35.0.0/16'
 readonly FS_NETWORK_GATEWAY='172.35.0.1'
 
-readonly FS_PROXY_BINANCE="${FS_NAME}"'_proxy_binance'
+readonly FS_PROXY_BINANCE="${FS_NAME}_proxy_binance"
 readonly FS_PROXY_BINANCE_IP='172.35.0.253'
-readonly FS_PROXY_BINANCE_JSON="${FS_DIR_USER_DATA}/${FS_PROXY_BINANCE}.json"
-readonly FS_PROXY_BINANCE_FUTURES_JSON="${FS_DIR_USER_DATA}/${FS_PROXY_BINANCE}_futures.json"
-readonly FS_PROXY_BINANCE_YML="${FS_DIR}/${FS_PROXY_BINANCE}.yml"
 
-readonly FS_PROXY_KUCOIN="${FS_NAME}"'_proxy_kucoin'
+readonly FS_PROXY_KUCOIN="${FS_NAME}_proxy_kucoin"
 readonly FS_PROXY_KUCOIN_IP='172.35.0.252'
-readonly FS_PROXY_KUCOIN_JSON="${FS_DIR_USER_DATA}/${FS_PROXY_KUCOIN}.json"
-readonly FS_PROXY_KUCOIN_YML="${FS_DIR}/${FS_PROXY_KUCOIN}.yml"
 
-readonly FS_NGINX="${FS_NAME}"'_nginx'
-readonly FS_NGINX_YML="${FS_DIR}"'/'"${FS_NAME}"'_nginx.yml'
+readonly FS_NGINX="${FS_NAME}_nginx"
+readonly FS_NGINX_YML="${FS_DIR}/${FS_NAME}_nginx.yml"
 readonly FS_NGINX_CONFD="/etc/nginx/conf.d"
-readonly FS_NGINX_CONFD_FREQUI="${FS_NGINX_CONFD}"'/frequi.conf'
-readonly FS_NGINX_CONFD_HTPASSWD="${FS_NGINX_CONFD}"'/.htpasswd'
-readonly FS_CERTBOT="${FS_NAME}"'_certbot'
-
-readonly FS_FREQUI="${FS_NAME}"'_frequi'
-readonly FS_FREQUI_JSON="${FS_DIR_USER_DATA}/${FS_FREQUI}.json"
-readonly FS_FREQUI_SERVER_JSON="${FS_DIR_USER_DATA}/${FS_FREQUI}_server.json"
-readonly FS_FREQUI_YML="${FS_DIR}/${FS_NAME}_frequi.yml"
-
-FS_HASH="$(xxd -l 8 -ps /dev/urandom)"
-readonly FS_HASH
+readonly FS_NGINX_CONFD_FREQUI="${FS_NGINX_CONFD}/frequi.conf"
+readonly FS_NGINX_CONFD_HTPASSWD="${FS_NGINX_CONFD}/.htpasswd"
+readonly FS_CERTBOT="${FS_NAME}_certbot"
+readonly FS_FREQUI="${FS_NAME}_frequi"
+readonly FS_HASH="$(xxd -l 8 -ps /dev/urandom)"
 
 FS_OPTS_COMPOSE=1
 FS_OPTS_SETUP=1
@@ -531,7 +520,7 @@ _fsDockerProjectStrategies_() {
     | sed "s,^/[^/]*,${FS_DIR}," || true)
     
       # add default strategy path
-    _strategiesDir+=( "${FS_DIR_USER_DATA_STRATEGIES}" )
+    _strategiesDir+=( "${FS_ROOTLESS_DIR_USER_DATA}/strategies" )
     
     _strategiesDirDeduped=()
     while read -r; do
@@ -731,7 +720,7 @@ _fsDockerProject_() {
       if [[ -n "${_projectShell}" ]]; then
         _projectArgs="$(printf -- '%s' "${_projectArgs}" | sed 's,/bin/sh -c ,,')"
                 
-        cd "${FS_DIR}" && docker-compose -f ${_projectFile} -p ${_projectName} run --rm ${_projectService} /bin/sh -c "${_projectArgs}"
+        cd "${FS_DIR}" && docker-compose -f ${_projectFile} -p ${_projectName} run --rm "${_projectService}" /bin/sh -c "${_projectArgs}"
       else
         cd "${FS_DIR}" && docker-compose -f ${_projectFile} -p ${_projectName} run --rm ${_projectService} ${_projectArgs}
       fi
@@ -815,7 +804,7 @@ _fsDockerProject_() {
           | sed "s, ,,g")"
           
           if [[ -n "${_containerLogfile}" ]]; then
-            _containerLogfile="${FS_DIR_USER_DATA_LOGS}"'/'"${_containerLogfile##*/}"
+            _containerLogfile="${FS_ROOTLESS_DIR_USER_DATA}/logs/${_containerLogfile##*/}"
             
             if [[ "$(_fsFile_ "${_containerLogfile}")" -eq 0 ]]; then
                 # workaround to preserve owner of file
@@ -866,7 +855,7 @@ _fsDockerProject_() {
           # check for frequi port and config
         if [[ ! "${_containerName}" = "${FS_FREQUI}" ]]; then
           _containerApiPort="$(docker inspect --format="{{json .}}" "${_containerName}" | jq -r '.HostConfig.PortBindings["9999/tcp"][0].HostPort // empty')"
-          _containerApiJson="$(echo "${_containerCmd}" | grep -o "${FS_FREQUI_JSON##*/}" || true)"
+          _containerApiJson="$(echo "${_containerCmd}" | grep -o "${FS_FREQUI}.json" || true)"
           
           if [[ -n "${_containerApiPort}" ]] && [[ -z "${_containerApiJson}" ]]; then
             _fsMsgWarning_ "Port (${_containerApiPort}) is set but confing (${_containerApiJson}) is missing in command for FreqUI access!"
@@ -1002,7 +991,7 @@ _fsDockerStrategy_() {
   local _strategyFileType=''
   local _strategyFileTypeName='unknown'
   local _strategyTmp="${FS_TMP}/${FS_HASH}_${_strategyName}"
-  local _strategyDir="${FS_DIR_USER_DATA_STRATEGIES}/${_strategyName}"
+  local _strategyDir="${FS_ROOTLESS_DIR_USER_DATA}/strategies/${_strategyName}"
   local _strategyUrls=''
   local _strategyUrlsDeduped=''
   local _strategyUrl=''
@@ -1129,9 +1118,12 @@ _fsDockerPurge_() {
   rm -f "${FS_AUTOUPDATE}"
     
   if [[ "$(_fsPkgsStatus_ "docker-ce")" -eq 0 ]]; then
-    docker ps -a -q | xargs -I {} sudo docker rm -f {}
-    docker network prune --force
-    docker image ls -q | xargs -I {} sudo docker image rm -f {}
+      # credit: https://stackoverflow.com/a/69921248
+    if curl -s --unix-socket /var/run/docker.sock http/_ping 2>&1 >/dev/null; then
+      docker ps -a -q | xargs -I {} sudo docker rm -f {}
+      docker network prune --force
+      docker image ls -q | xargs -I {} sudo docker image rm -f {}
+    fi
   fi
 }
 
@@ -1143,8 +1135,8 @@ _fsSetup_() {
   
   _fsLogo_
   _fsSetupPrerequisites_
-  _fsSetupUser_
   _fsSetupConf_
+  _fsSetupRootless_
   _fsSetupChrony_
   _fsSetupFreqtrade_
   _fsSetupFrequi_
@@ -1159,6 +1151,40 @@ _fsSetup_() {
   
   if [[ "$(_fsIsSymlink_ "${FS_SYMLINK}")" -eq 1 ]]; then
     _fsMsgError_ "Cannot create symlink: ${FS_SYMLINK}"
+  fi
+}
+
+# PREREQUISITES
+
+_fsSetupPrerequisites_() {
+  
+  _fsMsgTitle_ "PREREQUISITES"
+  
+  sudo apt update || true # workaround if you have manually installed packages that are causing errors
+  
+  _fsPkgs_ "curl" "jq" "docker-ce" "docker-compose"
+  
+  _fsMsg_ "Update server and install unattended-upgrades. Reboot may be required!"
+  
+  if [[ "$(_fsCaseConfirmation_ "Skip server update?")" -eq 0 ]]; then
+    _fsMsg_ "Skipping..."
+  else
+    sudo apt -o Dpkg::Options::="--force-confdef" dist-upgrade -y && \
+    sudo apt install -y unattended-upgrades && \
+    sudo apt autoremove -y
+    
+    if sudo test -f /var/run/reboot-required; then
+      _fsMsgWarning_ 'A reboot is required to finish installing updates.'
+      
+      if [[ "$(_fsCaseConfirmation_ "Skip reboot now?")" -eq 0 ]]; then
+        _fsMsg_ 'Skipping...'
+      else
+        sudo reboot
+        exit 0
+      fi
+    else
+      _fsMsg_ "A reboot is not required."
+    fi
   fi
 }
 
@@ -1200,162 +1226,90 @@ _fsSetupConf_() {
   '}'
 }
 
-# USER
+# ROOTLESS
 
-_fsSetupUser_() {
-  local	_currentUser=''
-  local	_currentUserId=''
-  local _dir="${FS_DIR}"
-  local _symlink="${FS_SYMLINK}"
-  local _newUser=''
-  local _newDir=''
-  local _logout=0
+_fsSetupRootless_() {
+  local _userId=''
+  local _userLinger=1
   
-  _fsMsgTitle_ "USER"
+  sudo loginctl disable-linger "${FS_ROOTLESS}" || true
+  sudo killall -u "${FS_ROOTLESS}" 2> /dev/null || true
+  sudo userdel "${FS_ROOTLESS}" 2> /dev/null || true
+  sudo rm -rf "${FS_ROOTLESS_DIR}" 2> /dev/null || true
   
-  _currentUser="$(id -u -n)"
-  _currentUserId="$(id -u)"
+  _userId="$(id -u "${FS_ROOTLESS}")"
+  if sudo loginctl show-user "${FS_ROOTLESS}" 2> /dev/null | grep -q 'Linger=yes'; then
+    _userLinger=0
+  fi
   
-  if [[ "${_currentUserId}" -eq 0 ]]; then
-    _fsMsgWarning_ "Your are logged in as root."
+  _fsMsgTitle_ "DOCKER (rootless)"
+  
+  if [[ "${_userLinger}" -eq 1 ]]; then
+    systemctl stop docker.socket docker.service 2> /dev/null || true
+    systemctl disable --now docker.socket docker.service 2> /dev/null || true
+    rm /var/run/docker.sock 2> /dev/null || true
     
-      # confirmation has to be no because of non-interactive mode
-    if [[ "$(_fsCaseConfirmation_ 'Skip creating a new user (not recommended)?')" -eq 1 ]]; then
-      while true; do
-        read -rp 'Enter your new username: ' _newUser
-        
-        if [[ "${_newUser}" = "" ]]; then
-          _fsCaseEmpty_
-        elif [[ "$(_fsIsAlphaDash_ "${_newUser}")" -eq 1 ]]; then
-          _fsMsg_ "Only alpha-numeric, dash and underscore characters are allowed!"
-          _newUser=''
-        else
-          if [[ "$(_fsCaseConfirmation_ "Is the username \"${_newUser}\" correct?")" -eq 0 ]]; then
-            break
-          fi
-          _newUser=''
-        fi
-      done
-      
-      if [[ -n "${_newUser}" ]]; then
-          # stop everything on current user; credit: https://superuser.com/a/1613980
-        _fsDockerPurge_
-        
-        sudo adduser --gecos "" "${_newUser}" || sudo passwd "${_newUser}"
-        sudo usermod -aG sudo "${_newUser}" || true
-        
-        sudo groupadd docker || true
-        sudo groupadd ubuntu || true
-        
-        sudo usermod -aG docker "${_newUser}" || true
-        sudo usermod -aG ubuntu "${_newUser}" || true
-        
-          # no password for sudo
-        echo "${_newUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
-        
-        _newDir="$(bash -c "cd ~$(printf %q "${_newUser}") && pwd")"'/'"${FS_NAME}"
-        _newPath="${_newDir}/${FS_NAME}.sh"
-        
-        if [[ ! -d "${_newDir}" ]]; then
-          mkdir -p "${_newDir}"
-        fi
-        
-          # copy script and content to new user and set permissions
-        cp -R "${_dir}"/* "${_newDir}"
-        sudo chown -R "${_newUser}":"${_newUser}" "${_newDir}"
-        sudo chmod +x "${_newPath}"
-        
-          # remove symlink, tmp folder incl. scriptlock
-        rm -f "${_symlink}"
-        rm -f "${FS_PATH}"
-        rm -rf "${FS_TMP}"
-        
-        if [[ "$(_fsCaseConfirmation_ "Disable \"${_currentUser}\" user (recommended)?")" -eq 0 ]]; then
-          sudo usermod -L "${_currentUser}"
-        fi
-        
-        _fsMsgTitle_ 'Files can be found in new path: '"${_newDir}"
-        cd "${_newDir}"
-          # switch to new user
-        _fsMsgWarning_ 'Restart script: '"${FS_FILE}"' --setup'
-        sudo su - "${_newUser}"
-        exit 0
-      fi
-    fi
-  fi
-  
-  sudo groupadd docker || true
-  sudo groupadd ubuntu || true
-  
-  [[ "$(_fsSetupUserGroup_ "${_currentUser}" 'sudo')" -eq 1 ]] && _logout=$((_logout+1))
-  [[ "$(_fsSetupUserGroup_ "${_currentUser}" 'docker')" -eq 1 ]] && _logout=$((_logout+1))
-  [[ "$(_fsSetupUserGroup_ "${_currentUser}" 'ubuntu')" -eq 1 ]] && _logout=$((_logout+1))
-  
-  if [[ "${_currentUserId}" -ne 0 ]] && [[ -z "$(sudo -l | grep -o '(ALL : ALL) NOPASSWD: ALL' || true)" ]]; then
-    echo "${_currentUser} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
-  fi
-  
-  if [[ "${_logout}" -gt 0 ]]; then
-   _fsMsgWarning_ 'Restart script: '"${FS_FILE}"' --setup'
-    rm -rf "${FS_TMP}"
-    sudo su - "${_currentUser}"
-    exit 0
-  fi
-}
-
-_fsSetupUserGroup_() {
-  [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
-  
-  local _user="${1}"
-  local _group="${2}"
-  
-    # credit: https://stackoverflow.com/a/46651233
-  if ! id -nGz "${_user}" | grep -qzxF "${_group}"; then
-    sudo usermod -aG "${_group}" "${_user}"
-    _fsMsg_ 'User "'"${_user}"'" added to user group: '"${_group}"
+      # only root can log into user without password
+    useradd -m -d "${FS_ROOTLESS_DIR}" -s "$(which bash)" "${FS_ROOTLESS}"
     
-    if id -nGz "${_user}" | grep -qzxF "${_group}"; then
-      echo 1
+    _userId="$(id -u "${FS_ROOTLESS}")"
+    _path="${FS_ROOTLESS_DIR}/${FS_ROOTLESS}.sh"
+    
+    _fsFileCreate_ "${_path}" \
+    "#!/usr/bin/env bash" \
+    "dockerd-rootless-setuptool.sh install" \
+    "if cat ~/.bashrc | grep -q '# ${FS_NAME}'; then" \
+    "echo "" >> ~/.bashrc" \
+    "echo '# ${FS_NAME}' >> ~/.bashrc" \
+    "echo 'export PATH=/usr/bin:\$PATH' >> ~/.bashrc" \
+    "echo 'export DOCKER_HOST=unix:///run/user/${_userId}/docker.sock' >> ~/.bashrc" \
+    "fi" \
+    "export PATH=/usr/bin:\$PATH" \
+    "export DOCKER_HOST=unix:///run/user/${_userId}/docker.sock" \
+    "systemctl --user start docker" \
+    "systemctl --user enable docker" \
+    "echo '! [WARNING] Setup complete, type the following command: exit'" \
+    "exit 0"
+    
+    sudo chmod +x "${_path}"
+    
+    _fsMsgWarning_ "Start the following script after login: ${_path}"
+    _fsCdown_ 5 "to log into user: ${FS_ROOTLESS}"
+    
+      # log into rootless user
+    machinectl shell "${FS_ROOTLESS}@"
+    
+      # confirmation to pause script while in rootless user
+    if [[ "$(_fsCaseConfirmation_ 'Continue?')" -eq 0 ]]; then
+      rm -f "${_path}"
+      sudo loginctl enable-linger "${FS_ROOTLESS}"
     else
-      _fsMsgError_ 'Cannot add user to group: '"${_group}"
+      exit 0
     fi
   else
-    _fsMsg_ 'User has access to group: '"${_group}"
+    _fsMsg_ 'Already installed.'
   fi
+
+  if cat ~/.bashrc | grep -q "# ${FS_NAME}"; then
+    echo "" >> ~/.bashrc
+    echo "# ${FS_NAME}" >> ~/.bashrc
+    echo "export DOCKER_HOST=unix:///run/user/${_userId}/docker.sock" >> ~/.bashrc
+  fi
+  
+  export "DOCKER_HOST=unix:///run/user/${_userId}/docker.sock"
 }
 
-# PREREQUISITES
+# CHRONY
 
-_fsSetupPrerequisites_() {
+_fsSetupChrony_() {
+  _fsMsgTitle_ "CHRONY"
   
-  _fsMsgTitle_ "PREREQUISITES"
+  _fsPkgs_ "chrony"
   
-  sudo apt update || true # workaround if you have manually installed packages that are causing errors
-  
-  _fsPkgs_ "curl" "jq" "docker-ce"
-  
-    # add current user to docker group
-  
-  _fsMsg_ "Update server and install unattended-upgrades? Reboot may be required!"
-  
-  if [[ "$(_fsCaseConfirmation_ "Skip server update?")" -eq 0 ]]; then
-    _fsMsg_ "Skipping..."
+  if [[ -n "$(chronyc activity | grep -o "200 OK" || true)" ]]; then
+    _fsMsg_ "Server time is synchronized."
   else
-    sudo apt -o Dpkg::Options::="--force-confdef" dist-upgrade -y && \
-    sudo apt install -y unattended-upgrades && \
-    sudo apt autoremove -y
-    
-    if sudo test -f /var/run/reboot-required; then
-      _fsMsg_ 'A reboot is required to finish installing updates.'
-      if [[ "$(_fsCaseConfirmation_ "Skip reboot now?")" -eq 0 ]]; then
-        _fsMsg_ 'Skipping...'
-      else
-        sudo reboot
-        exit 0
-      fi
-    else
-      _fsMsg_ "A reboot is not required."
-    fi
+    _fsMsgWarning_ "Server time may not be synchronized."
   fi
 }
 
@@ -1421,20 +1375,6 @@ _fsSetupFirewall_() {
   done
 }
 
-# CHRONY
-
-_fsSetupChrony_() {
-  _fsMsgTitle_ "CHRONY"
-  
-  _fsPkgs_ "chrony"
-  
-  if [[ -n "$(chronyc activity | grep -o "200 OK" || true)" ]]; then
-    _fsMsg_ "Server time is synchronized."
-  else
-    _fsMsgWarning_ "Server time may not be synchronized."
-  fi
-}
-
 # FREQTRADE
 
 _fsSetupFreqtrade_() {
@@ -1452,30 +1392,38 @@ _fsSetupFreqtrade_() {
 
   _fsMsgTitle_ "FREQTRADE"
   
-    # download original freqtrade docker project file from git repo
-  if [[ ! -f "${_dockerYml}" ]]; then
-    curl --connect-timeout 10 -s -L "${_dockerGit}" -o "${_dockerYml}"
-    _fsFileExit_ "${_dockerYml}"
-  fi
+  _fsFileCreate_ "${_dockerYml}" \
+  "---" \
+  "version: '3'" \
+  "services:" \
+  "  freqtrade:" \
+  "    image: freqtradeorg/freqtrade:stable" \
+  "    container_name: freqtrade" \
+  "    volumes:" \
+  '      - "'"${FS_ROOTLESS_DIR_USER_DATA}"':/freqtrade/user_data"'
   
-  if [[ ! -d "${FS_DIR_USER_DATA}" ]]; then
-    mkdir -p "${FS_DIR_USER_DATA}"
+  _fsFileExit_ "${_dockerYml}"
+  
+  #[[ ! -d "${FS_ROOTLESS_DIR_USER_DATA}" ]] && mkdir -p "${FS_ROOTLESS_DIR_USER_DATA}"
+  
     
-  	if [[ ! "$(ls -A "${FS_DIR_USER_DATA}")" ]]; then
-        # create user_data folder
-      _fsDockerProject_ "${_dockerYml}" 'run-force' 'freqtrade' \
-      "create-userdir --userdir /freqtrade/${FS_DIR_USER_DATA##*/}"
-      
-      # validate if directory exists and is not empty
-      if [[ ! "$(ls -A "${FS_DIR_USER_DATA}")" ]]; then
-        sudo rm -rf "${FS_DIR_USER_DATA}"
-        _fsMsgError_ "Cannot create directory: ${FS_DIR_USER_DATA}"
-      else
-        _fsMsg_ "Directory created: ${FS_DIR_USER_DATA}"
-      fi
+  if [[ ! "$(ls -A "${FS_ROOTLESS_DIR_USER_DATA}")" ]]; then
+      # create user_data folder
+    _fsDockerProject_ "${_dockerYml}" 'run-force' 'freqtrade' \
+    "create-userdir --userdir /freqtrade/${FS_ROOTLESS_DIR_USER_DATA##*/}"
+    
+    # validate if directory exists and is not empty
+    if [[ ! "$(ls -A "${FS_ROOTLESS_DIR_USER_DATA}")" ]]; then
+      sudo rm -rf "${FS_ROOTLESS_DIR_USER_DATA}"
+      _fsMsgError_ "Cannot create directory: ${FS_ROOTLESS_DIR_USER_DATA}"
+    else
+      _fsMsg_ "Directory created: ${FS_ROOTLESS_DIR_USER_DATA}"
     fi
   fi
-    
+  sudo chown -R rootless:rootless "${FS_ROOTLESS_DIR_USER_DATA}"
+
+  #sudo chmod -R g+w "${FS_ROOTLESS_DIR_USER_DATA}"
+  
     # optional creation of freqtrade config
   if [[ "$(_fsCaseConfirmation_ "Skip creating a config?")" -eq 0 ]]; then
      _fsMsg_ "Skipping..."
@@ -1505,8 +1453,8 @@ _fsSetupFreqtrade_() {
       fi
     done
     
-    _configFile="${FS_DIR_USER_DATA}/${_configName}.json"
-    _configFileTmp="${FS_DIR_USER_DATA}/${_configName}.tmp.json"
+    _configFile="${FS_ROOTLESS_DIR_USER_DATA}/${_configName}.json"
+    _configFileTmp="${FS_ROOTLESS_DIR_USER_DATA}/${_configName}.tmp.json"
     
     if [[ "$(_fsFile_ "${_configFile}")" -eq 0 ]]; then
       _fsMsg_ "The config file already exist: ${_configFile}"
@@ -1518,7 +1466,7 @@ _fsSetupFreqtrade_() {
     
     if [[ -n "${_configName}" ]]; then
       _fsDockerProject_ "${_dockerYml}" 'run-force' 'freqtrade' \
-      "new-config --config /freqtrade/${FS_DIR_USER_DATA##*/}/${_configFileTmp##*/}"
+      "new-config --config /freqtrade/${FS_ROOTLESS_DIR_USER_DATA##*/}/${_configFileTmp##*/}"
             
       _fsFileExit_ "${_configFileTmp}"
       
@@ -1535,6 +1483,7 @@ _fsSetupFreqtrade_() {
 
 _fsSetupBinanceProxy_() {
   local _docker="nightshift2k/binance-proxy:latest"
+  local _yml="${FS_DIR}/${FS_PROXY_BINANCE}.yml"
   
   _fsMsgTitle_ 'PROXY FOR BINANCE'
   
@@ -1554,7 +1503,7 @@ _fsSetupBinanceProxy_() {
     fi
     
       # binance proxy json file
-    _fsFileCreate_ "${FS_PROXY_BINANCE_JSON}" \
+    _fsFileCreate_ "${FS_ROOTLESS_DIR_USER_DATA}/${FS_PROXY_BINANCE}.json" \
     "{" \
     "    \"exchange\": {" \
     "        \"name\": \"binance\"," \
@@ -1573,7 +1522,7 @@ _fsSetupBinanceProxy_() {
     "}"
     
       # binance proxy futures json file
-    _fsFileCreate_ "${FS_PROXY_BINANCE_FUTURES_JSON}" \
+    _fsFileCreate_ "${FS_ROOTLESS_DIR_USER_DATA}/${FS_PROXY_BINANCE}_futures.json" \
     "{" \
     "    \"exchange\": {" \
     "        \"name\": \"binance\"," \
@@ -1592,7 +1541,7 @@ _fsSetupBinanceProxy_() {
     "}"
     
       # binance proxy project file
-    _fsFileCreate_ "${FS_PROXY_BINANCE_YML}" \
+    _fsFileCreate_ "${_yml}" \
     "---" \
     "version: '3'" \
     "services:" \
@@ -1604,7 +1553,7 @@ _fsSetupBinanceProxy_() {
     "      --port-futures=8991" \
     "      --verbose" \
     
-    _fsDockerProject_ "$(basename "${FS_PROXY_BINANCE_YML}")" 'compose-force'
+    _fsDockerProject_ "$(basename "${_yml}")" 'compose-force'
     
     break
   done
@@ -1615,6 +1564,7 @@ _fsSetupBinanceProxy_() {
 
 _fsSetupKucoinProxy_() {
   local _docker="mikekonan/exchange-proxy:latest-amd64"
+  local _yml="${FS_DIR}/${FS_PROXY_KUCOIN}.yml"
   
   _fsMsgTitle_ 'PROXY FOR KUCOIN'
   
@@ -1634,7 +1584,7 @@ _fsSetupKucoinProxy_() {
     fi
     
       # kucoin proxy json file
-    _fsFileCreate_ "${FS_PROXY_KUCOIN_JSON}" \
+    _fsFileCreate_ "${FS_ROOTLESS_DIR_USER_DATA}/${FS_PROXY_KUCOIN}.json" \
     "{" \
     "    \"exchange\": {" \
     "        \"name\": \"kucoin\"," \
@@ -1656,7 +1606,7 @@ _fsSetupKucoinProxy_() {
     "}"
     
       # kucoin proxy project file
-    _fsFileCreate_ "${FS_PROXY_KUCOIN_YML}" \
+    _fsFileCreate_ "${_yml}" \
     "---" \
     "version: '3'" \
     "services:" \
@@ -1667,7 +1617,7 @@ _fsSetupKucoinProxy_() {
     "      -port 8980" \
     "      -verbose 1"
     
-    _fsDockerProject_ "$(basename "${FS_PROXY_KUCOIN_YML}")" 'compose-force'
+    _fsDockerProject_ "$(basename "${_yml}")" 'compose-force'
     
     break
   done
@@ -1683,8 +1633,8 @@ _fsSetupNginx_() {
   local _ipPublic=''
   local _ipPublicTemp=''
   local _ipLocal=''
-  local _htpasswd="${FS_DIR_PROXY}${FS_NGINX_CONFD_HTPASSWD}"
-  local _htpasswdDir="${FS_DIR_PROXY}${FS_NGINX_CONFD_HTPASSWD%/*}"
+  local _htpasswd="${FS_ROOTLESS_DIR_PROXY}${FS_NGINX_CONFD_HTPASSWD}"
+  local _htpasswdDir="${FS_ROOTLESS_DIR_PROXY}${FS_NGINX_CONFD_HTPASSWD%/*}"
   
   _ipPublic="$(_fsValueGet_ "${FS_CONFIG}" '.ip_public')"
   _ipLocal="$(_fsValueGet_ "${FS_CONFIG}" '.ip_local')"
@@ -1844,19 +1794,20 @@ _fsSetupNginxOpenssl_() {
   local _sslConf="${_sslSnippets}"'/self-signed.conf'
   local _sslConfParam="${_sslSnippets}"'/ssl-params.conf'
   
-  _ipPublic="$(dig +short myip.opendns.com @resolver1.opendns.com)"
+  _ipPublic="$(dig +short myip.opendns.com @resolver1.opendns.com || true)"
+  [[ -z "${_ipPublic}" ]] && _ipPublic='not set'
   
   while true; do
     printf -- '%s\n' \
     "? Which IP to access FreqUI:" \
-    "  1) Public IP" \
+    "  1) Public IP (${_ipPublic})" \
     "  2) Local IP" >&2
     
-    if [[ "${FS_OPTS_YES}" -eq 1 ]]; then
-      read -rp "  Choose number (default: 1): " _nr
-    elif  [[ -z "${_ipPublic}" ]]; then
+    if  [[ "${_ipPublic}" = 'not set' ]]; then
       _fsMsgWarning_ 'Cannot access public IP!'
       local _nr="2"
+    elif [[ "${FS_OPTS_YES}" -eq 1 ]]; then
+      read -rp "  Choose number (default: 1): " _nr
     else
       local _nr="1"
     fi
@@ -1967,14 +1918,14 @@ _fsSetupNginxOpenssl_() {
   '    image: amd64/nginx:stable' \
   '    network_mode: host' \
   '    volumes:' \
-  "      - ${FS_DIR_PROXY}${FS_NGINX_CONFD}:${FS_NGINX_CONFD}" \
-  "      - ${FS_DIR_PROXY}${_sslSnippets}:${_sslSnippets}" \
-  "      - ${FS_DIR_PROXY}${_sslParam}:${_sslParam}" \
-  "      - ${FS_DIR_PROXY}${_sslCerts}:${_sslCerts}" \
-  "      - ${FS_DIR_PROXY}${_sslPrivate}:${_sslPrivate}"
+  "      - ${FS_ROOTLESS_DIR_PROXY}${FS_NGINX_CONFD}:${FS_NGINX_CONFD}" \
+  "      - ${FS_ROOTLESS_DIR_PROXY}${_sslSnippets}:${_sslSnippets}" \
+  "      - ${FS_ROOTLESS_DIR_PROXY}${_sslParam}:${_sslParam}" \
+  "      - ${FS_ROOTLESS_DIR_PROXY}${_sslCerts}:${_sslCerts}" \
+  "      - ${FS_ROOTLESS_DIR_PROXY}${_sslPrivate}:${_sslPrivate}"
   
     # create nginx conf for ip ssl; credit: https://serverfault.com/a/1060487
-  _fsFileCreate_ "${FS_DIR_PROXY}${FS_NGINX_CONFD_FREQUI}" \
+  _fsFileCreate_ "${FS_ROOTLESS_DIR_PROXY}${FS_NGINX_CONFD_FREQUI}" \
   'map $http_cookie $rate_limit_key {' \
   "    default \$binary_remote_addr;" \
   '    "~__Secure-rl-bypass='"${_bypass}"'" "";' \
@@ -2024,14 +1975,14 @@ _fsSetupNginxOpenssl_() {
   "    }" \
   "}"
   
-  mkdir -p "${FS_DIR_PROXY}${_sslPrivate}"
-  mkdir -p "${FS_DIR_PROXY}${_sslCerts}"
+  mkdir -p "${FS_ROOTLESS_DIR_PROXY}${_sslPrivate}"
+  mkdir -p "${FS_ROOTLESS_DIR_PROXY}${_sslCerts}"
   
-  _fsFileCreate_ "${FS_DIR_PROXY}${_sslConf}" \
+  _fsFileCreate_ "${FS_ROOTLESS_DIR_PROXY}${_sslConf}" \
   "ssl_certificate ${_sslCert};" \
   "ssl_certificate_key ${_sslKey};"
   
-  _fsFileCreate_ "${FS_DIR_PROXY}${_sslConfParam}" \
+  _fsFileCreate_ "${FS_ROOTLESS_DIR_PROXY}${_sslConfParam}" \
   "ssl_protocols TLSv1.2;" \
   "ssl_prefer_server_ciphers on;" \
   "ssl_dhparam ${_sslParam};" \
@@ -2049,19 +2000,21 @@ _fsSetupNginxOpenssl_() {
   "add_header X-XSS-Protection \"1; mode=block\";"
   
   while true; do
-    if [[ "$(_fsFileEmpty_ "${FS_DIR_PROXY}${_sslKey}")" -eq 0 ]]; then
+    if [[ "$(_fsFileEmpty_ "${FS_ROOTLESS_DIR_PROXY}${_sslKey}")" -eq 0 ]]; then
       if [[ "$(_fsCaseConfirmation_ "Skip generating new SSL key?")" -eq 0 ]]; then
         _fsMsg_ "Skipping..."
         break
       else
-        sudo rm -f "${FS_DIR_PROXY}${_sslKey}"
-        sudo rm -f "${FS_DIR_PROXY}${_sslCert}"
-        sudo rm -f "${FS_DIR_PROXY}${_sslParam}"
+        sudo rm -f "${FS_ROOTLESS_DIR_PROXY}${_sslKey}"
+        sudo rm -f "${FS_ROOTLESS_DIR_PROXY}${_sslCert}"
+        sudo rm -f "${FS_ROOTLESS_DIR_PROXY}${_sslParam}"
       fi
     fi
     
-    touch "${FS_DIR_PROXY}${_sslParam}"
-    
+    touch "${FS_ROOTLESS_DIR_PROXY}${_sslParam}"
+
+  sudo chown -R rootless:rootless "${FS_ROOTLESS_DIR_PROXY}"
+
       # generate self-signed certificate
     _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_NGINX}_ip" \
     "/bin/sh -c" \
@@ -2087,8 +2040,8 @@ _setupNginxLetsencrypt_() {
   local _sslCert=''
   local _sslKey=''
   local _bypass=''
-  local _sslNginx="${FS_DIR_PROXY}/certbot/conf/options-ssl-nginx.conf"
-  local _sslDhparams="${FS_DIR_PROXY}/certbot/conf/ssl-dhparams.pem"
+  local _sslNginx="${FS_ROOTLESS_DIR_PROXY}/certbot/conf/options-ssl-nginx.conf"
+  local _sslDhparams="${FS_ROOTLESS_DIR_PROXY}/certbot/conf/ssl-dhparams.pem"
   local _certEmail=''
   local _cronCmd="freqstart --cert -y"
   local _cronUpdate="30 0 * * 0" # update at 0:30am UTC on sunday every week
@@ -2159,9 +2112,9 @@ _setupNginxLetsencrypt_() {
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_local' ''
     _fsValueUpdate_ "${FS_CONFIG}" '.url' "${_url}"
     
-    mkdir -p "${FS_DIR_PROXY}/certbot/conf"
-    mkdir -p "${FS_DIR_PROXY}/certbot/www"
-    mkdir -p "${FS_DIR_PROXY}/certbot/conf/live/${_domain}"
+    mkdir -p "${FS_ROOTLESS_DIR_PROXY}/certbot/conf"
+    mkdir -p "${FS_ROOTLESS_DIR_PROXY}/certbot/www"
+    mkdir -p "${FS_ROOTLESS_DIR_PROXY}/certbot/conf/live/${_domain}"
     
       # credit: https://github.com/wmnnd/nginx-certbot/
     _fsFileCreate_ "${FS_NGINX_YML}" \
@@ -2173,16 +2126,16 @@ _setupNginxLetsencrypt_() {
     "    hostname: ${FS_NGINX}_domain" \
     '    network_mode: host' \
     '    volumes:' \
-    "      - ${FS_DIR_PROXY}${FS_NGINX_CONFD}:${FS_NGINX_CONFD}" \
-    "      - ${FS_DIR_PROXY}/certbot/conf:/etc/letsencrypt" \
-    "      - ${FS_DIR_PROXY}/certbot/www:/var/www/certbot" \
+    "      - ${FS_ROOTLESS_DIR_PROXY}${FS_NGINX_CONFD}:${FS_NGINX_CONFD}" \
+    "      - ${FS_ROOTLESS_DIR_PROXY}/certbot/conf:/etc/letsencrypt" \
+    "      - ${FS_ROOTLESS_DIR_PROXY}/certbot/www:/var/www/certbot" \
     "  ${FS_CERTBOT}:" \
     '    image: certbot/certbot:latest' \
     "    container_name: ${FS_CERTBOT}" \
     "    hostname: ${FS_CERTBOT}" \
     '    volumes:' \
-    "      - ${FS_DIR_PROXY}/certbot/conf:/etc/letsencrypt" \
-    "      - ${FS_DIR_PROXY}/certbot/www:/var/www/certbot"
+    "      - ${FS_ROOTLESS_DIR_PROXY}/certbot/conf:/etc/letsencrypt" \
+    "      - ${FS_ROOTLESS_DIR_PROXY}/certbot/www:/var/www/certbot"
     
       # download recommended TLS parameters
     if [[ "$(_fsFile_ "${_sslNginx}")" -eq 1 ]] || [[ "$(_fsFile_ "${_sslDhparams}")" -eq 1 ]]; then
@@ -2200,7 +2153,7 @@ _setupNginxLetsencrypt_() {
     
       # workaround for first setup while missing cert files
     if [[ "$(_fsFile_ "${_sslCert}")" -eq 1 ]] || [[ "$(_fsFile_ "${_sslKey}")" -eq 1 ]]; then
-      _fsFileCreate_ "${FS_DIR_PROXY}${FS_NGINX_CONFD_FREQUI}" \
+      _fsFileCreate_ "${FS_ROOTLESS_DIR_PROXY}${FS_NGINX_CONFD_FREQUI}" \
       "server {" \
       "    listen ${_domain}:80;" \
       "    server_name ${_domain};" \
@@ -2219,7 +2172,7 @@ _setupNginxLetsencrypt_() {
     "certonly --webroot -w /var/www/certbot ${_certEmail} -d ${_domain} --rsa-key-size 4096 --agree-tos"
     
       # create nginx conf for domain ssl; credit: https://serverfault.com/a/1060487
-    _fsFileCreate_ "${FS_DIR_PROXY}${FS_NGINX_CONFD_FREQUI}" \
+    _fsFileCreate_ "${FS_ROOTLESS_DIR_PROXY}${FS_NGINX_CONFD_FREQUI}" \
     'map $http_cookie $rate_limit_key {' \
     "    default \$binary_remote_addr;" \
     '    "~__Secure-rl-bypass='"${_bypass}"'" "";' \
@@ -2331,10 +2284,13 @@ _fsSetupFrequiJson_() {
   local _username=''
   local _password=''
   local _url=''
+  local _json="${FS_ROOTLESS_DIR_USER_DATA}/${FS_FREQUI}.json"
+  local _jsonServer="${FS_ROOTLESS_DIR_USER_DATA}/${FS_FREQUI}_server.json"
+  local _yml="${FS_DIR}/${FS_FREQUI}.yml"
   
-  _jwt="$(_fsValueGet_ "${FS_FREQUI_JSON}" ".api_server.jwt_secret_key")"
-  _username="$(_fsValueGet_ "${FS_FREQUI_JSON}" ".api_server.username")"
-  _password="$(_fsValueGet_ "${FS_FREQUI_JSON}" ".api_server.password")"
+  _jwt="$(_fsValueGet_ "${_json}" ".api_server.jwt_secret_key")"
+  _username="$(_fsValueGet_ "${_json}" ".api_server.username")"
+  _password="$(_fsValueGet_ "${_json}" ".api_server.password")"
   _url="$(_fsValueGet_ "${FS_CONFIG}" ".url")"
   
     # generate jwt if it is not set in config
@@ -2370,7 +2326,7 @@ _fsSetupFrequiJson_() {
   
   if [[ -n "${_username}" ]] && [[ -n "${_password}" ]]; then
       # create frequi json for bots
-    _fsFileCreate_ "${FS_FREQUI_JSON}" \
+    _fsFileCreate_ "${_json}" \
     '{' \
     '    "api_server": {' \
     '        "enabled": true,' \
@@ -2391,10 +2347,10 @@ _fsSetupFrequiJson_() {
 
 _fsSetupFrequiCompose_() {
   local _frequiStrategy='DoesNothingStrategy'
-  local _frequiServerLog="${FS_DIR_USER_DATA}"'/logs/'"${FS_FREQUI}"'.log'
+  local _frequiServerLog="${FS_ROOTLESS_DIR_USER_DATA}"'/logs/'"${FS_FREQUI}"'.log'
   local _docker="freqtradeorg/freqtrade:stable"
   
-  _fsFileCreate_ "${FS_FREQUI_SERVER_JSON}" \
+  _fsFileCreate_ "${_jsonServer}" \
   "{" \
   "    \"max_open_trades\": 1," \
   "    \"stake_currency\": \"BTC\"," \
@@ -2434,7 +2390,7 @@ _fsSetupFrequiCompose_() {
   "    \"initial_state\": \"running\"" \
   "}"
   
-  _fsFileCreate_ "${FS_FREQUI_YML}" \
+  _fsFileCreate_ "${_yml}" \
   "---" \
   "version: '3'" \
   "services:" \
@@ -2442,7 +2398,7 @@ _fsSetupFrequiCompose_() {
   "    image: ${_docker}" \
   "    container_name: ${FS_FREQUI}" \
   "    volumes:" \
-  '      - "'"${FS_DIR_USER_DATA}"':/freqtrade/user_data"' \
+  '      - "'"${FS_ROOTLESS_DIR_USER_DATA}"':/freqtrade/user_data"' \
   "    ports:" \
   '      - "127.0.0.1:9999:9999"' \
   "    tty: true" \
@@ -2451,10 +2407,10 @@ _fsSetupFrequiCompose_() {
   "      --logfile /freqtrade/user_data/logs/$(basename "${_frequiServerLog}")" \
   "      --strategy ${_frequiStrategy}" \
   "      --strategy-path /freqtrade/user_data/strategies/${_frequiStrategy}" \
-  "      --config /freqtrade/user_data/$(basename "${FS_FREQUI_SERVER_JSON}")" \
-  "      --config /freqtrade/user_data/$(basename "${FS_FREQUI_JSON}")"
+  "      --config /freqtrade/user_data/$(basename "${_jsonServer}")" \
+  "      --config /freqtrade/user_data/$(basename "${_json}")"
   
-  _fsDockerProject_ "${FS_FREQUI_YML}" 'compose-force'
+  _fsDockerProject_ "${_yml}" 'compose-force'
 }
 
 ###
@@ -2881,22 +2837,36 @@ _fsPkgs_() {
   
   for _pkg in "${_pkgs[@]}"; do
     if [[ "$(_fsPkgsStatus_ "${_pkg}")" -eq 1 ]]; then
-      if [[ "${_pkg}" = 'docker-ce' ]]; then
+      if [[ "${_pkg}" = 'xxxxx' ]]; then
           # docker setup
+        #sudo apt purge -y docker-ce docker docker-engine docker.io containerd runc || true
+        sudo apt install -y dbus-user-session
+        mkdir -p "${FS_DIR_DOCKER}"
+        curl --connect-timeout 10 -fsSL "https://get.docker.com/rootless" -o "${_getDocker}"
+        _fsFileExit_ "${_getDocker}"
+        sudo chmod +x "${_getDocker}"
+        _fsMsgTitle_ 'Installing docker can take some time, please be patient!'
+        sh "${_getDocker}" || true
+        rm -f "${_getDocker}"
+        #dockerd-rootless-setuptool.sh install
+          # exposing privileged ports for proxy
+        sudo setcap cap_net_bind_service=ep $(which rootlesskit)
+        systemctl --user restart docker
+      elif [[ "${_pkg}" = 'docker-ce' ]]; then
+        sudo apt install -y "uidmap" "dbus-user-session" "systemd-container"
         mkdir -p "${FS_DIR_DOCKER}"
         curl --connect-timeout 10 -fsSL "https://get.docker.com" -o "${_getDocker}"
         _fsFileExit_ "${_getDocker}"
         sudo chmod +x "${_getDocker}"
-        _fsMsg_ 'Installing docker can take some time, please be patient!'
-        sudo sh "${_getDocker}"
+        _fsMsgTitle_ 'Installing docker can take some time, please be patient!'
+        sh "${_getDocker}" || true
         rm -f "${_getDocker}"
-        sudo apt install -y -q docker-compose
       elif [[ "${_pkg}" = 'ufw' ]]; then
           # firewall setup
         sudo apt install -y -q ufw
         sudo ufw logging medium > /dev/null
       else
-        sudo apt install -y -q "${_pkg}"
+        sudo apt install -y "${_pkg}"
       fi
         # validate installation
       if [[ "$(_fsPkgsStatus_ "${_pkg}")" -eq 0 ]]; then
@@ -3084,7 +3054,7 @@ _fsOptions_() {
     case "${1}" in
       --compose|-c)
         FS_OPTS_COMPOSE=0
-        readonly c_arg="${2}"
+        c_arg="${2}"
         shift
         shift
         ;;
@@ -3094,7 +3064,7 @@ _fsOptions_() {
         ;;
       --quit|-q)
         FS_OPTS_QUIT=0
-        readonly q_arg="${2}"
+        q_arg="${2}"
         shift
         shift
         ;;
