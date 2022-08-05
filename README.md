@@ -1,9 +1,10 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v1.0.4
+# FREQSTART v2.0.0
+(Requires full setup. Do not update from previous versions!)
 
-* Fixed permission error for server where docker is started as ubuntu (Vultr)
+* Implemented rootless docker setup routine
 
 ## Setup & Docker-Manager for Freqtrade
 
@@ -46,7 +47,7 @@ Freqstart provides an interactive setup guide for server security, Freqtrade inc
 
 Freqstart installs server packages and configurations tailored to the needs of Freqtrade and may overwrite existing installations and configurations. It is recommended to set it up in a new and clean environment!
 
-Packages: git, curl, jq, docker-ce, chrony, ufw
+Packages: git, curl, jq, docker-ce, docker-compose, docker-ce-rootless-extras, systemd-container, uidmap, dbus-user-session, chrony, ufw
 
 ### Recommended VPS
 
