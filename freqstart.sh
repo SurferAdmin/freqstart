@@ -1233,18 +1233,18 @@ _fsSetupRootless_() {
   local _userLinger=1
   
   sudo loginctl disable-linger "${FS_ROOTLESS}" || true
-  sudo killall -u "${FS_ROOTLESS}" 2> /dev/null || true
-  sudo userdel "${FS_ROOTLESS}" 2> /dev/null || true
-  sudo rm -rf "${FS_ROOTLESS_DIR}" 2> /dev/null || true
+  sudo killall -u "${FS_ROOTLESS}" || true
+  sudo userdel "${FS_ROOTLESS}" || true
+  sudo rm -rf "${FS_ROOTLESS_DIR}" || true
   
-  _userId="$(id -u "${FS_ROOTLESS}")"
-  if sudo loginctl show-user "${FS_ROOTLESS}" 2> /dev/null | grep -q 'Linger=yes'; then
+  _userId="$(id -u "${FS_ROOTLESS}" || true)"
+  if ! sudo loginctl show-user "${FS_ROOTLESS}" 2> /dev/null | grep -q 'Linger=yes'; then
     _userLinger=0
   fi
   
   _fsMsgTitle_ "DOCKER (rootless)"
   
-  if [[ "${_userLinger}" -eq 1 ]]; then
+  if [[ "${_userLinger}" -eq 0 ]]; then
     systemctl stop docker.socket docker.service 2> /dev/null || true
     systemctl disable --now docker.socket docker.service 2> /dev/null || true
     rm /var/run/docker.sock 2> /dev/null || true
@@ -1258,7 +1258,7 @@ _fsSetupRootless_() {
     _fsFileCreate_ "${_path}" \
     "#!/usr/bin/env bash" \
     "dockerd-rootless-setuptool.sh install" \
-    "if cat ~/.bashrc | grep -q '# ${FS_NAME}'; then" \
+    "if ! cat ~/.bashrc | grep -q '# ${FS_NAME}'; then" \
     "echo "" >> ~/.bashrc" \
     "echo '# ${FS_NAME}' >> ~/.bashrc" \
     "echo 'export PATH=/usr/bin:\$PATH' >> ~/.bashrc" \
@@ -1290,7 +1290,7 @@ _fsSetupRootless_() {
     _fsMsg_ 'Already installed.'
   fi
 
-  if cat ~/.bashrc | grep -q "# ${FS_NAME}"; then
+  if ! cat ~/.bashrc | grep -q "# ${FS_NAME}"; then
     echo "" >> ~/.bashrc
     echo "# ${FS_NAME}" >> ~/.bashrc
     echo "export DOCKER_HOST=unix:///run/user/${_userId}/docker.sock" >> ~/.bashrc
@@ -1420,7 +1420,8 @@ _fsSetupFreqtrade_() {
       _fsMsg_ "Directory created: ${FS_ROOTLESS_DIR_USER_DATA}"
     fi
   fi
-  sudo chown -R rootless:rootless "${FS_ROOTLESS_DIR_USER_DATA}"
+  
+  #sudo chown -R rootless:rootless "${FS_ROOTLESS_DIR_USER_DATA}"
 
   #sudo chmod -R g+w "${FS_ROOTLESS_DIR_USER_DATA}"
   
@@ -2427,18 +2428,10 @@ _fsStart_() {
     _fsMsgError_ "Start setup first!"
   fi
   
-  if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
-    _fsMsgError_ "Option -a or --auto cannot be used with -q or --quit."
-  elif [[ "${FS_OPTS_QUIT}" -eq 0 ]] && [[ "${FS_OPTS_COMPOSE}" -eq 0 ]]; then
-    _fsMsgError_ "Option -c or --compose cannot be used with -q or --quit."
-  elif [[ -z "${_yml}" ]]; then
-    _fsMsgError_ "Setting an \"example.yml\" file with -c or --compose is required."
-  else
-    if [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
-      _fsDockerProject_ "${_yml}" "quit"
-    elif [[ "${FS_OPTS_COMPOSE}" -eq 0 ]]; then
-      _fsDockerProject_ "${_yml}" "compose"
-    fi
+  if [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
+    _fsDockerProject_ "${_yml}" "quit"
+  elif [[ "${FS_OPTS_COMPOSE}" -eq 0 ]]; then
+    _fsDockerProject_ "${_yml}" "compose"
   fi
   
   _fsStats_
@@ -3104,6 +3097,20 @@ _fsOptions_() {
 _fsScriptLock_
 _fsOptions_ "${@}"
 
+  # validate arguments
+if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
+  _fsMsgError_ "Option -a or --auto cannot be used with -q or --quit."
+elif [[ "${FS_OPTS_QUIT}" -eq 0 ]] && [[ "${FS_OPTS_COMPOSE}" -eq 0 ]]; then
+  _fsMsgError_ "Option -c or --compose cannot be used with -q or --quit."
+elif [[ "${FS_OPTS_COMPOSE}" -eq 0 ]] && [[ -z "${c_arg}" ]]; then
+  _fsMsgError_ "Setting an \"example.yml\" file with -c or --compose is required."
+elif [[ "${FS_OPTS_QUIT}" -eq 0 ]] && [[ -z "${q_arg}" ]]; then
+  _fsMsgError_ "Setting an \"example.yml\" file with -q or --quit is required."
+elif [[ "${FS_OPTS_SETUP}" -eq 0 ]] && [[ "${FS_OPTS_YES}" -eq 0 ]]; then
+  _fsMsgError_ "Option -s or --setup cannot be used with -y or --yes."
+fi
+
+  # run code
 if [[ "${FS_OPTS_CERT}" -eq 0 ]]; then
   _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_CERTBOT}" "renew"
 elif [[ "${FS_OPTS_SETUP}" -eq 0 ]]; then
