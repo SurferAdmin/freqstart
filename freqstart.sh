@@ -1076,7 +1076,7 @@ _fsSetupPrerequisites_() {
   
   sudo apt update || true # workaround if you have manually installed packages that are causing errors
   
-  _fsPkgs_ "curl" "jq" "docker-ce" "docker-compose" "dnsutils" "lsof" "cron" "slirp4netns" "uidmap"
+  _fsPkgs_ "curl" "jq" "docker-ce" "docker-compose" "dnsutils" "lsof" "cron" "systemd-container" "uidmap"
   
   _fsMsg_ "Update server and install unattended-upgrades. Reboot may be required!"
   
