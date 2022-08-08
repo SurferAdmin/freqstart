@@ -1144,31 +1144,34 @@ _fsSetupConf_() {
 
 _fsSetupRootless_() {
   local _userId=''
-  local _userLinger=1
+  local _userLinger=0
   
   _userId="$(id -u "${FS_ROOTLESS}" 2> /dev/null || true)"
   
   if ! sudo loginctl show-user "${FS_ROOTLESS}" 2> /dev/null | grep -q 'Linger=yes'; then
     _fsDockerPurge_
-    _userLinger=0
+    _userLinger=1
   fi
   
   _fsMsgTitle_ "DOCKER (rootless)"
   
-  if [[ "${_userLinger}" -eq 0 ]]; then
-    
+  if [[ "${_userLinger}" -eq 1 ]]; then
+    _fsMsg_ '1'
+
     sudo systemctl stop docker.socket docker.service 2> /dev/null || true
     sudo systemctl disable --now docker.socket docker.service 2> /dev/null || true
     sudo rm /var/run/docker.sock 2> /dev/null || true
-    
+    _fsMsg_ '2'
+
       # only root can log into user without password
     if [[ -z "${_userId}" ]]; then
       sudo useradd -m -d "${FS_ROOTLESS_DIR}" -s "$(which bash)" "${FS_ROOTLESS}"
     fi
-    
+    _fsMsg_ '3'
     sudo groupadd docker || true
-    sudo usermod -aG docker "${FS_ROOTLESS}"
-    
+    sudo usermod -aG docker "${FS_ROOTLESS}" || true
+    _fsMsg_ '4'
+
     _userId="$(id -u "${FS_ROOTLESS}")"
     _path="${FS_ROOTLESS_DIR}/${FS_ROOTLESS}.sh"
     
@@ -1191,7 +1194,8 @@ _fsSetupRootless_() {
     "exit 0"
     
     sudo chmod +x "${_path}"
-    
+    _fsMsg_ '5'
+
     _fsMsgWarning_ "Start the following script after login: ${_path}"
     _fsCdown_ 5 "to log into user: ${FS_ROOTLESS}"
     
@@ -1200,18 +1204,17 @@ _fsSetupRootless_() {
     
       # confirmation to pause script while in rootless user
     if [[ "$(_fsCaseConfirmation_ 'Continue?')" -eq 0 ]]; then
-      rm -f "${_path}"
-      #sudo setcap cap_net_bind_service=ep $(which slirp4netns)
+      sudo rm -f "${_path}"
       sudo loginctl enable-linger "${FS_ROOTLESS}"
     else
-      #_fsSetupRootlessRemove_
       exit 0
     fi
   else
     _fsMsg_ 'Already installed.'
   fi
-
+  
   if ! cat ~/.bashrc | grep -q "# ${FS_NAME}"; then
+      # add docker host variable to bashrc
     printf -- '%s\n' \
     '' \
     "# ${FS_NAME}" \
@@ -1219,6 +1222,7 @@ _fsSetupRootless_() {
     '' >> ~/.bashrc
   fi
   
+    # export docker host variable
   export "DOCKER_HOST=unix:///run/user/${_userId}/docker.sock"
 }
 
@@ -1228,7 +1232,7 @@ _fsSetupRootlessRemove_() {
   sudo loginctl disable-linger "${FS_ROOTLESS}" || true
   sudo killall -u "${FS_ROOTLESS}" || true
     #wait for precesses to be killed
-  sleep 2
+  sleep 5
   sudo userdel "${FS_ROOTLESS}" || true
   sudo rm -rf "${FS_ROOTLESS_DIR}" || true
 }
