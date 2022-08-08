@@ -1169,6 +1169,10 @@ _fsSetupRootless_() {
 
       # only root can log into user without password
     if [[ -z "${_userId}" ]]; then
+      sudo rm /etc/passwd.lock
+      sudo rm /etc/shadow.lock
+      sudo rm /etc/group.lock
+      sudo rm /etc/gshadow.lock
       sudo useradd -m -d "${FS_ROOTLESS_DIR}" -s "$(which bash)" "${FS_ROOTLESS}"
     fi
     _fsMsg_ '3'
