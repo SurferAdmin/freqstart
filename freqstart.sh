@@ -1164,17 +1164,19 @@ _fsSetupRootless_() {
   
   
   if [[ "${_userLinger}" -eq 1 ]]; then
-    sudo su
-    sudo systemctl stop docker.socket docker.service 2> /dev/null || true
-    sudo systemctl disable --now docker.socket docker.service 2> /dev/null || true
-    sudo rm /var/run/docker.sock 2> /dev/null || true
+    
+    sudo systemctl stop docker.socket docker.service > /dev/null || true
+    sudo systemctl disable --now docker.socket docker.service > /dev/null || true
+    sudo rm /var/run/docker.sock > /dev/null || true
     
       # only root can log into user without password
     if [[ -z "${_userId}" ]]; then
+      sudo su
       sudo useradd -m -d "${FS_ROOTLESS_DIR}" -s "$(which bash)" "${FS_ROOTLESS}"
+      sudo su "${_userCurrent}"
     fi
     
-    sudo groupadd docker 2> /dev/null || true
+    sudo groupadd docker > /dev/null || true
     sudo usermod -aG docker "${FS_ROOTLESS}" 2> /dev/null || true
     
     _userId="$(id -u "${FS_ROOTLESS}")"
@@ -1210,7 +1212,6 @@ _fsSetupRootless_() {
     if [[ "$(_fsCaseConfirmation_ 'Continue?')" -eq 0 ]]; then
       sudo rm -f "${_path}"
       sudo loginctl enable-linger "${FS_ROOTLESS}"
-      sudo su "${_userCurrent}"
     else
       exit 0
     fi
