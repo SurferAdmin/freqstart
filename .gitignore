@@ -1,14 +1,7 @@
 
 *.json
 !spec/freqstart.strategies.json
-*.txt
-*.py
-*.sqlite
-*.pyc
-*.yml
-*.sqlite-shm
-*.sqlite-wal
-*.log
-*.ipynb
-user_data/logs/.tmp
 freqstart.autoupdate.sh
+*.yml
+user_data/
+proxy/
