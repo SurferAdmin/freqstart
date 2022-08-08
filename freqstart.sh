@@ -1160,26 +1160,23 @@ _fsSetupRootless_() {
   _fsMsgTitle_ "DOCKER (rootless)"
   
   if [[ "${_userLinger}" -eq 1 ]]; then
-    _fsMsg_ '1'
-
-    sudo systemctl stop docker.socket docker.service || true
-    sudo systemctl disable --now docker.socket docker.service || true
-    sudo rm /var/run/docker.sock || true
-    _fsMsg_ '2'
-
+    sudo systemctl stop docker.socket docker.service 2> /dev/null || true
+    sudo systemctl disable --now docker.socket docker.service 2> /dev/null || true
+    sudo rm /var/run/docker.sock 2> /dev/null || true
+    
       # only root can log into user without password
     if [[ -z "${_userId}" ]]; then
       sudo rm /etc/passwd.lock
       sudo rm /etc/shadow.lock
       sudo rm /etc/group.lock
       sudo rm /etc/gshadow.lock
+      
       sudo useradd -m -d "${FS_ROOTLESS_DIR}" -s "$(which bash)" "${FS_ROOTLESS}"
     fi
-    _fsMsg_ '3'
-    sudo groupadd docker || true
-    sudo usermod -aG docker "${FS_ROOTLESS}" || true
-    _fsMsg_ '4'
-
+    
+    sudo groupadd docker 2> /dev/null || true
+    sudo usermod -aG docker "${FS_ROOTLESS}" 2> /dev/null || true
+    
     _userId="$(id -u "${FS_ROOTLESS}")"
     _path="${FS_ROOTLESS_DIR}/${FS_ROOTLESS}.sh"
     
@@ -1202,8 +1199,7 @@ _fsSetupRootless_() {
     "exit 0"
     
     sudo chmod +x "${_path}"
-    _fsMsg_ '5'
-
+    
     _fsMsgWarning_ "Start the following script after login: ${_path}"
     _fsCdown_ 5 "to log into user: ${FS_ROOTLESS}"
     
