@@ -1043,9 +1043,9 @@ _fsDockerPurge_() {
   
   if [[ "$(_fsPkgsStatus_ "docker-ce")" -eq 0 ]]; then
         # credit: https://stackoverflow.com/a/69921248
-      docker ps -a -q | xargs -I {} docker rm -f {} || true
-      docker network prune --force || true
-      docker image ls -q | xargs -I {} docker image rm -f {} || true
+      sudo docker ps -a -q | xargs -I {} docker rm -f {} || true
+      sudo docker network prune --force || true
+      sudo docker image ls -q | xargs -I {} docker image rm -f {} || true
   fi
 }
 
@@ -1146,9 +1146,7 @@ _fsSetupRootless_() {
   local _userId=''
   local _userLinger=1
   
-  #_fsSetupRootlessRemove_
-
-  _userId="$(id -u "${FS_ROOTLESS}" || true)"
+  _userId="$(id -u "${FS_ROOTLESS}" 2> /dev/null || true)"
   
   if ! sudo loginctl show-user "${FS_ROOTLESS}" 2> /dev/null | grep -q 'Linger=yes'; then
     _fsDockerPurge_
@@ -1193,15 +1191,6 @@ _fsSetupRootless_() {
     "exit 0"
     
     sudo chmod +x "${_path}"
-    
-    #_fsFileCreate_ "~/.config/systemd/user/docker.service.d/override.conf" \
-    #'[Service]' \
-    #'Environment="DOCKERD_ROOTLESS_ROOTLESSKIT_PORT_DRIVER=slirp4netns"'
-    
-    #sudo cp -a "/usr/bin/dockerd-rootless.sh" "${FS_DIR}/dockerd-rootless.sh.bak"
-    #sed -i 's,--disable-host-loopback ,,' "/usr/bin/dockerd-rootless.sh"
-    
-    #sudo cp -a "${FS_DIR}/dockerd-rootless.sh.bak" "/usr/bin/dockerd-rootless.sh"
     
     _fsMsgWarning_ "Start the following script after login: ${_path}"
     _fsCdown_ 5 "to log into user: ${FS_ROOTLESS}"
