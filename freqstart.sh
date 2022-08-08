@@ -413,68 +413,6 @@ _fsDockerProjectImages_() {
   fi
 }
 
-_fsDockerProjectPorts_() {
-  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
-  
-  local _ymlPath="${1}"
-  local _dockerPorts=''
-  local _dockerPort=''
-  local _dockerPortDuplicate=''
-  local _error=0
-  
-  _ymlFile="${_ymlPath##*/}"
-  _ymlFileName="${_ymlFile%.*}"
-  _ymlName="${_ymlFileName//-/_}"
-  
-  _dockerPortsYml=()
-  while read -r; do
-    _dockerPortsYml+=("$REPLY")
-  done < <(grep -vE '^\s+#' "${_ymlPath}" \
-  | grep 'ports:' -A 1 \
-  | grep -oE "[0-9]{4}.*" \
-  | sed "s,\",,g" \
-  | sed "s,:.*,," || true)
-  
-  if (( ${#_dockerPortsYml[@]} )); then
-    declare -A values=()
-    for v in "${_dockerPortsYml[@]}"; do
-      if [[ "${values["x$v"]+set}" = set ]]; then
-        _fsMsg_ "Duplicate port found: ${v}"
-        _error=$((_error+1))
-      fi
-      values["x$v"]=1
-    done
-    
-    _dockerPortsProject=()
-    while read -r; do
-      _dockerPortsProject+=("$REPLY")
-    done < <(docker ps -a -f name="${_ymlName}" | awk 'NR > 1 {print $12}' | sed "s,->.*,," | sed "s,.*:,,")
-    
-    _dockerPortsAll=()
-    while read -r; do
-      _dockerPortsAll+=("$REPLY")
-    done < <(docker ps -a | awk 'NR > 1 {print $12}' | sed "s,->.*,," | sed "s,.*:,,")
-    
-    _dockerPortsBlocked=("$(printf '%s\n' "${_dockerPortsAll[@]}" "${_dockerPortsProject[@]}" | sort | uniq -u)")
-    _dockerPortsCompare=("$(echo "${_dockerPortsYml[@]}" "${_dockerPortsBlocked[@]}" | tr ' ' '\n' | sort | uniq -D | uniq)")
-    
-    if (( ${#_dockerPortsCompare[@]} )); then
-      for _dockerPortCompare in "${_dockerPortsCompare[@]}"; do
-        if [[ "${_dockerPortCompare}" =~ ^[0-9]+$ ]]; then
-          _error=$((_error+1))
-          _fsMsgWarning_ "Port is already allocated: ${_dockerPortCompare}"
-        fi
-      done
-    fi
-  fi
-  
-  if [[ "${_error}" -eq 0 ]]; then
-    echo 0
-  else
-    echo 1
-  fi
-}
-
 _fsDockerProjectStrategies_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
@@ -682,19 +620,12 @@ _fsDockerProject_() {
   if [[ "${_projectMode}" =~ "compose" ]]; then
     _fsMsgTitle_ "Compose project: ${_projectFile}"
     
-    if [[ "${_projectMode}" = "compose-force" ]]; then
-      _projectPorts=0    
-    else
-      _projectPorts="$(_fsDockerProjectPorts_ "${_projectPath}")"
-    fi
-    
     _projectStrategies="$(_fsDockerProjectStrategies_ "${_projectPath}")"
     _projectConfigs="$(_fsDockerProjectConfigs_ "${_projectPath}")"
     _projectImages="$(_fsDockerProjectImages_ "${_projectPath}")"
     
     [[ "${_projectImages}" -eq 1 ]] && _error=$((_error+1))
     [[ "${_projectConfigs}" -eq 1 ]] && _error=$((_error+1))
-    [[ "${_projectPorts}" -eq 1 ]] && _error=$((_error+1))
     [[ "${_projectStrategies}" -eq 1 ]] && _error=$((_error+1))
     
     if [[ "${_error}" -eq 0 ]]; then
@@ -707,16 +638,9 @@ _fsDockerProject_() {
   elif [[ "${_projectMode}" =~ "run" ]]; then
     _fsMsgTitle_ "Run project: ${_projectFile}"
     
-    if [[ "${_projectMode}" = "run-force" ]]; then
-      _projectPorts=0
-    else
-      _projectPorts="$(_fsDockerProjectPorts_ "${_projectPath}")"
-    fi
-    
     _projectImages="$(_fsDockerProjectImages_ "${_projectPath}")"
     
     [[ "${_projectImages}" -eq 1 ]] && _error=$((_error+1))
-    [[ "${_projectPorts}" -eq 1 ]] && _error=$((_error+1))
     
     if [[ "${_error}" -eq 0 ]]; then
         # workaround to execute shell from variable; help: open for suggestions
