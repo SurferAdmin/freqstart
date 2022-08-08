@@ -5,6 +5,7 @@
 (Requires full setup. Do not update from previous versions!)
 
 * Implemented rootless docker setup routine
+* Removed port exposure from docker services as a requirement for FreqUI access
 
 ## Setup & Docker-Manager for Freqtrade
 
@@ -115,6 +116,8 @@ With Freqstart you are no longer bound to a single docker-compose.yml and can fr
 
 * Project file based on NostalgiaForInfinityX and Binance (BUSD) with Proxy and FreqUI enabled.
 
+`NOTICE:` Port is not needed anymore for FreqUI exposure.
+
    ```yml
    version: '3'
    services:
@@ -122,8 +125,6 @@ With Freqstart you are no longer bound to a single docker-compose.yml and can fr
        image: freqtradeorg/freqtrade:stable
        volumes:
          - "/home/rootless/user_data:/freqtrade/user_data"
-       ports:
-         - "127.0.0.1:9000:9999" # OPTIONAL: Choose port between 9000 and 9100 and forward to 9999 or remove if not using FreqUI.
        tty: true
        command: >
          trade
