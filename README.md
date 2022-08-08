@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v2.0.0
+# FREQSTART v2.0.0 - rootless
 (Requires full setup. Do not update from previous versions!)
 
 * Implemented rootless docker setup routine
