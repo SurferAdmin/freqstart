@@ -1737,7 +1737,6 @@ _fsSetupNginxOpenssl_() {
   local _url=''
   local _nr=''
   local _mode=''
-  local _ipConf=''
   local _ipLocals=''
   local _ipLocal=''
   local _ipLocalDelete
@@ -1800,7 +1799,6 @@ _fsSetupNginxOpenssl_() {
     # public ip routine
   if [[ "${_mode}" = 'public' ]]; then
     _url="https://${_ipPublic}"
-    _ipConf="${_ipPublic}"
     
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_public' "${_ipPublic}"
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_local' ''
@@ -1860,11 +1858,9 @@ _fsSetupNginxOpenssl_() {
       fi
     done
     
-    _ipConf="${_ipLocal}"
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_public' ''
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_local' "${_ipLocal}"
   fi
-  _ipConf="0.0.0.0"
   _fsValueUpdate_ "${FS_CONFIG}" '.url' "${_url}"
   
     # create nginx docker project file
@@ -1893,16 +1889,15 @@ _fsSetupNginxOpenssl_() {
   "limit_req_status 429;" \
   "limit_req_zone \$rate_limit_key zone=auth:10m rate=1r/m;" \
   "server {" \
-  "    listen ${_ipConf}:80;" \
+  "    listen 0.0.0.0:80;" \
   "    location / {" \
   "        return 301 https://\$host\$request_uri;" \
   "    }" \
   "}" \
   "server {" \
-  "    listen ${_ipConf}:443 ssl;" \
+  "    listen 0.0.0.0:443 ssl;" \
   "    include ${_sslConf};" \
   "    include ${_sslConfParam};" \
-
   "    location / {" \
   "        resolver 127.0.0.11;" \
   "        set \$_pass ${FS_FREQUI}:9999;" \
@@ -1970,7 +1965,7 @@ _fsSetupNginxOpenssl_() {
     
     touch "${FS_ROOTLESS_DIR_PROXY}${_sslParam}"
 
-    sudo chown -R rootless:rootless "${FS_ROOTLESS_DIR_PROXY}"
+    sudo chown -R "${FS_ROOTLESS}":"${FS_ROOTLESS}" "${FS_ROOTLESS_DIR_PROXY}"
 
       # generate self-signed certificate
     _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_NGINX}_ip" \
@@ -2080,8 +2075,9 @@ _setupNginxLetsencrypt_() {
     "  ${FS_NGINX}_domain:" \
     '    image: amd64/nginx:stable' \
     "    container_name: ${FS_NGINX}_domain" \
-    "    hostname: ${FS_NGINX}_domain" \
-    '    network_mode: host' \
+    "    ports:" \
+    '      - "0.0.0.0:80:80"' \
+    '      - "0.0.0.0:443:443"' \
     '    volumes:' \
     "      - ${FS_ROOTLESS_DIR_PROXY}${FS_NGINX_CONFD}:${FS_NGINX_CONFD}" \
     "      - ${FS_ROOTLESS_DIR_PROXY}/certbot/conf:/etc/letsencrypt" \
@@ -2089,7 +2085,6 @@ _setupNginxLetsencrypt_() {
     "  ${FS_CERTBOT}:" \
     '    image: certbot/certbot:latest' \
     "    container_name: ${FS_CERTBOT}" \
-    "    hostname: ${FS_CERTBOT}" \
     '    volumes:' \
     "      - ${FS_ROOTLESS_DIR_PROXY}/certbot/conf:/etc/letsencrypt" \
     "      - ${FS_ROOTLESS_DIR_PROXY}/certbot/www:/var/www/certbot"
@@ -2112,8 +2107,7 @@ _setupNginxLetsencrypt_() {
     if [[ "$(_fsFile_ "${_sslCert}")" -eq 1 ]] || [[ "$(_fsFile_ "${_sslKey}")" -eq 1 ]]; then
       _fsFileCreate_ "${FS_ROOTLESS_DIR_PROXY}${FS_NGINX_CONFD_FREQUI}" \
       "server {" \
-      "    listen ${_domain}:80;" \
-      "    server_name ${_domain};" \
+      "    listen 0.0.0.0:80;" \
       "    location /.well-known/acme-challenge {" \
       "        default_type \"text/plain\";" \
       "        root /var/www/certbot;" \
@@ -2137,8 +2131,7 @@ _setupNginxLetsencrypt_() {
     "limit_req_status 429;" \
     "limit_req_zone \$rate_limit_key zone=auth:10m rate=1r/m;" \
     "server {" \
-    "    listen ${_domain}:80;" \
-    "    server_name ${_domain};" \
+    "    listen 0.0.0.0:80;" \
     "    location / {" \
     "        return 301 https://\$host\$request_uri;" \
     "    }" \
@@ -2148,8 +2141,7 @@ _setupNginxLetsencrypt_() {
     "    }" \
     "}" \
     "server {" \
-    "    listen ${_domain}:443 ssl http2;" \
-    "    server_name ${_domain};" \
+    "    listen 0.0.0.0:443 ssl http2;" \
     "    ssl_certificate ${_sslCert};" \
     "    ssl_certificate_key ${_sslKey};" \
     "    include /etc/letsencrypt/options-ssl-nginx.conf;" \
@@ -2220,7 +2212,7 @@ _fsSetupFrequi_() {
       fi
     fi
     
-    #_fsSetupFirewall_
+    _fsSetupFirewall_
     _fsSetupNginx_
     _fsSetupFrequiJson_
     _fsSetupFrequiCompose_
