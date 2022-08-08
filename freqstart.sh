@@ -783,7 +783,6 @@ _fsDockerProject_() {
         
           # check for frequi port and config
         if [[ ! $_containerName =~ $_regex ]]; then
-          #_containerApiPort="$(docker inspect --format="{{json .}}" "${_containerName}" | jq -r '.HostConfig.PortBindings["9999/tcp"][0].HostPort // empty')"
           _containerApiJson="$(echo "${_containerCmd}" | grep -o "${FS_FREQUI}.json" || true)"
           
           if [[ -n "${_containerApiJson}" ]]; then
@@ -1014,7 +1013,7 @@ _fsDockerAutoupdate_() {
   local _projectAutoupdate='freqstart --compose '"${_projectFile}"' --auto --yes'
   local _projectAutoupdateMode="${2:-}" # optional: remove
   local _projectAutoupdates=""
-  local _cronUpdate="3 */6 * * *" # update every 6 hours and 3 minutes; thanks: ECO
+  local _cronUpdate="3 */12 * * *" # update every 12 hours and 3 minutes; thanks: ECO
   
   _projectAutoupdates=()
   _projectAutoupdates+=("#!/usr/bin/env bash")
@@ -1043,7 +1042,7 @@ _fsDockerPurge_() {
   rm -f "${FS_AUTOUPDATE}"
   
   if [[ "$(_fsPkgsStatus_ "docker-ce")" -eq 0 ]]; then
-      # credit: https://stackoverflow.com/a/69921248
+        # credit: https://stackoverflow.com/a/69921248
       docker ps -a -q | xargs -I {} docker rm -f {} || true
       docker network prune --force || true
       docker image ls -q | xargs -I {} docker image rm -f {} || true
