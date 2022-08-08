@@ -1148,8 +1148,12 @@ _fsSetupRootless_() {
   
   _userId="$(id -u "${FS_ROOTLESS}" 2> /dev/null || true)"
   
-  if ! sudo loginctl show-user "${FS_ROOTLESS}" 2> /dev/null | grep -q 'Linger=yes'; then
-    _fsDockerPurge_
+  if [[ -n "${_userId}" ]]; then
+    if ! sudo loginctl show-user "${FS_ROOTLESS}" 2> /dev/null | grep -q 'Linger=yes'; then
+      _fsDockerPurge_
+      _userLinger=1
+    fi
+  else
     _userLinger=1
   fi
   
@@ -1228,7 +1232,7 @@ _fsSetupRootless_() {
 
 _fsSetupRootlessRemove_() {
   _fsDockerPurge_
-
+  
   sudo loginctl disable-linger "${FS_ROOTLESS}" || true
   sudo killall -u "${FS_ROOTLESS}" || true
     #wait for precesses to be killed
@@ -1302,8 +1306,6 @@ _fsSetupFirewall_() {
     sudo ufw allow "${_portSSH}"/tcp
     sudo ufw allow 80/tcp
     sudo ufw allow 443/tcp
-    sudo ufw allow 9999/tcp
-    sudo ufw allow 9000:9100/tcp
     sudo ufw allow out http
     sudo ufw allow out https
       # allow ntp sync on port 123
@@ -1357,11 +1359,8 @@ _fsSetupFreqtrade_() {
     fi
   fi
   
-    # set symlink owner to user_data from freqtrade docker
   _fsSymlinkCreate_ "${FS_ROOTLESS_DIR_USER_DATA}" "${FS_DIR}/${FS_ROOTLESS_DIR_USER_DATA##*/}"
   
-
-
     # optional creation of freqtrade config
   if [[ "$(_fsCaseConfirmation_ "Skip creating a config?")" -eq 0 ]]; then
      _fsMsg_ "Skipping..."
