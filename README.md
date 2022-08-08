@@ -6,6 +6,7 @@
 
 * Implemented rootless docker setup routine
 * Removed port exposure from docker services as a requirement for FreqUI access
+* Removed port validation from docker project function as this is not a requirement anymore
 
 ## Setup & Docker-Manager for Freqtrade
 
