@@ -876,7 +876,7 @@ _fsDockerProject_() {
     if [[ "${_error}" -eq 0 ]]; then
         # create project conf file
       if (( ${#_procjectJson[@]} )); then
-        printf -- '%s\n' "${_procjectJson[@]}" | jq . | tee "${_containerConfPath}" > /dev/null
+        printf -- '%s\n' "${_procjectJson[@]}" | jq . | sudo tee "${_containerConfPath}" > /dev/null
       else
         rm -f "${_containerConfPath}"
       fi
@@ -997,7 +997,7 @@ _fsDockerStrategy_() {
         '$ARGS.named' \
       )"
       
-      printf '%s\n' "${_strategyJson}" | jq . | tee "${_strategyDir}/${_strategyName}.conf.json" > /dev/null
+      printf '%s\n' "${_strategyJson}" | jq . | sudo tee "${_strategyDir}/${_strategyName}.conf.json" > /dev/null
     else
       _fsMsg_ "Strategy is installed: ${_strategyName}"
     fi
@@ -1031,7 +1031,7 @@ _fsDockerAutoupdate_() {
     _fsCrontabRemove_ "${FS_AUTOUPDATE}"
     rm -f "${FS_AUTOUPDATE}"
   else
-    printf '%s\n' "${_projectAutoupdates[@]}" | tee "${FS_AUTOUPDATE}" > /dev/null
+    printf '%s\n' "${_projectAutoupdates[@]}" | sudo tee "${FS_AUTOUPDATE}" > /dev/null
     sudo chmod +x "${FS_AUTOUPDATE}"
     _fsCrontab_ "${FS_AUTOUPDATE}" "${_cronUpdate}"
   fi
@@ -1157,13 +1157,13 @@ _fsSetupRootless_() {
   
   if [[ "${_userLinger}" -eq 0 ]]; then
     
-    systemctl stop docker.socket docker.service 2> /dev/null || true
-    systemctl disable --now docker.socket docker.service 2> /dev/null || true
-    rm /var/run/docker.sock 2> /dev/null || true
+    sudo systemctl stop docker.socket docker.service 2> /dev/null || true
+    sudo systemctl disable --now docker.socket docker.service 2> /dev/null || true
+    sudo rm /var/run/docker.sock 2> /dev/null || true
     
       # only root can log into user without password
     if [[ -z "${_userId}" ]]; then
-      useradd -m -d "${FS_ROOTLESS_DIR}" -s "$(which bash)" "${FS_ROOTLESS}"
+      sudo useradd -m -d "${FS_ROOTLESS_DIR}" -s "$(which bash)" "${FS_ROOTLESS}"
     fi
     
     sudo groupadd docker || true
@@ -2481,14 +2481,14 @@ _fsFileCreate_() {
   _fileTmp="${FS_TMP}"'/'"${_fileHash}"'_'"${_file}"
   
   _output="$(printf -- '%s\n' "${_input[@]}")"
-  echo "${_output}" | tee "${_fileTmp}" > /dev/null
+  echo "${_output}" | sudo tee "${_fileTmp}" > /dev/null
   
   if [[ ! -d "${_fileDir}" ]]; then
-    mkdir -p "${_fileDir}"
+    sudo mkdir -p "${_fileDir}"
   fi
   
   if [[ "$(_fsFileEmpty_ "${_fileTmp}")" -eq 0 ]]; then
-    cp "${_fileTmp}" "${_filePath}"
+    sudo cp "${_fileTmp}" "${_filePath}"
   fi
   
   _fsFileExit_ "${_filePath}"
@@ -2580,7 +2580,7 @@ _fsValueUpdate_() {
       # credit: https://stackoverflow.com/a/24943373
     _jsonUpdate="$(jq "${_key}"' = $newVal' --arg newVal "${_value}" <<< "${_json}")"
     
-    printf '%s\n' "${_jsonUpdate}" | jq . | tee "${_fileTmp}" > /dev/null
+    printf '%s\n' "${_jsonUpdate}" | jq . | sudo tee "${_fileTmp}" > /dev/null
   else
       # update value for other filetypes
     cp "${_filePath}" "${_fileTmp}"
