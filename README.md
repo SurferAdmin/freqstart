@@ -47,7 +47,7 @@ Freqstart provides an interactive setup guide for server security, Freqtrade inc
 
 Freqstart installs server packages and configurations tailored to the needs of Freqtrade and may overwrite existing installations and configurations. It is recommended to set it up in a new and clean environment!
 
-Packages: git, curl, jq, docker-ce, docker-compose, docker-ce-rootless-extras, systemd-container, uidmap, dbus-user-session, chrony, ufw
+Packages: git, curl, jq, docker-ce, docker-compose, docker-ce-rootless-extras, systemd-container, uidmap, dbus-user-session, chrony, ufw, dnsutils, lsof , cron, uidmap
 
 ### Recommended VPS
 
@@ -70,10 +70,6 @@ Vultr (AMD High Performance / Tokyo): [www.vultr.com](https://www.vultr.com/?ref
 4. Setup `freqstart`
    ```sh
    ./freqstart.sh --setup
-   ```
-5. Setup `freqstart`, non-interactive
-   ```sh
-   ./freqstart.sh --setup --yes
    ```
    
 ### Start
@@ -125,7 +121,7 @@ With Freqstart you are no longer bound to a single docker-compose.yml and can fr
      example_dryrun: # IMPORTANT: Dont forget to change service name!
        image: freqtradeorg/freqtrade:stable
        volumes:
-         - "./user_data:/freqtrade/user_data"
+         - "/home/rootless/user_data:/freqtrade/user_data"
        ports:
          - "127.0.0.1:9000:9999" # OPTIONAL: Choose port between 9000 and 9100 and forward to 9999 or remove if not using FreqUI.
        tty: true
