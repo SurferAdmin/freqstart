@@ -1162,9 +1162,9 @@ _fsSetupRootless_() {
   if [[ "${_userLinger}" -eq 1 ]]; then
     _fsMsg_ '1'
 
-    sudo systemctl stop docker.socket docker.service 2> /dev/null || true
-    sudo systemctl disable --now docker.socket docker.service 2> /dev/null || true
-    sudo rm /var/run/docker.sock 2> /dev/null || true
+    sudo systemctl stop docker.socket docker.service || true
+    sudo systemctl disable --now docker.socket docker.service || true
+    sudo rm /var/run/docker.sock || true
     _fsMsg_ '2'
 
       # only root can log into user without password
