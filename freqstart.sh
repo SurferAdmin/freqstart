@@ -1905,12 +1905,12 @@ _fsSetupNginxOpenssl_() {
 
   "    location / {" \
   "        resolver 127.0.0.11;" \
-  "        set \$freqstart_pass freqstart_frequi:9999;" \
+  "        set \$_pass ${FS_FREQUI}:9999;" \
   "        auth_basic \"Restricted\";" \
   "        auth_basic_user_file ${FS_NGINX_CONFD_HTPASSWD};" \
   "        limit_req zone=auth burst=20 nodelay;" \
   '        add_header Set-Cookie "__Secure-rl-bypass='"${_bypass}"';Max-Age=31536000;Domain=$host;Path=/;Secure;HttpOnly";' \
-  "        proxy_pass http://\$freqstart_pass;" \
+  "        proxy_pass http://\$_pass;" \
   "        proxy_set_header X-Real-IP \$remote_addr;" \
   "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" \
   "        proxy_set_header Host \$host;" \
@@ -1922,8 +1922,8 @@ _fsSetupNginxOpenssl_() {
   "    }" \
   "    location ~ ^/(${FS_NAME})/([^/]+)(.*) {" \
   "        resolver 127.0.0.11;" \
-  "        set \$freqstart_pass \$2:9999\$3;" \
-  "        proxy_pass http://\$freqstart_pass;" \
+  "        set \$_pass \$2:9999\$3;" \
+  "        proxy_pass http://\$_pass;" \
   "        proxy_set_header X-Real-IP \$remote_addr;" \
   "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" \
   "        proxy_set_header Host \$host;" \
@@ -2160,12 +2160,12 @@ _setupNginxLetsencrypt_() {
     "    }" \
     "    location / {" \
     "        resolver 127.0.0.11;" \
-    "        set \$freqstart_pass freqstart_frequi:9999;" \
+    "        set \$_pass ${FS_FREQUI}:9999;" \
     "        auth_basic \"Restricted\";" \
     "        auth_basic_user_file ${FS_NGINX_CONFD_HTPASSWD};" \
     "        limit_req zone=auth burst=20 nodelay;" \
     '        add_header Set-Cookie "__Secure-rl-bypass='"${_bypass}"';Max-Age=31536000;Domain=$host;Path=/;Secure;HttpOnly";' \
-    "        proxy_pass http://0.0.0.0:9999;" \
+    "        proxy_pass http://\$_pass;" \
     "        proxy_set_header X-Real-IP \$remote_addr;" \
     "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" \
     "        proxy_set_header Host \$host;" \
@@ -2177,8 +2177,8 @@ _setupNginxLetsencrypt_() {
     "    }" \
     "    location ~ ^/(${FS_NAME})/([^/]+)(.*) {" \
     "        resolver 127.0.0.11;" \
-    "        set \$freqstart_pass \$2:9999\$3;" \
-    "        proxy_pass http://\$freqstart_pass;" \
+    "        set \$_pass \$2:9999\$3;" \
+    "        proxy_pass http://\$_pass;" \
     "        proxy_set_header X-Real-IP \$remote_addr;" \
     "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" \
     "        proxy_set_header Host \$host;" \
