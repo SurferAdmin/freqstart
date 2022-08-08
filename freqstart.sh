@@ -1076,7 +1076,7 @@ _fsSetupPrerequisites_() {
   
   sudo apt update || true # workaround if you have manually installed packages that are causing errors
   
-  _fsPkgs_ "curl" "jq" "docker-ce" "docker-compose" "dnsutils" "lsof" "cron" "systemd-container" "uidmap"
+  _fsPkgs_ "curl" "jq" "docker-ce" "docker-compose" "dnsutils" "lsof" "cron" "systemd-container" "uidmap" "dbus-user-session"
   
   _fsMsg_ "Update server and install unattended-upgrades. Reboot may be required!"
   
@@ -2760,7 +2760,6 @@ _fsPkgs_() {
   for _pkg in "${_pkgs[@]}"; do
     if [[ "$(_fsPkgsStatus_ "${_pkg}")" -eq 1 ]]; then
       if [[ "${_pkg}" = 'docker-ce' ]]; then
-        sudo apt install -y "uidmap" "dbus-user-session" "systemd-container"
         mkdir -p "${FS_DIR_DOCKER}"
         curl --connect-timeout 10 -fsSL "https://get.docker.com" -o "${_getDocker}"
         _fsFileExit_ "${_getDocker}"
