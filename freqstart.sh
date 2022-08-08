@@ -2380,6 +2380,7 @@ _fsStart_() {
   if [[ -d "${FS_ROOTLESS_DIR_USER_DATA}" ]]; then
     _owner="$(ls -ld "${FS_ROOTLESS_DIR_USER_DATA}" | awk '{print $3}')"
     sudo chown -R "${_owner}":"${_owner}" "${FS_DIR}/${FS_ROOTLESS_DIR_USER_DATA##*/}"
+    sudo chown -R "${_owner}":"${_owner}" "${FS_ROOTLESS_DIR_USER_DATA}"
   fi
   
   if [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
