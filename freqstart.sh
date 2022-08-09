@@ -1143,34 +1143,43 @@ _fsSetupConf_() {
 # ROOTLESS
 
 _fsSetupRootless_() {
-  local _userId=''
-  local _userLinger=0
-  local _userCurrent=''
+  local _rootlessId=''
+  local _rootlessLinger=0
+  local _user=''
   
   _fsMsgTitle_ "DOCKER (rootless)"
   
-  _userId="$(id -u "${FS_ROOTLESS}" 2> /dev/null || true)"
+    # create docker group and add current user
+  _user="$(id -u -n)"
+  sudo groupadd docker 2> /dev/null || true
+  
+  if ! id -nGz "${_user}" | grep -qzxF 'docker'; then
+    sudo usermod -aG docker "${_user}"
+    exec sudo su -l "${_user}"
+  fi
+  
+    # get userid from rootless if exists
+  _rootlessId="$(id -u "${FS_ROOTLESS}" 2> /dev/null || true)"
   
   if ! sudo loginctl show-user "${FS_ROOTLESS}" 2> /dev/null | grep -q 'Linger=yes'; then
     _fsDockerPurge_
-    _userLinger=1
+    _rootlessLinger=1
   fi
   
-  if [[ "${_userLinger}" -eq 1 ]]; then
-    echo '111'
+  if [[ "${_rootlessLinger}" -eq 1 ]]; then
     sudo systemctl stop docker.socket docker.service > /dev/null 2> /dev/null || true
     sudo systemctl disable --now docker.socket docker.service > /dev/null 2> /dev/null || true
     sudo rm /var/run/docker.sock 2> /dev/null || true
     
       # only root can log into user without password
-    if [[ -z "${_userId}" ]]; then
+    if [[ -z "${_rootlessId}" ]]; then
       sudo useradd -m -d "${FS_ROOTLESS_DIR}" -s "$(which bash)" "${FS_ROOTLESS}"
     fi
-    
-    sudo groupadd docker 2> /dev/null || true
+      
+      # add rootless to docker group
     sudo usermod -aG docker "${FS_ROOTLESS}" || true
     
-    _userId="$(id -u "${FS_ROOTLESS}")"
+    _rootlessId="$(id -u "${FS_ROOTLESS}")"
     _path="${FS_ROOTLESS_DIR}/${FS_ROOTLESS}.sh"
     
     _fsFileCreate_ "${_path}" \
@@ -1181,11 +1190,11 @@ _fsSetupRootless_() {
     "  '' \\" \
     "  '# ${FS_NAME}' \\" \
     "  'export PATH=/usr/bin:\$PATH' \\" \
-    "  'export DOCKER_HOST=unix:///run/user/${_userId}/docker.sock' \\" \
+    "  'export DOCKER_HOST=unix:///run/user/${_rootlessId}/docker.sock' \\" \
     "  '' >> ~/.bashrc" \
     "fi" \
     "export PATH=/usr/bin:\$PATH" \
-    "export DOCKER_HOST=unix:///run/user/${_userId}/docker.sock" \
+    "export DOCKER_HOST=unix:///run/user/${_rootlessId}/docker.sock" \
     "systemctl --user start docker" \
     "systemctl --user enable docker" \
     "echo '! [WARNING] Setup complete, type the following command: exit'" \
@@ -1215,23 +1224,12 @@ _fsSetupRootless_() {
     printf -- '%s\n' \
     '' \
     "# ${FS_NAME}" \
-    "export DOCKER_HOST=unix:///run/user/${_userId}/docker.sock" \
+    "export DOCKER_HOST=unix:///run/user/${_rootlessId}/docker.sock" \
     '' >> ~/.bashrc
   fi
   
     # export docker host variable
-  export "DOCKER_HOST=unix:///run/user/${_userId}/docker.sock"
-}
-
-_fsSetupRootlessRemove_() {
-  _fsDockerPurge_
-  
-  sudo loginctl disable-linger "${FS_ROOTLESS}" || true
-  sudo killall -u "${FS_ROOTLESS}" || true
-    #wait for precesses to be killed
-  sleep 5
-  sudo userdel "${FS_ROOTLESS}" || true
-  sudo rm -rf "${FS_ROOTLESS_DIR}" || true
+  export "DOCKER_HOST=unix:///run/user/${_rootlessId}/docker.sock"
 }
 
 # CHRONY
