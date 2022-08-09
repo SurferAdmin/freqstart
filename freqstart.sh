@@ -1043,9 +1043,9 @@ _fsDockerPurge_() {
   
   if [[ "$(_fsPkgsStatus_ "docker-ce")" -eq 0 ]]; then
         # credit: https://stackoverflow.com/a/69921248
-      sudo docker ps -a -q | xargs -I {} docker rm -f {} || true
-      sudo docker network prune --force || true
-      sudo docker image ls -q | xargs -I {} docker image rm -f {} || true
+      sudo docker ps -a -q 2> /dev/null | xargs -I {} docker rm -f {} 2> /dev/null || true
+      sudo docker network prune --force 2> /dev/null || true
+      sudo docker image ls -q 2> /dev/null | xargs -I {} docker image rm -f {} 2> /dev/null || true
   fi
 }
 
@@ -1148,36 +1148,27 @@ _fsSetupRootless_() {
   local _userCurrent=''
   
   _fsMsgTitle_ "DOCKER (rootless)"
-
-  _userCurrent="$(id -u -n)"
-
+  
   _userId="$(id -u "${FS_ROOTLESS}" 2> /dev/null || true)"
   
-  if [[ -n "${_userId}" ]]; then
-    if ! sudo loginctl show-user "${FS_ROOTLESS}" 2> /dev/null | grep -q 'Linger=yes'; then
-      _fsDockerPurge_
-      _userLinger=1
-    fi
-  else
+  if ! sudo loginctl show-user "${FS_ROOTLESS}" 2> /dev/null | grep -q 'Linger=yes'; then
+    _fsDockerPurge_
     _userLinger=1
   fi
   
-  
   if [[ "${_userLinger}" -eq 1 ]]; then
-    
-    sudo systemctl stop docker.socket docker.service > /dev/null || true
-    sudo systemctl disable --now docker.socket docker.service > /dev/null || true
-    sudo rm /var/run/docker.sock > /dev/null || true
+    echo '111'
+    sudo systemctl stop docker.socket docker.service > /dev/null 2> /dev/null || true
+    sudo systemctl disable --now docker.socket docker.service > /dev/null 2> /dev/null || true
+    sudo rm /var/run/docker.sock 2> /dev/null || true
     
       # only root can log into user without password
     if [[ -z "${_userId}" ]]; then
-      sudo su
       sudo useradd -m -d "${FS_ROOTLESS_DIR}" -s "$(which bash)" "${FS_ROOTLESS}"
-      sudo su "${_userCurrent}"
     fi
     
-    sudo groupadd docker > /dev/null || true
-    sudo usermod -aG docker "${FS_ROOTLESS}" 2> /dev/null || true
+    sudo groupadd docker 2> /dev/null || true
+    sudo usermod -aG docker "${FS_ROOTLESS}" || true
     
     _userId="$(id -u "${FS_ROOTLESS}")"
     _path="${FS_ROOTLESS_DIR}/${FS_ROOTLESS}.sh"
@@ -1206,7 +1197,7 @@ _fsSetupRootless_() {
     _fsCdown_ 5 "to log into user: ${FS_ROOTLESS}"
     
       # log into rootless user
-    machinectl shell "${FS_ROOTLESS}@"
+    sudo machinectl shell "${FS_ROOTLESS}@"
     
       # confirmation to pause script while in rootless user
     if [[ "$(_fsCaseConfirmation_ 'Continue?')" -eq 0 ]]; then
