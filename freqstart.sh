@@ -2386,7 +2386,7 @@ _fsStats_() {
     # some handy stats to get you an impression how your server compares to the current possibly best location for binance
   _time="$( (time curl --connect-timeout 10 -X GET "https://api.binance.com/api/v3/exchangeInfo?symbol=BNBBTC") 2>&1 > /dev/null \
   | grep -o "real.*s" \
-  | sed "s#real$(echo '\t')##" )"
+  | sed "s#real/\t##" )"
   _memory="$(free -m | awk 'NR==2{printf "%s/%sMB (%.2f%%)", $3,$2,$3*100/$2 }')"
   _disk="$(df -h | awk '$NF=="/"{printf "%d/%dGB (%s)", $3,$2,$5}')"
   
@@ -2420,7 +2420,6 @@ _fsUsage_() {
   "  -y, --yes       Yes on every confirmation" \
   "  --reset         Stop and remove all Docker images, containers und networks but keep all files" >&2
   
-  _fsStats_
   exit 0
 }
 
