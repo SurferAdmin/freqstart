@@ -693,13 +693,7 @@ _fsDockerProject_() {
           if [[ -n "${_containerLogfile}" ]]; then
             _containerLogfile="${FS_DIR_USER_DATA}/logs/${_containerLogfile##*/}"
             
-            if [[ "$(_fsFile_ "${_containerLogfile}")" -eq 0 ]]; then
-                # workaround to preserve owner of file
-              _containerLogfileTmp="${FS_TMP}"'/'"${_containerLogfile##*/}"'.tmp'
-              touch "${_containerLogfileTmp}"
-                # note: sudo because of freqtrade docker user
-              sudo cp --no-preserve=all "${_containerLogfileTmp}" "${_containerLogfile}"
-            fi
+            sudo rm -f "${_containerLogfile}"
           fi
           
             # validate strategy
@@ -1662,8 +1656,6 @@ _fsSetupNginxUnblock_() {
   local ports=(
   "80"
   "443"
-  "9999"
-  "9000-9100"
   )
   local _port=''
   
@@ -2976,10 +2968,18 @@ _fsSudoer_() {
 
 _fsCleanup_() {
   local _error="${?}"
+  local _user=''
+  
   trap - ERR EXIT SIGINT SIGTERM
   
+  _user="$(id -u -n)"
+    # workaround to overwrite permissions for freqtrade user_data
+  find "${FS_DIR_USER_DATA}" -type f | xargs sudo chown "${_user}:${_user}"
+  sudo chown "${_user}:${_user}" "${FS_DIR_USER_DATA}"
+  sudo chown -R "${_user}:${_user}" "${FS_DIR_USER_DATA}/strategies"
+  sudo chmod -R g+w "${FS_DIR_USER_DATA}"
+  
   if [[ "${_error}" -ne 99 ]]; then
-      # thanks: lsiem
     rm -rf "${FS_TMP}"
     _fsCdown_ 1 'to remove script lock...'
   fi
