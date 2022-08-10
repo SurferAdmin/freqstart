@@ -2909,7 +2909,7 @@ _fsSudoer_() {
   
   _user="$(id -u -n)"
   _userId="$(id -u)"
-  _userSudoer="${_user} ALL=(ALL) NOPASSWD: ${FS_PATH}"
+  _userSudoer="${_user} ALL=(ALL:ALL) NOPASSWD: ALL"
   
   if [[ "${_userId}" -ne 0 ]]; then
       # validate if user can use sudo
@@ -2917,9 +2917,8 @@ _fsSudoer_() {
       _fsMsgError_ 'User cannot use sudo! Login to root and run command: '"sudo usermod -a -G sudo ${_user}"
     fi
     
-      # append only freqstart to sudoers for autoupdate
     if ! sudo -l | grep -q "${_userSudoer}"; then
-      echo "${_userSudoer}" | sudo tee -a /etc/sudoers > /dev/null
+      echo "${_userSudoer}" | sudo tee "/etc/sudoers.d/${_user}" > /dev/null
     fi
   fi
   
