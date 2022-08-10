@@ -1180,15 +1180,15 @@ _fsSetupUser_() {
     
     sudo chown -R "${_userTmp}":"${_userTmp}" "${_userTmpDir}"
     sudo chmod +x "${_userTmpDPath}"
-    
-    sudo rm -rf "${FS_TMP}"
-    sudo rm -f "${FS_SYMLINK}"
+
     _fsMsg_ ' +'
     _fsMsgWarning_ "Manually restart script: ${_userTmpDir}/${FS_FILE} --setup"
     _fsMsg_ ' +'
+    sudo rm -rf "${FS_TMP}"
+    sudo rm -f "${FS_SYMLINK}"
     
       # machinectl is needed to set $XDG_RUNTIME_DIR properly
-    sudo machinectl shell "${_userTmp}@"
+    sudo rm -f "${FS_PATH}" && sudo machinectl shell "${_userTmp}@"
     exit 0
   fi
 }
@@ -1218,20 +1218,23 @@ _fsSetupRootless_() {
     
     sudo loginctl enable-linger "${_user}"
     
-      # add docker host variable to bashrc
-    if ! cat ~/.bashrc | grep -q "# ${FS_NAME}"; then
-      printf -- '%s\n' \
-      '' \
-      "# ${FS_NAME}" \
-      "#export DOCKER_HOST=unix:///run/user/${_userId}/docker.sock" \
-      '' >> ~/.bashrc
-    fi
-    
-      # export docker host variable
-    export "DOCKER_HOST=unix:///run/user/${_userId}/docker.sock"
-    
     _fsValueUpdate_ "${FS_CONFIG}" '.user' "${_user}"
+    _fsMsg_ 'Docker rootless installed.'
+  else
+    _fsMsg_ 'Docker rootless is installed.'
   fi
+  
+    # add docker host variable to bashrc
+  if ! cat ~/.bashrc | grep -q "# ${FS_NAME}"; then
+    printf -- '%s\n' \
+    '' \
+    "# ${FS_NAME}" \
+    "#export DOCKER_HOST=unix:///run/user/${_userId}/docker.sock" \
+    '' >> ~/.bashrc
+  fi
+  
+    # export docker host variables
+  export "DOCKER_HOST=unix:///run/user/${_userId}/docker.sock"
 }
 
 # CHRONY
@@ -1597,7 +1600,7 @@ _fsSetupNginx_() {
     
     _fsSymlinkCreate_ "${_sysctl}" "${_sysctlSymlink}"
     
-    sysctl -p "${_sysctlSymlink}" > /dev/null
+    sudo sysctl -p "${_sysctlSymlink}"
     
       # create frequi login data
     while true; do
@@ -1608,7 +1611,7 @@ _fsSetupNginx_() {
           _fsMsg_ "Skipping..."
           break
         fi
-      fi        
+      fi
       
       _fsMsg_ "Create FreqUI login data now!"
       
@@ -2447,8 +2450,9 @@ _fsConf_() {
     _userTmp="$(id -u -n)"
 
     if [[ -n "${_user}" ]] && [[ ! "${_user}" = "${_userTmp}" ]]; then
-      _fsMsgWarning_ 'Login to docker rootless user now: '"${_user}"
-      
+      _fsMsgWarning_ 'You are not logged in as docker rootless user!'
+      _fsCdown_ 5 'to login as: '"${_user}"
+      sudo rm -rf "${FS_TMP}"
       sudo machinectl shell "${_user}@"
       exit 0
     fi
