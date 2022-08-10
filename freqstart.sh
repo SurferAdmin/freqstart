@@ -1183,8 +1183,9 @@ _fsSetupUser_() {
     
     sudo rm -rf "${FS_TMP}"
     sudo rm -f "${FS_SYMLINK}"
-
+    _fsMsg_ ' +'
     _fsMsgWarning_ "Manually restart script: ${_userTmpDir}/${FS_FILE} --setup"
+    _fsMsg_ ' +'
     
       # machinectl is needed to set $XDG_RUNTIME_DIR properly
     sudo machinectl shell "${_userTmp}@"
@@ -1259,14 +1260,9 @@ _fsSetupFirewall_() {
   
   while true; do
     if [[ -n "${_status}" ]]; then
-        # check if ufw rule for 9999 exists
-      _status="$(sudo ufw status | grep -o '9999' || true)"
-      
-      if [[ -n "${_status}" ]]; then
-        if [[ "$(_fsCaseConfirmation_ 'Skip reconfiguration of firewall?')" -eq 0 ]]; then
-          _fsMsg_ 'Skipping...'
-          break
-        fi
+      if [[ "$(_fsCaseConfirmation_ 'Skip reconfiguration of firewall?')" -eq 0 ]]; then
+        _fsMsg_ 'Skipping...'
+        break
       fi
     else
       if [[ "$(_fsCaseConfirmation_ 'Install firewall for Nginx proxy (recommended)?')" -eq 1 ]]; then
@@ -1677,7 +1673,7 @@ _fsSetupNginx_() {
   done
 }
 
-_fsSetupNginxWebservice_() {
+_fsSetupNginxUnblock_() {
   local _webservices=(
   "gitlab"
   "apache"
@@ -1708,7 +1704,7 @@ _fsSetupNginxWebservice_() {
     if [[ -n "$(sudo lsof -n -sTCP:LISTEN -i:${_port})" ]]; then
       _fsMsgWarning_ 'Stopping webservice blocking port: '"${_port}"
 
-      sudo fuser -k "${_port}/tcp" > /dev/null 2> /dev/null
+      sudo fuser -k "${_port}/tcp" > /dev/null 2> /dev/null || true
     fi
   done
 }
@@ -1772,7 +1768,7 @@ _fsSetupNginxOpenssl_() {
     # stop nginx domain container
   _fsDockerRemove_ "${FS_NGINX}_domain"
     # stop/disable native webservices and free blocked ports
-  _fsSetupNginxWebservice_
+  _fsSetupNginxUnblock_
 
   _fsValueUpdate_ "${FS_CONFIG}" '.domain' ''
   
@@ -1975,7 +1971,7 @@ _setupNginxLetsencrypt_() {
   local _sslNginx="${FS_DIR_PROXY}/certbot/conf/options-ssl-nginx.conf"
   local _sslDhparams="${FS_DIR_PROXY}/certbot/conf/ssl-dhparams.pem"
   local _certEmail=''
-  local _cronCmd="freqstart --cert -y"
+  local _cronCmd="freqstart --cert --yes"
   local _cronUpdate="30 0 * * 0" # update at 0:30am UTC on sunday every week
   
   _ipPublic="$(dig +short myip.opendns.com @resolver1.opendns.com)"
@@ -2037,7 +2033,7 @@ _setupNginxLetsencrypt_() {
       # stop nginx ip container
     _fsDockerRemove_ "${FS_NGINX}_ip"
       # stop/disable native webservices and free blocked ports
-    _fsSetupNginxWebservice_
+    _fsSetupNginxUnblock_
     
     _fsValueUpdate_ "${FS_CONFIG}" '.domain' "${_domain}"
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_public' ''
@@ -2349,13 +2345,6 @@ _fsStart_() {
   fi
   
   _fsConf_
-  
-    # set owner of freqtrade user to user_data folder and symlink
-  #if [[ -d "${FS_DIR_USER_DATA}" ]]; then
-  #  _owner="$(ls -ld "${FS_DIR_USER_DATA}" | awk '{print $3}')"
-  #  sudo chown -R "${_owner}":"${_owner}" "${FS_DIR}/${FS_DIR_USER_DATA##*/}"
-  #  sudo chown -R "${_owner}":"${_owner}" "${FS_DIR_USER_DATA}"
-  #fi
   
   if [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
     _fsDockerProject_ "${_yml}" "quit"
