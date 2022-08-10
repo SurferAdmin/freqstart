@@ -2,9 +2,9 @@
 
 <!-- FREQSTART -->
 # FREQSTART v2.0.1 - rootless
-(Requires full setup. Do not update from versions below v2.0.0!)
+(Requires full setup. Do not update from versions below v2.0.0)
 
-* TBA
+See what has been changed: <a href="#changelog">Changelog</a>
 
 ## Setup & Docker-Manager for Freqtrade
 
@@ -144,6 +144,22 @@ With Freqstart you are no longer bound to a single docker-compose.yml and can fr
 ## Roadmap
 
 See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full list of proposed features (and known issues).
+
+### Changelog
+
+`v2.0.1`
+* Fast permission fix for user_data folder
+* Removed nginx unblock function
+* Fixed sudoers
+
+`v2.0.0`
+* Implemented rootless docker setup routine
+* Overhauled user routine incl usage of machinectl for login so set env variable correctly
+* Removed port exposure from docker services as a requirement for FreqUI access
+* Removed port validation from docker project function as this is not a requirement anymore
+* Removed docker image backup logic because of overhead and security concerns
+* Fixed some permission and shellcheck errors (Thanks: tomjrtsmith)
+* Fixed package installation routine for minimal images (Thanks: lsiem)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
