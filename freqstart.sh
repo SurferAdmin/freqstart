@@ -29,7 +29,6 @@ readonly FS_SYMLINK="/usr/local/bin/${FS_NAME}"
 readonly FS_DIR="$(dirname "$(readlink --canonicalize-existing "${0}" 2> /dev/null)")"
 readonly FS_FILE="${0##*/}"
 readonly FS_PATH="${FS_DIR}/${FS_FILE}"
-readonly FS_DIR_DOCKER="${FS_DIR}/docker"
 readonly FS_DIR_PROXY="${FS_DIR}/proxy"
 readonly FS_DIR_USER_DATA="${FS_DIR}/user_data"
 
@@ -463,7 +462,7 @@ _fsDockerProjectConfigs_() {
   local _configs=''
   local _configsDeduped=''
   local _config=''
-  local _configNew=''
+  local _configPath=''
   local _error=0
   
   _configs=()
@@ -507,8 +506,6 @@ _fsDockerProject_() {
   local _projectMode="${2}" # compose, compose-force, run, run-force, validate, quit
   local _projectService="${3:-}" # optional: service
   local _projectArgs="${4:-}" # optional: args
-  local _projectCronCmd=''
-  local _projectCronUpdate=''
   local _projectFile=''
   local _projectFileType=''
   local _projectFileName=''
@@ -516,7 +513,6 @@ _fsDockerProject_() {
   local _projectImages=1
   local _projectStrategies=1
   local _projectConfigs=1
-  local _projectPorts=1
   local _projectContainers=''
   local _projectContainer=''
   local _procjectJson=''
@@ -525,14 +521,12 @@ _fsDockerProject_() {
   local _containerActive=''
   local _containerRestart=1
   local _containerName=''
-  local _containerConfigs=''
   local _containerStrategy=''
   local _containerStrategyDir=''
   local _containerStrategyUpdate=''
   local _containerJson=''
   local _containerJsonInner=''
   local _containerConfPath=''
-  local _containerApiPort=''
   local _containerApiJson=''
   local _containerLogfile=''
   local _containerLogfileTmp=''
@@ -542,7 +536,6 @@ _fsDockerProject_() {
   local _strategyUpdate=''
   local _strategyDir=''
   local _strategyPath=''
-  local _dockerCmd=''
   local _regex="(${FS_PROXY_KUCOIN}|${FS_PROXY_BINANCE}|${FS_NGINX}|${FS_CERTBOT}|${FS_FREQUI})"
   local _error=0
   local _url=0
@@ -592,8 +585,10 @@ _fsDockerProject_() {
     
     if [[ "${_error}" -eq 0 ]]; then
       if [[ "${_projectMode}" = 'compose-force' ]]; then
+          # shellcheck disable=SC2015,SC2086 # ignore shellcheck
         cd "${FS_DIR}" && docker-compose -f ${_projectFile} -p ${_projectName} up --no-start --force-recreate ${_projectService} || true
       else
+          # shellcheck disable=SC2015,SC2086 # ignore shellcheck
         cd "${FS_DIR}" && docker-compose -f ${_projectFile} -p ${_projectName} up --no-start --no-recreate ${_projectService} || true
       fi
     fi
@@ -610,9 +605,10 @@ _fsDockerProject_() {
       
       if [[ -n "${_projectShell}" ]]; then
         _projectArgs="$(printf -- '%s' "${_projectArgs}" | sed 's,/bin/sh -c ,,')"
-                
+          # shellcheck disable=SC2015,SC2086 # ignore shellcheck
         cd "${FS_DIR}" && docker-compose -f ${_projectFile} -p ${_projectName} run --rm "${_projectService}" /bin/sh -c "${_projectArgs}" || true
       else
+          # shellcheck disable=SC2015,SC2086 # ignore shellcheck
         cd "${FS_DIR}" && docker-compose -f ${_projectFile} -p ${_projectName} run --rm ${_projectService} ${_projectArgs} || true
       fi
     fi
@@ -873,10 +869,7 @@ _fsDockerStrategy_() {
   
   local _strategyName="${1}"
   local _strategyFile=''
-  local _strategyFileNew=''
   local _strategyUpdate=''
-  local _strategyFileType=''
-  local _strategyFileTypeName='unknown'
   local _strategyTmp="${FS_TMP}/${FS_HASH}_${_strategyName}"
   local _strategyDir="${FS_DIR_USER_DATA}/strategies/${_strategyName}"
   local _strategyUrls=''
@@ -888,7 +881,7 @@ _fsDockerStrategy_() {
   local _setup=0
   local _error=0
   
-    # create the only necessary strategy for proxies if file doesnt exist or use strategies file from git or create your own.
+    # create the only necessary strategy for proxies if file doesnt exist or use strategies file from git or create your own
   if [[ "$(_fsFile_ "${FS_STRATEGIES}")" -eq 1 ]]; then
     _fsFileCreate_ "${FS_STRATEGIES}" \
     "{" \
@@ -917,16 +910,9 @@ _fsDockerStrategy_() {
     
     for _strategyUrl in "${_strategyUrlsDeduped[@]}"; do
       if [[ "$(_fsIsUrl_ "${_strategyUrl}")" -eq 0 ]]; then
-        _strategyFile="$(basename "${_strategyUrl}")"
-        _strategyFileType="${_strategyFile##*.}"
+        _strategyFile="${_strategyUrl##*/}"
         _strategyPath="${_strategyDir}/${_strategyFile}"
         _strategyPathTmp="${_strategyTmp}/${_strategyFile}"
-        
-        if [[ "${_strategyFileType}" = "py" ]]; then
-          _strategyFileTypeName="strategy"
-        elif [[ "${_strategyFileType}" = "json" ]]; then
-          _strategyFileTypeName="config"
-        fi
         
         curl --connect-timeout 10 -s -L "${_strategyUrl}" -o "${_strategyPathTmp}"
         
@@ -1087,13 +1073,10 @@ _fsSetupPrerequisites_() {
 _fsSetupUser_() {
   local	_user=''
   local	_userId=''
-  local _dir="${FS_DIR}"
   local _userTmp=''
   local _userTmpDir=''
   local _userTmpDPath=''
-  local _logout=0
   local _nr=''
-  local _userLinger=0
   
   _fsMsgTitle_ "USER"
   
@@ -1314,15 +1297,10 @@ _fsSetupFirewall_() {
 _fsSetupFreqtrade_() {
   local _docker="freqtradeorg/freqtrade:stable"
   local _dockerYml="${FS_DIR}/${FS_NAME}_setup.yml"
-  local _dockerGit="https://raw.githubusercontent.com/freqtrade/freqtrade/stable/docker-compose.yml"
-  local _configKey=''
-  local _configSecret=''
   local _configName=''
   local _configFile=''
-  local _configFileTmp=''
-  local _owner=''
+  local _configFileTmp=''  
   
-
   _fsMsgTitle_ "FREQTRADE"
   
   _fsFileCreate_ "${_dockerYml}" \
@@ -1706,7 +1684,7 @@ _fsSetupNginxUnblock_() {
   done
   
   for _port in "${ports[@]}"; do 
-    if [[ -n "$(sudo lsof -n -sTCP:LISTEN -i:${_port})" ]]; then
+    if [[ -n "$(sudo lsof -n -sTCP:LISTEN -i:"${_port}")" ]]; then
       _fsMsgWarning_ 'Stopping webservice blocking port: '"${_port}"
 
       sudo fuser -k "${_port}/tcp" > /dev/null 2> /dev/null || true
@@ -2430,11 +2408,11 @@ _fsConf_() {
   local _userTmp=''
   
   if [[ "$(_fsFile_ "${FS_CONFIG}")" -eq 0 ]]; then
-    _domain="$(_fsValueGet_ "${FS_CONFIG}" '.domain' 2> /dev/null || true)"
-    _url="$(_fsValueGet_ "${FS_CONFIG}" '.url' 2> /dev/null || true)"
-    _ipPublic="$(_fsValueGet_ "${FS_CONFIG}" '.ip_public' 2> /dev/null || true)"
-    _ipLocal="$(_fsValueGet_ "${FS_CONFIG}" '.ip_local' 2> /dev/null || true)"
-    _userConf="$(_fsValueGet_ "${FS_CONFIG}" '.user' 2> /dev/null || true)"
+    _domain="$(_fsValueGet_ "${FS_CONFIG}" '.domain')"
+    _url="$(_fsValueGet_ "${FS_CONFIG}" '.url')"
+    _ipPublic="$(_fsValueGet_ "${FS_CONFIG}" '.ip_public')"
+    _ipLocal="$(_fsValueGet_ "${FS_CONFIG}" '.ip_local')"
+    _userTmp="$(_fsValueGet_ "${FS_CONFIG}" '.user')"
     
       # validate public ip if set
     if [[ -n "${_ipPublic}" ]]; then
