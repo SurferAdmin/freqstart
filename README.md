@@ -1,16 +1,10 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v2.0.0 - rootless
-(Requires full setup. Do not update from previous versions!)
+# FREQSTART v2.0.1 - rootless
+(Requires full setup. Do not update from versions below v2.0.0!)
 
-* Implemented rootless docker setup routine
-* Overhauled user routine incl usage of machinectl for login so set env variable correctly
-* Removed port exposure from docker services as a requirement for FreqUI access
-* Removed port validation from docker project function as this is not a requirement anymore
-* Removed docker image backup logic because of overhead and security concerns
-* Fixed some permission and shellcheck errors (Thanks: tomjrtsmith)
-* Fixed package installation routine for minimal images (Thanks: lsiem)
+* TBA
 
 ## Setup & Docker-Manager for Freqtrade
 

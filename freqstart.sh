@@ -22,7 +22,7 @@ set -o nounset
 set -o pipefail
 
 readonly FS_NAME="freqstart"
-readonly FS_VERSION='v2.0.0'
+readonly FS_VERSION='v2.0.1'
 readonly FS_TMP="/tmp/${FS_NAME}"
 readonly FS_SYMLINK="/usr/local/bin/${FS_NAME}"
 
