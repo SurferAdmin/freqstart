@@ -1030,16 +1030,19 @@ _fsSetupPrerequisites_() {
   _fsMsgTitle_ "PREREQUISITES"
   
   _user="$(id -u -n)"
+  _userId="$(id -u)"
   _userSudoer="${_user} ALL=(root) NOPASSWD: ${FS_PATH}"
-    
-    # validate if user can use sudo
-  if ! id -nGz "${_user}" | grep -qzxF 'sudo'; then
-    _fsMsgError_ 'User cannot use sudo! Login to root and run command: '"sudo usermod -a -G sudo ${_user}"
-  fi
   
-    # append only freqstart to sudoers for autoupdate
-  if ! sudo -l | grep -q "${_userSudoer}"; then
-    echo "${_userSudoer}" | sudo tee -a /etc/sudoers > /dev/null
+  if [[ "${_userId}" -ne 0 ]]; then
+      # validate if user can use sudo
+    if ! id -nGz "${_user}" | grep -qzxF 'sudo'; then
+      _fsMsgError_ 'User cannot use sudo! Login to root and run command: '"sudo usermod -a -G sudo ${_user}"
+    fi
+    
+      # append only freqstart to sudoers for autoupdate
+    if ! sudo -l | grep -q "${_userSudoer}"; then
+      echo "${_userSudoer}" | sudo tee -a /etc/sudoers > /dev/null
+    fi
   fi
   
     # update; note: true workaround if manually installed packages are causing errors
@@ -1179,7 +1182,11 @@ _fsSetupUser_() {
     
     sudo chown -R "${_userTmp}":"${_userTmp}" "${_userTmpDir}"
     sudo chmod +x "${_userTmpDPath}"
-
+    
+    if [[ "$(_fsCaseConfirmation_ "Disable \"${_user}\" user (recommended)?")" -eq 0 ]]; then
+      sudo usermod -L "${_user}"
+    fi
+    
     _fsMsg_ ' +'
     _fsMsgWarning_ "Manually restart script: ${_userTmpDir}/${FS_FILE} --setup"
     _fsMsg_ ' +'
@@ -1190,7 +1197,7 @@ _fsSetupUser_() {
     sudo rm -f "${FS_PATH}" && sudo machinectl shell "${_userTmp}@"
     exit 0
   else
-    _fsMsgWarning_ "Your are logged in as non-root."
+    _fsMsg_ "Your are logged in as non-root."
   fi
 }
 
@@ -2363,10 +2370,9 @@ _fsStats_() {
   local _cpuLoad=''
   local _cpuUsage=''
   
-    # some handy stats to get you an impression how your server compares to the current possibly best location for binance
   _time="$( (time curl --connect-timeout 10 -X GET "https://api.binance.com/api/v3/exchangeInfo?symbol=BNBBTC") 2>&1 > /dev/null \
   | grep -o "real.*s" \
-  | sed "s#real/\t##" )"
+  | sed "s#real$(echo '\t')##" )"
   _memory="$(free -m | awk 'NR==2{printf "%s/%sMB (%.2f%%)", $3,$2,$3*100/$2 }')"
   _disk="$(df -h | awk '$NF=="/"{printf "%d/%dGB (%s)", $3,$2,$5}')"
   
