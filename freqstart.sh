@@ -999,6 +999,7 @@ _fsDockerAutoupdate_() {
   else
     printf '%s\n' "${_projectAutoupdates[@]}" | tee "${FS_AUTOUPDATE}" > /dev/null
     sudo chmod +x "${FS_AUTOUPDATE}"
+    
     _fsCrontab_ "${FS_AUTOUPDATE}" "${_cronUpdate}"
   fi
 }
@@ -1172,15 +1173,22 @@ _fsSetupUser_() {
       sudo adduser --no-log-init --gecos "" "${_userTmp}"
     fi
     
+      # add user to sudo group
     sudo usermod -a -G sudo "${_userTmp}" || true
     
     _userTmpDir="$(bash -c "cd ~$(printf %q "${_userTmp}") && pwd")"'/'"${FS_NAME}"
     _userTmpDPath="${_userTmpDir}/${FS_NAME}.sh"
+    _userTmpSudoer="${_userTmp} ALL=(root) NOPASSWD: ${_userTmpDPath}"
+    
+      # append freqstart to sudoers for autoupdate
+    if sudo -l | grep -q "${_userTmpSudoer}"; then
+      echo "${_userTmpSudoer}" | sudo tee -a /etc/sudoers > /dev/null
+    fi
     
     mkdir -p "${_userTmpDir}"
     
+      # copy freqstart incl. strategies to new user home
     cp -a "${FS_PATH}" "${_userTmpDir}/${FS_FILE}" 2> /dev/null || true
-    cp -a "${FS_CONFIG}" "${_userTmpDir}/${FS_CONFIG##*/}" 2> /dev/null || true
     cp -a "${FS_STRATEGIES}" "${_userTmpDir}/${FS_STRATEGIES##*/}" 2> /dev/null || true
     
     sudo chown -R "${_userTmp}":"${_userTmp}" "${_userTmpDir}"
@@ -2509,15 +2517,11 @@ _fsFileCreate_() {
   local _file="${_filePath##*/}"
   local _fileDir="${_filePath%/*}"
   local _fileHash=''
-  
-  _fsMsgWarning_ "_mode: ${_mode}"
-  
+    
     # shift args in case of sudo
   [[ "${_mode}" = 'sudo' ]] && shift
   shift; _input=("${@}")
   
-  _fsMsgWarning_ "_input: ${_input[@]}"
-
   _fileHash="$(_fsRandomHex_ 8)"
   _fileTmp="${FS_TMP}"'/'"${_fileHash}"'_'"${_file}"
   
