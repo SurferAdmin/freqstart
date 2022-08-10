@@ -1026,13 +1026,20 @@ _fsSetup_() {
 
 _fsSetupPrerequisites_() {
   local _user=''
-  
+
   _fsMsgTitle_ "PREREQUISITES"
   
   _user="$(id -u -n)"
-  
+  _userSudoer="${_user} ALL=(root) NOPASSWD: ${FS_PATH}"
+    
+    # validate if user can use sudo
   if ! id -nGz "${_user}" | grep -qzxF 'sudo'; then
     _fsMsgError_ 'User cannot use sudo! Login to root and run command: '"sudo usermod -a -G sudo ${_user}"
+  fi
+  
+    # append only freqstart to sudoers for autoupdate
+  if ! sudo -l | grep -q "${_userSudoer}"; then
+    echo "${_userSudoer}" | sudo tee -a /etc/sudoers > /dev/null
   fi
   
     # update; note: true workaround if manually installed packages are causing errors
@@ -1159,7 +1166,7 @@ _fsSetupUser_() {
     _userTmpDPath="${_userTmpDir}/${FS_NAME}.sh"
     _userTmpSudoer="${_userTmp} ALL=(root) NOPASSWD: ${_userTmpDPath}"
     
-      # append freqstart to sudoers for autoupdate
+      # append only freqstart to sudoers for autoupdate
     if ! sudo -l | grep -q "${_userTmpSudoer}"; then
       echo "${_userTmpSudoer}" | sudo tee -a /etc/sudoers > /dev/null
     fi
