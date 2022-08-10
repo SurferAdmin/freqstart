@@ -701,7 +701,8 @@ _fsDockerProject_() {
                 # workaround to preserve owner of file
               _containerLogfileTmp="${FS_TMP}"'/'"${_containerLogfile##*/}"'.tmp'
               touch "${_containerLogfileTmp}"
-              cp --no-preserve=all "${_containerLogfileTmp}" "${_containerLogfile}"
+                # note: sudo because of freqtrade docker user
+              sudo cp --no-preserve=all "${_containerLogfileTmp}" "${_containerLogfile}"
             fi
           fi
           
@@ -911,7 +912,8 @@ _fsDockerStrategy_() {
   
   if (( ${#_strategyUrlsDeduped[@]} )); then
     mkdir -p "${_strategyTmp}"
-    mkdir -p "${_strategyDir}"
+      # note: sudo because of freqtrade docker user
+    sudo mkdir -p "${_strategyDir}"
     
     for _strategyUrl in "${_strategyUrlsDeduped[@]}"; do
       if [[ "$(_fsIsUrl_ "${_strategyUrl}")" -eq 0 ]]; then
@@ -932,12 +934,14 @@ _fsDockerStrategy_() {
           if [[ "$(_fsFile_ "${_strategyPath}")" -eq 0 ]]; then
               # only update file if it is different
             if ! cmp --silent "${_strategyPathTmp}" "${_strategyPath}"; then
-              cp -a "${_strategyPathTmp}" "${_strategyPath}"
+                # note: sudo because of freqtrade docker user
+              sudo cp -a "${_strategyPathTmp}" "${_strategyPath}"
               _setup=$((_setup+1))
               _fsFileExit_ "${_strategyPath}"
             fi
           else
-            cp -a "${_strategyPathTmp}" "${_strategyPath}"
+              # note: sudo because of freqtrade docker user
+            sudo cp -a "${_strategyPathTmp}" "${_strategyPath}"
             _setup=$((_setup+1))
             _fsFileExit_ "${_strategyPath}"
           fi
@@ -958,8 +962,8 @@ _fsDockerStrategy_() {
         --arg update "${_strategyUpdate}" \
         '$ARGS.named' \
       )"
-      
-      printf '%s\n' "${_strategyJson}" | jq . | tee "${_strategyDir}/${_strategyName}.conf.json" > /dev/null
+        # note: sudo because of freqtrade docker user
+      printf '%s\n' "${_strategyJson}" | jq . | sudo tee "${_strategyDir}/${_strategyName}.conf.json" > /dev/null
     else
       _fsMsg_ "Strategy is installed: ${_strategyName}"
     fi
@@ -1220,20 +1224,23 @@ _fsSetupRootless_() {
     
     _fsValueUpdate_ "${FS_CONFIG}" '.user' "${_user}"
     _fsMsg_ 'Docker rootless installed.'
+    _fsMsgWarning_ 'Until you log-out/in for the first time, manual docker commands will fail.'
   else
     _fsMsg_ 'Docker rootless is installed.'
   fi
   
-    # add docker host variable to bashrc
+    # add docker variables to bashrc; note: path variable should be set but left the comment in
   if ! cat ~/.bashrc | grep -q "# ${FS_NAME}"; then
     printf -- '%s\n' \
     '' \
     "# ${FS_NAME}" \
-    "#export DOCKER_HOST=unix:///run/user/${_userId}/docker.sock" \
+    "#export PATH=/home/${_user}/bin:\$PATH" \
+    "export DOCKER_HOST=unix:///run/user/${_userId}/docker.sock" \
     '' >> ~/.bashrc
   fi
   
-    # export docker host variables
+    # export docker variables
+  #export "PATH=/home/${_user}/bin:\$PATH"
   export "DOCKER_HOST=unix:///run/user/${_userId}/docker.sock"
 }
 
@@ -1343,7 +1350,8 @@ _fsSetupFreqtrade_() {
     
     # validate if directory exists and is not empty
     if [[ ! "$(ls -A "${FS_DIR_USER_DATA}" 2> /dev/null)" ]]; then
-      rm -rf "${FS_DIR_USER_DATA}"
+        # note: sudo because of freqtrade docker user
+      sudo rm -rf "${FS_DIR_USER_DATA}"
       _fsMsgError_ "Cannot create directory: ${FS_DIR_USER_DATA}"
     else
       _fsMsg_ "Directory created: ${FS_DIR_USER_DATA}"
@@ -1394,8 +1402,8 @@ _fsSetupFreqtrade_() {
       "new-config --config /freqtrade/${FS_DIR_USER_DATA##*/}/${_configFileTmp##*/}"
             
       _fsFileExit_ "${_configFileTmp}"
-      
-      cp -a "${_configFileTmp}" "${_configFile}"
+        # note: sudo because of freqtrade docker user
+      sudo cp -a "${_configFileTmp}" "${_configFile}"
       rm -f "${_configFileTmp}"
       
       _fsMsg_ "Enter your exchange api KEY and SECRET to: ${_configFile}"
@@ -1427,8 +1435,8 @@ _fsSetupBinanceProxy_() {
       fi
     fi
     
-      # binance proxy json file
-    _fsFileCreate_ "${FS_DIR_USER_DATA}/${FS_PROXY_BINANCE}.json" \
+      # binance proxy json file; note: sudo because of freqtrade docker user
+    _fsFileCreate_ "${FS_DIR_USER_DATA}/${FS_PROXY_BINANCE}.json" 'sudo' \
     "{" \
     "    \"exchange\": {" \
     "        \"name\": \"binance\"," \
@@ -1446,8 +1454,8 @@ _fsSetupBinanceProxy_() {
     "    }" \
     "}"
     
-      # binance proxy futures json file
-    _fsFileCreate_ "${FS_DIR_USER_DATA}/${FS_PROXY_BINANCE}_futures.json" \
+      # binance proxy futures json file; note: sudo because of freqtrade docker user
+    _fsFileCreate_ "${FS_DIR_USER_DATA}/${FS_PROXY_BINANCE}_futures.json" 'sudo' \
     "{" \
     "    \"exchange\": {" \
     "        \"name\": \"binance\"," \
@@ -1508,8 +1516,8 @@ _fsSetupKucoinProxy_() {
       fi
     fi
     
-      # kucoin proxy json file
-    _fsFileCreate_ "${FS_DIR_USER_DATA}/${FS_PROXY_KUCOIN}.json" \
+      # kucoin proxy json file; note: sudo because of freqtrade docker user
+    _fsFileCreate_ "${FS_DIR_USER_DATA}/${FS_PROXY_KUCOIN}.json" 'sudo' \
     "{" \
     "    \"exchange\": {" \
     "        \"name\": \"kucoin\"," \
@@ -2245,8 +2253,8 @@ _fsSetupFrequiJson_() {
   done
   
   if [[ -n "${_username}" ]] && [[ -n "${_password}" ]]; then
-      # create frequi json for bots
-    _fsFileCreate_ "${_json}" \
+      # create frequi json for bots; note: sudo because of freqtrade docker user
+    _fsFileCreate_ "${_json}" 'sudo' \
     '{' \
     '    "api_server": {' \
     '        "enabled": true,' \
@@ -2273,7 +2281,8 @@ _fsSetupFrequiCompose_() {
   local _jsonServer="${FS_DIR_USER_DATA}/${FS_FREQUI}_server.json"
   local _yml="${FS_DIR}/${FS_FREQUI}.yml"
   
-  _fsFileCreate_ "${_jsonServer}" \
+    # note: sudo because of freqtrade docker user
+  _fsFileCreate_ "${_jsonServer}" 'sudo' \
   "{" \
   "    \"max_open_trades\": 1," \
   "    \"stake_currency\": \"BTC\"," \
