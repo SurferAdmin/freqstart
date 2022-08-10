@@ -1168,7 +1168,8 @@ _fsSetupUser_() {
     done
     
     if [[ "${_nr}" -eq 1 ]] && [[ -n "${_userTmp}" ]]; then
-      sudo adduser --gecos "" "${_userTmp}"
+        # do not add the user to the lastlog and faillog databases to avoid excessive log files
+      sudo adduser --no-log-init --gecos "" "${_userTmp}"
     fi
     
     sudo usermod -a -G sudo "${_userTmp}" || true
@@ -1266,53 +1267,38 @@ _fsSetupFirewall_() {
   
   _fsPkgs_ "ufw"
   
-  _status="$(sudo ufw status | grep -o 'active' || true)"
+  _fsMsgTitle_ 'Configurate firewall for Nginx proxy.'
   
-  while true; do
-    if [[ -n "${_status}" ]]; then
-      if [[ "$(_fsCaseConfirmation_ 'Skip reconfiguration of firewall?')" -eq 0 ]]; then
-        _fsMsg_ 'Skipping...'
-        break
-      fi
-    else
-      if [[ "$(_fsCaseConfirmation_ 'Install firewall for Nginx proxy (recommended)?')" -eq 1 ]]; then
-        break
-      fi
-    fi
-    
-    if [[ "$(_fsCaseConfirmation_ 'Is the default SSH port "22/tcp"?')" -eq 1 ]]; then
-      while true; do
-        read -rp '? SSH port (Press [ENTER] for default "22/tcp"): ' _portSSH
-        case ${_portSSH} in
-          '')
-            _portSSH=22
-            ;;
-          *)
-            _fsMsg_ 'Do not continue if the default SSH port is not: '"${_portSSH}"
-            if [[ "$(_fsCaseConfirmation_ 'Continue?')" -eq 0 ]]; then
-              break
-            fi
-            ;;
-        esac
-      done
-    fi
-    
-    yes $'y' | sudo ufw reset || true
-    sudo ufw default deny incoming
-      # ports for ssh access and nginx proxy forward for frequi
-    sudo ufw allow ssh
-    sudo ufw allow "${_portSSH}"/tcp
-    sudo ufw allow 80/tcp
-    sudo ufw allow 443/tcp
-    sudo ufw allow out http
-    sudo ufw allow out https
-      # allow ntp sync on port 123
-    sudo ufw allow 123/udp
-    sudo ufw allow out 123/udp
-    yes $'y' | sudo ufw enable || true
-    
-    break
-  done
+  if [[ "$(_fsCaseConfirmation_ 'Is the default SSH port "22/tcp"?')" -eq 1 ]]; then
+    while true; do
+      read -rp '? SSH port (Press [ENTER] for default "22/tcp"): ' _portSSH
+      case ${_portSSH} in
+        '')
+          _portSSH=22
+          ;;
+        *)
+          _fsMsg_ 'Do not continue if the default SSH port is not: '"${_portSSH}"
+          if [[ "$(_fsCaseConfirmation_ 'Continue?')" -eq 0 ]]; then
+            break
+          fi
+          ;;
+      esac
+    done
+  fi
+  
+  yes $'y' | sudo ufw reset || true
+  sudo ufw default deny incoming
+    # ports for ssh access and nginx proxy forward for frequi
+  sudo ufw allow ssh
+  sudo ufw allow "${_portSSH}"/tcp
+  sudo ufw allow 80/tcp
+  sudo ufw allow 443/tcp
+  sudo ufw allow out http
+  sudo ufw allow out https
+    # allow ntp sync on port 123
+  sudo ufw allow 123/udp
+  sudo ufw allow out 123/udp
+  yes $'y' | sudo ufw enable || true
 }
 
 # FREQTRADE
@@ -1635,7 +1621,7 @@ _fsSetupNginx_() {
         _fsMsgWarning_ 'FreqUI login data created automatically:'
         _fsMsg_ "Username: ${_username}"
         _fsMsg_ "Password: ${_password}"
-        _fsCdown_ 15 'to memorize login data... Restart setup to change!'
+        _fsCdown_ 10 'to copy/memorize login data... Restart setup to change!'
       fi
       
         # create htpasswd for frequi access
@@ -2246,7 +2232,7 @@ _fsSetupFrequiJson_() {
       _fsMsgWarning_ 'API login data created automatically:'
       _fsMsg_ "Username: ${_username}"
       _fsMsg_ "Password: ${_password}"
-      _fsCdown_ 15 'to memorize login data... Restart setup to change!'
+      _fsCdown_ 10 'to copy/memorize login data... Restart setup to change!'
     fi
     
     break
@@ -2515,7 +2501,7 @@ _fsFileExit_() {
 _fsFileCreate_() {
   [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-  local _filePath="${1}"; shift
+  local _filePath="${1}"
   local _mode="${2}"
   local _input=()
   local _output=''
@@ -2524,9 +2510,13 @@ _fsFileCreate_() {
   local _fileDir="${_filePath%/*}"
   local _fileHash=''
   
-  [[ "${_mode}" = 'sudo' ]] && shift
+  _fsMsgWarning_ "_mode: ${_mode}"
   
-  _input=("${@}")
+    # shift args in case of sudo
+  [[ "${_mode}" = 'sudo' ]] && shift
+  shift; _input=("${@}")
+  
+  _fsMsgWarning_ "_input: ${_input[@]}"
 
   _fileHash="$(_fsRandomHex_ 8)"
   _fileTmp="${FS_TMP}"'/'"${_fileHash}"'_'"${_file}"
