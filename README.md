@@ -126,11 +126,10 @@ With Freqstart you are no longer bound to a single docker-compose.yml and can fr
    ```yml
    version: '3'
    services:
-     example_dryrun: # IMPORTANT: Dont forget to change service name!
+     example_dryrun: # IMPORTANT: Dont forget to change service name
        image: freqtradeorg/freqtrade:stable
        volumes:
-         - "/home/rootless/user_data:/freqtrade/user_data"
-       tty: true
+         - "./user_data:/freqtrade/user_data"
        command: >
          trade
          --dry-run
@@ -141,8 +140,8 @@ With Freqstart you are no longer bound to a single docker-compose.yml and can fr
          --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/exampleconfig.json
          --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/pairlist-volume-binance-busd.json
          --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/blacklist-binance.json
-         --config /freqtrade/user_data/freqstart_frequi.json # OPTIONAL: If you want to manage bot via FreqUI.
-         --config /freqtrade/user_data/freqstart_proxy_binance.json
+         --config /freqtrade/user_data/freqstart_frequi.json # OPTIONAL: If you want to manage bot via FreqUI
+         --config /freqtrade/user_data/freqstart_proxy_binance.json # OPTIONAL: If you want to use proxy for Binance
    ```
 
 <p align="right">(<a href="#top">back to top</a>)</p>
