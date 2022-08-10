@@ -1031,13 +1031,9 @@ _fsSetupPrerequisites_() {
   
   _user="$(id -u -n)"
   
-   # add current user to sudoers excl. rootless
-  #if [[ ! "${_user}" = "${FS_ROOTLESS}" ]]; then
-  #  if ! sudo -l | grep -q '(ALL : ALL) NOPASSWD: ALL'; then
-  #    echo "${_user} ALL=(ALL:ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers > /dev/null
-  #    _fsMsg_ "User added to: sudoers"
-  #  fi
-  #fi
+  if ! id -nGz "${_user}" | grep -qzxF 'sudo'; then
+    _fsMsgError_ 'User cannot use sudo! Login to root and run command: '"sudo usermod -a -G sudo ${_user}"
+  fi
   
     # update; note: true workaround if manually installed packages are causing errors
   sudo apt update || true
@@ -1186,6 +1182,8 @@ _fsSetupUser_() {
       # machinectl is needed to set $XDG_RUNTIME_DIR properly
     sudo rm -f "${FS_PATH}" && sudo machinectl shell "${_userTmp}@"
     exit 0
+  else
+    _fsMsgWarning_ "Your are logged in as non-root."
   fi
 }
 
