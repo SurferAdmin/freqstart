@@ -147,13 +147,13 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 
 ### Changelog
 
-`v2.0.1`
-* TBA
+`v2.0.2`
+* Improved sudoers function
 
 `v2.0.1`
 * Fast permission fix for user_data folder
 * Removed nginx unblock function
-* Fixed sudoers
+* Fixed sudoers function
 
 `v2.0.0`
 * Implemented rootless docker setup routine
