@@ -1024,26 +1024,8 @@ _fsSetup_() {
 
 # PREREQUISITES
 
-_fsSetupPrerequisites_() {
-  local _user=''
-
+_fsSetupPrerequisites_() {  
   _fsMsgTitle_ "PREREQUISITES"
-  
-  _user="$(id -u -n)"
-  _userId="$(id -u)"
-  _userSudoer="${_user} ALL=(root) NOPASSWD: ${FS_PATH}"
-  
-  if [[ "${_userId}" -ne 0 ]]; then
-      # validate if user can use sudo
-    if ! id -nGz "${_user}" | grep -qzxF 'sudo'; then
-      _fsMsgError_ 'User cannot use sudo! Login to root and run command: '"sudo usermod -a -G sudo ${_user}"
-    fi
-    
-      # append only freqstart to sudoers for autoupdate
-    if ! sudo -l | grep -q "${_userSudoer}"; then
-      echo "${_userSudoer}" | sudo tee -a /etc/sudoers > /dev/null
-    fi
-  fi
   
     # update; note: true workaround if manually installed packages are causing errors
   sudo apt update || true
@@ -1159,7 +1141,7 @@ _fsSetupUser_() {
     
     if [[ "${_nr}" -eq 1 ]] && [[ -n "${_userTmp}" ]]; then
         # do not add the user to the lastlog and faillog databases to avoid excessive log files
-      sudo adduser --no-log-init --gecos "" "${_userTmp}"
+      sudo adduser --gecos '' "${_userTmp}"
     fi
     
       # add user to sudo group
@@ -1388,7 +1370,7 @@ _fsSetupFreqtrade_() {
       _fsFileExit_ "${_configFileTmp}"
         # note: sudo because of freqtrade docker user
       sudo cp -a "${_configFileTmp}" "${_configFile}"
-      rm -f "${_configFileTmp}"
+      sudo rm -f "${_configFileTmp}"
       
       _fsMsg_ "Enter your exchange api KEY and SECRET to: ${_configFile}"
     fi
@@ -2966,6 +2948,32 @@ _fsLoginDataPassword_() {
   echo "$(cut -d':' -f2 <<< "${_password}")"
 }
 
+_fsSudoer_() {
+  local _user=''
+  local _userId=''
+  local _userSudoer=''
+  
+  _user="$(id -u -n)"
+  _userId="$(id -u)"
+  _userSudoer="${_user} ALL=(root) NOPASSWD: ${FS_PATH}"
+  
+  if [[ "${_userId}" -ne 0 ]]; then
+      # validate if user can use sudo
+    if ! id -nGz "${_user}" | grep -qzxF 'sudo'; then
+      _fsMsgError_ 'User cannot use sudo! Login to root and run command: '"sudo usermod -a -G sudo ${_user}"
+    fi
+    
+      # append only freqstart to sudoers for autoupdate
+    if ! sudo -l | grep -q "${_userSudoer}"; then
+      echo "${_userSudoer}" | sudo tee -a /etc/sudoers > /dev/null
+    fi
+  fi
+  
+  if ! sudo loginctl show-user "${_user}" 2> /dev/null | grep -q 'Linger=yes'; then
+    export "DOCKER_HOST=unix:///run/user/${_userId}/docker.sock"
+  fi
+}
+
 _fsCleanup_() {
   local _error="${?}"
   trap - ERR EXIT SIGINT SIGTERM
@@ -3081,6 +3089,7 @@ _fsOptions_() {
 _fsScriptLock_
 _fsOptions_ "${@}"
 _fsLogo_
+_fsSudoer_
 
   # validate arguments
 if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
