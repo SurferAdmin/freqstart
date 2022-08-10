@@ -1,9 +1,16 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v1.0.4
+# FREQSTART v2.0.0 - rootless
+(Requires full setup. Do not update from previous versions!)
 
-* Fixed permission error for server where docker is started as ubuntu (Vultr)
+* Implemented rootless docker setup routine
+* Overhauled user routine incl usage of machinectl for login so set env variable correctly
+* Removed port exposure from docker services as a requirement for FreqUI access
+* Removed port validation from docker project function as this is not a requirement anymore
+* Removed docker image backup logic because of overhead and security concerns
+* Fixed some permission and shellcheck errors (Thanks: tomjrtsmith)
+* Fixed package installation routine for minimal images (Thanks: lsiem)
 
 ## Setup & Docker-Manager for Freqtrade
 
@@ -46,7 +53,7 @@ Freqstart provides an interactive setup guide for server security, Freqtrade inc
 
 Freqstart installs server packages and configurations tailored to the needs of Freqtrade and may overwrite existing installations and configurations. It is recommended to set it up in a new and clean environment!
 
-Packages: git, curl, jq, docker-ce, chrony, ufw
+Packages: git, curl, jq, docker-ce, docker-compose, docker-ce-rootless-extras, systemd-container, uidmap, dbus-user-session, chrony, ufw, dnsutils, lsof , cron, uidmap
 
 ### Recommended VPS
 
@@ -69,10 +76,6 @@ Vultr (AMD High Performance / Tokyo): [www.vultr.com](https://www.vultr.com/?ref
 4. Setup `freqstart`
    ```sh
    ./freqstart.sh --setup
-   ```
-5. Setup `freqstart`, non-interactive
-   ```sh
-   ./freqstart.sh --setup --yes
    ```
    
 ### Start
@@ -118,16 +121,15 @@ With Freqstart you are no longer bound to a single docker-compose.yml and can fr
 
 * Project file based on NostalgiaForInfinityX and Binance (BUSD) with Proxy and FreqUI enabled.
 
+`NOTICE:` Port is not needed anymore for FreqUI exposure.
+
    ```yml
    version: '3'
    services:
-     example_dryrun: # IMPORTANT: Dont forget to change service name!
+     example_dryrun: # IMPORTANT: Dont forget to change service name
        image: freqtradeorg/freqtrade:stable
        volumes:
          - "./user_data:/freqtrade/user_data"
-       ports:
-         - "127.0.0.1:9000:9999" # OPTIONAL: Choose port between 9000 and 9100 and forward to 9999 or remove if not using FreqUI.
-       tty: true
        command: >
          trade
          --dry-run
@@ -138,8 +140,8 @@ With Freqstart you are no longer bound to a single docker-compose.yml and can fr
          --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/exampleconfig.json
          --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/pairlist-volume-binance-busd.json
          --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/blacklist-binance.json
-         --config /freqtrade/user_data/freqstart_frequi.json # OPTIONAL: If you want to manage bot via FreqUI.
-         --config /freqtrade/user_data/freqstart_proxy_binance.json
+         --config /freqtrade/user_data/freqstart_frequi.json # OPTIONAL: If you want to manage bot via FreqUI
+         --config /freqtrade/user_data/freqstart_proxy_binance.json # OPTIONAL: If you want to use proxy for Binance
    ```
 
 <p align="right">(<a href="#top">back to top</a>)</p>
