@@ -1181,7 +1181,7 @@ _fsSetupUser_() {
     _userTmpSudoer="${_userTmp} ALL=(root) NOPASSWD: ${_userTmpDPath}"
     
       # append freqstart to sudoers for autoupdate
-    if sudo -l | grep -q "${_userTmpSudoer}"; then
+    if ! sudo -l | grep -q "${_userTmpSudoer}"; then
       echo "${_userTmpSudoer}" | sudo tee -a /etc/sudoers > /dev/null
     fi
     
