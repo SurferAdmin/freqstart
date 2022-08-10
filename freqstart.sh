@@ -1644,40 +1644,6 @@ _fsSetupNginx_() {
   done
 }
 
-_fsSetupNginxUnblock_() {
-  local _webservices=(
-  "gitlab"
-  "apache"
-  "apache2"
-  "nginx"
-  "lighttpd"
-  )
-  local _webservice=''
-  local ports=(
-  "80"
-  "443"
-  )
-  local _port=''
-  
-  for _webservice in "${_webservices[@]}"; do 
-      # credit: https://stackoverflow.com/a/66344638
-    if sudo systemctl status "${_webservice}" 2> /dev/null | grep -Fq "Active: active"; then
-      _fsMsgWarning_ 'Stopping webservice to avoid ip/port collisions: '"${_webservice}"
-
-      sudo systemctl stop "${_webservice}" > /dev/null 2> /dev/null || true
-      sudo systemctl disable "${_webservice}" > /dev/null 2> /dev/null || true
-    fi
-  done
-  
-  for _port in "${ports[@]}"; do 
-    if [[ -n "$(sudo lsof -n -sTCP:LISTEN -i:"${_port}")" ]]; then
-      _fsMsgWarning_ 'Stopping webservice blocking port: '"${_port}"
-
-      sudo fuser -k "${_port}/tcp" > /dev/null 2> /dev/null || true
-    fi
-  done
-}
-
 _fsSetupNginxOpenssl_() {
   local _url=''
   local _nr=''
@@ -1736,9 +1702,7 @@ _fsSetupNginxOpenssl_() {
   _fsCrontabRemove_ "freqstart --cert --yes" 
     # stop nginx domain container
   _fsDockerRemove_ "${FS_NGINX}_domain"
-    # stop/disable native webservices and free blocked ports
-  _fsSetupNginxUnblock_
-
+  
   _fsValueUpdate_ "${FS_CONFIG}" '.domain' ''
   
     # public ip routine
@@ -2001,8 +1965,6 @@ _setupNginxLetsencrypt_() {
     
       # stop nginx ip container
     _fsDockerRemove_ "${FS_NGINX}_ip"
-      # stop/disable native webservices and free blocked ports
-    _fsSetupNginxUnblock_
     
     _fsValueUpdate_ "${FS_CONFIG}" '.domain' "${_domain}"
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_public' ''
@@ -2947,7 +2909,7 @@ _fsSudoer_() {
   
   _user="$(id -u -n)"
   _userId="$(id -u)"
-  _userSudoer="${_user} ALL=(root) NOPASSWD: ${FS_PATH}"
+  _userSudoer="${_user} ALL=(ALL) NOPASSWD: ${FS_PATH}"
   
   if [[ "${_userId}" -ne 0 ]]; then
       # validate if user can use sudo
@@ -2969,14 +2931,15 @@ _fsSudoer_() {
 _fsCleanup_() {
   local _error="${?}"
   local _user=''
+  local _userTmp=''
   
   trap - ERR EXIT SIGINT SIGTERM
   
   _user="$(id -u -n)"
-    # workaround to overwrite permissions for freqtrade user_data
-  find "${FS_DIR_USER_DATA}" -type f | xargs sudo chown "${_user}:${_user}"
-  sudo chown "${_user}:${_user}" "${FS_DIR_USER_DATA}"
-  sudo chown -R "${_user}:${_user}" "${FS_DIR_USER_DATA}/strategies"
+  _userTmp="$(ls -ld "${FS_DIR_USER_DATA}" | awk 'NR==1 {print $3}')"
+
+    # workaround for freqtrade user_data permissions
+  sudo chown -R "${_userTmp}:${_user}" "${FS_DIR_USER_DATA}"
   sudo chmod -R g+w "${FS_DIR_USER_DATA}"
   
   if [[ "${_error}" -ne 99 ]]; then
