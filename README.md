@@ -5,8 +5,12 @@
 (Requires full setup. Do not update from previous versions!)
 
 * Implemented rootless docker setup routine
+* Overhauled user routine incl usage of machinectl for login so set env variable correctly
 * Removed port exposure from docker services as a requirement for FreqUI access
 * Removed port validation from docker project function as this is not a requirement anymore
+* Removed docker image backup logic because of overhead and security concerns
+* Fixed some permission and shellcheck errors (Thanks: tomjrtsmith)
+* Fixed package installation routine for minimal images (Thanks: lsiem)
 
 ## Setup & Docker-Manager for Freqtrade
 
