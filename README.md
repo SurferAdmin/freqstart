@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v2.0.1 - rootless
+# FREQSTART v2.0.2 - rootless
 (Requires full setup. Do not update from versions below v2.0.0)
 
 See what has been changed: <a href="#changelog">Changelog</a>
@@ -147,10 +147,13 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 
 ### Changelog
 
+`v2.0.2`
+* Improved sudoers function
+
 `v2.0.1`
 * Fast permission fix for user_data folder
 * Removed nginx unblock function
-* Fixed sudoers
+* Fixed sudoers function
 
 `v2.0.0`
 * Implemented rootless docker setup routine
