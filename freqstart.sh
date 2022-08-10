@@ -1167,6 +1167,8 @@ _fsSetupUser_() {
       sudo adduser --gecos "" "${_userTmp}"
     fi
     
+    sudo usermod -a -G sudo "${_userTmp}" || true
+    
     _userTmpDir="$(bash -c "cd ~$(printf %q "${_userTmp}") && pwd")"'/'"${FS_NAME}"
     _userTmpDPath="${_userTmpDir}/${FS_NAME}.sh"
     
