@@ -1231,19 +1231,19 @@ _fsSetupFirewall_() {
     done
   fi
   
-  yes $'y' | sudo ufw reset || true
-  sudo ufw default deny incoming
+  sudo ufw --force reset > /dev/null
+  sudo ufw default deny incoming > /dev/null
     # ports for ssh access and nginx proxy forward for frequi
-  sudo ufw allow ssh
-  sudo ufw allow "${_portSSH}"/tcp
-  sudo ufw allow 80/tcp
-  sudo ufw allow 443/tcp
-  sudo ufw allow out http
-  sudo ufw allow out https
+  sudo ufw allow ssh > /dev/null
+  sudo ufw allow "${_portSSH}"/tcp > /dev/null
+  sudo ufw allow 80/tcp > /dev/null
+  sudo ufw allow 443/tcp > /dev/null
+  sudo ufw allow out http > /dev/null
+  sudo ufw allow out https > /dev/null
     # allow ntp sync on port 123
-  sudo ufw allow 123/udp
-  sudo ufw allow out 123/udp
-  yes $'y' | sudo ufw enable || true
+  sudo ufw allow 123/udp > /dev/null
+  sudo ufw allow out 123/udp > /dev/null
+  sudo ufw --force enable > /dev/null
 }
 
 # FREQTRADE
@@ -1534,7 +1534,7 @@ _fsSetupNginx_() {
     
     _fsSymlinkCreate_ "${_sysctl}" "${_sysctlSymlink}"
     
-    sudo sysctl -p "${_sysctlSymlink}"
+    sudo sysctl -p "${_sysctlSymlink}" > /dev/null
     
       # create frequi login data
     while true; do
