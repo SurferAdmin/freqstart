@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v2.0.2 - rootless
+# FREQSTART v2.0.3 - rootless
 (Requires full setup. Do not update from versions below v2.0.0)
 
 See what has been changed: <a href="#changelog">Changelog</a>
@@ -118,22 +118,22 @@ With Freqstart you are no longer bound to a single docker-compose.yml and can fr
 `NOTICE:` Port is not needed anymore for FreqUI exposure.
 
    ```yml
-   version: '3'
-   services:
-     example_dryrun: # IMPORTANT: Dont forget to change service name
-       image: freqtradeorg/freqtrade:stable
-       volumes:
-         - "./user_data:/freqtrade/user_data"
-       command: >
-         trade
-         --dry-run
-         --db-url sqlite:////freqtrade/user_data/example_dryrun.sqlite
-         --logfile /freqtrade/user_data/logs/example_dryrun.log
-         --strategy NostalgiaForInfinityX
-         --strategy-path /freqtrade/user_data/strategies/NostalgiaForInfinityX
-         --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/exampleconfig.json
-         --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/pairlist-volume-binance-busd.json
-         --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/blacklist-binance.json
+   version: '3' # REQUIRED
+   services: # REQUIRED: For multiple services duplicate code from here
+     example_dryrun: # REQUIRED: Do not forget to change service name
+       image: freqtradeorg/freqtrade:stable # REQUIRED: For more updates use freqtradeorg/freqtrade:latest
+       volumes: # REQUIRED
+         - "./user_data:/freqtrade/user_data" # REQUIRED: Do not change
+       command: > # REQUIRED
+         trade # REQUIRED
+         --dry-run # OPTIONAL: Remove if you want to trade live
+         --db-url sqlite:////freqtrade/user_data/example_dryrun.sqlite # REQUIRED: Do not forget to change sqlite name
+         --logfile /freqtrade/user_data/logs/example_dryrun.log # OPTIONAL: Recommended and do not forget to change log name
+         --strategy NostalgiaForInfinityX # REQUIRED
+         --strategy-path /freqtrade/user_data/strategies/NostalgiaForInfinityX # REQUIRED
+         --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/exampleconfig.json # REQUIRED: Add your API credentials from exchange
+         --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/pairlist-volume-binance-busd.json # OPTIONAL: Use different volume or static pairlists
+         --config /freqtrade/user_data/strategies/NostalgiaForInfinityX/blacklist-binance.json # OPTIONAL
          --config /freqtrade/user_data/freqstart_frequi.json # OPTIONAL: If you want to manage bot via FreqUI
          --config /freqtrade/user_data/freqstart_proxy_binance.json # OPTIONAL: If you want to use proxy for Binance
    ```
@@ -146,6 +146,11 @@ With Freqstart you are no longer bound to a single docker-compose.yml and can fr
 See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full list of proposed features (and known issues).
 
 ### Changelog
+
+`v2.0.3`
+* Removed deprecated code in docker routine and value get/update functions
+* Improved ufw ssh port confirmation and removed unnecessary output in function
+* Improved cron routine for certbot and added cron remove to docker purge
 
 `v2.0.2`
 * Improved sudoers function

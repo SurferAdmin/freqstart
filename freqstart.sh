@@ -22,7 +22,7 @@ set -o nounset
 set -o pipefail
 
 readonly FS_NAME="freqstart"
-readonly FS_VERSION='v2.0.2'
+readonly FS_VERSION='v2.0.3'
 readonly FS_TMP="/tmp/${FS_NAME}"
 readonly FS_SYMLINK="/usr/local/bin/${FS_NAME}"
 
@@ -53,6 +53,7 @@ readonly FS_NGINX_CONFD_FREQUI="${FS_NGINX_CONFD}/frequi.conf"
 readonly FS_NGINX_CONFD_HTPASSWD="${FS_NGINX_CONFD}/.htpasswd"
 
 readonly FS_CERTBOT="${FS_NAME}_certbot"
+readonly FS_CERTBOT_CRON="freqstart --cert --yes"
 readonly FS_FREQUI="${FS_NAME}_frequi"
 readonly FS_HASH="$(xxd -l 8 -ps /dev/urandom)"
 
@@ -70,28 +71,15 @@ trap '_fsErr_ "${FUNCNAME:-.}" ${LINENO}' ERR
 ###
 # DOCKER
 
-_fsDockerVarsRepo_() {
-  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
-  
-  local _docker="${1}"
-  local _dockerRepo="${_docker%:*}"
-  
-  echo "${_dockerRepo}"
-}
-
 _fsDockerVarsCompare_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-  local _docker="${1}"
-  local _dockerRepo=''
-  local _dockerTag=''
+  local _dockerImage="${1}"
   local _dockerVersionLocal=''
   local _dockerVersionHub=''
   
-  _dockerRepo="$(_fsDockerVarsRepo_ "${_docker}")"
-  _dockerTag="$(_fsDockerVarsTag_ "${_docker}")"
-  _dockerVersionHub="$(_fsDockerVersionHub_ "${_dockerRepo}" "${_dockerTag}")"
-  _dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerRepo}" "${_dockerTag}")"
+  _dockerVersionHub="$(_fsDockerVersionHub_ "${_dockerImage}")"
+  _dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerImage}")"
   
   # compare versions
   if [[ -z "${_dockerVersionHub}" ]]; then
@@ -108,38 +96,23 @@ _fsDockerVarsCompare_() {
 _fsDockerVarsName_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-  local _docker="${1}"
-  local _dockerRepo=''
+  local _dockerImage="${1}"
+  local _dockerRepo="${_dockerImage%:*}"
   local _dockerName=''
   
-  _dockerRepo="$(_fsDockerVarsRepo_ "${_docker}")"
   _dockerName="${FS_NAME}"'_'"$(echo "${_dockerRepo}" | sed "s,\/,_,g" | sed "s,\-,_,g")"
   
   echo "${_dockerName}"
 }
 
-_fsDockerVarsTag_() {
+_fsDockerVersionLocal_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-  local _docker="${1}"
-  local _dockerTag="${_docker##*:}"
-  
-  if [[ "${_dockerTag}" = "${_docker}" ]]; then
-    _dockerTag="latest"
-  fi
-  
-  echo "${_dockerTag}"
-}
-
-_fsDockerVersionLocal_() {
-  [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
-  
-  local _dockerRepo="${1}"
-  local _dockerTag="${2}"
+  local _dockerImage="${1}"
   local _dockerVersionLocal=''
   
-  if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" -eq 0 ]]; then
-    _dockerVersionLocal="$(docker inspect --format='{{index .RepoDigests 0}}' "${_dockerRepo}:${_dockerTag}" \
+  if [[ "$(_fsDockerImageInstalled_ "${_dockerImage}")" -eq 0 ]]; then
+    _dockerVersionLocal="$(docker inspect --format='{{index .RepoDigests 0}}' "${_dockerImage}" \
     | sed 's/.*@//')"
     
     if [[ -n "${_dockerVersionLocal}" ]]; then
@@ -149,17 +122,18 @@ _fsDockerVersionLocal_() {
 }
 
 _fsDockerVersionHub_() {
-  [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-  local _dockerRepo="${1}"
-  local _dockerTag="${2}"
+  local _dockerImage="${1}"
+  local _dockerRepo="${_dockerImage%:*}"
+  local _dockerTag="${_dockerImage##*:}"
   local _token=''
   local _acceptM="application/vnd.docker.distribution.manifest.v2+json"
   local _acceptML="application/vnd.docker.distribution.manifest.list.v2+json"
   local _dockerName=''
   local _dockerManifest=''
   
-  _dockerName="$(_fsDockerVarsName_ "${_dockerRepo}")"
+  _dockerName="$(_fsDockerVarsName_ "${_dockerImage}")"
   _dockerManifest="${FS_TMP}"'/'"${FS_HASH}"'_'"${_dockerName}"'_'"${_dockerTag}"'.md'
   _token="$(curl --connect-timeout 10 -s "https://auth.docker.io/token?scope=repository:${_dockerRepo}:pull&service=registry.docker.io"  | jq -r '.token')"
   
@@ -169,17 +143,16 @@ _fsDockerVersionHub_() {
     -I -s -L "https://registry-1.docker.io/v2/${_dockerRepo}/manifests/${_dockerTag}"
   fi
   
-  if [[ "$(_fsFile_ "${_dockerManifest}")" -eq 0 ]]; then
-    _status="$(grep -o "200 OK" "${_dockerManifest}" || true)"
+  if [[ -f "${_dockerManifest}" ]]; then    
+    _dockerVersionHub="$(grep -oE 'etag: "(.*)"' "${_dockerManifest}" \
+    | sed 's,\",,g' \
+    | sed 's,etag: ,,' \
+    || true)"
     
-    if [[ -n "${_status}" ]]; then
-      _dockerVersionHub="$(_fsValueGet_ "${_dockerManifest}" 'etag')"
-      
-      if [[ -n "${_dockerVersionHub}" ]]; then
-        echo "${_dockerVersionHub}"
-      else
-        _fsMsgWarning_ 'Cannot retrieve docker manifest.'
-      fi
+    if [[ -n "${_dockerVersionHub}" ]]; then
+      echo "${_dockerVersionHub}"
+    else
+      _fsMsgWarning_ 'Cannot retrieve docker manifest.'
     fi
   else
     _fsMsgWarning_ 'Cannot connect to docker hub.'
@@ -190,32 +163,28 @@ _fsDockerImage_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _dockerImage="${1}"
-  local _dockerRepo=''
-  local _dockerTag=''
   local _dockerName=''
   local _dockerCompare=''
   local _dockerStatus=2
   local _dockerVersionLocal=''
   
-  _dockerRepo="$(_fsDockerVarsRepo_ "${_dockerImage}")"
-  _dockerTag="$(_fsDockerVarsTag_ "${_dockerImage}")"
   _dockerName="$(_fsDockerVarsName_ "${_dockerImage}")"
   _dockerCompare="$(_fsDockerVarsCompare_ "${_dockerImage}")"
   
   if [[ "${_dockerCompare}" -eq 0 ]]; then
       # docker hub image version is equal
-    _fsMsg_ "Image is installed: ${_dockerRepo}:${_dockerTag}"
+    _fsMsg_ "Image is installed: ${_dockerImage}"
     _dockerStatus=0
   elif [[ "${_dockerCompare}" -eq 1 ]]; then
       # docker hub image version is greater
-    _dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerRepo}" "${_dockerTag}")"
+    _dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerImage}")"
     
     if [[ -n "${_dockerVersionLocal}" ]]; then
         # update from docker hub
-      _fsMsg_ "Image update found for: ${_dockerRepo}:${_dockerTag}"
+      _fsMsg_ "Image update found for: ${_dockerImage}"
       
       if [[ "$(_fsCaseConfirmation_ "Do you want to update now?")" -eq 0 ]]; then
-        docker pull "${_dockerRepo}"':'"${_dockerTag}"
+        docker pull "${_dockerImage}"
         
         if [[ "$(_fsDockerVarsCompare_ "${_dockerImage}")" -eq 0 ]]; then
           _fsMsg_ "Updated..."
@@ -227,36 +196,35 @@ _fsDockerImage_() {
       fi
     else
         # install from docker hub
-      docker pull "${_dockerRepo}:${_dockerTag}"
+      docker pull "${_dockerImage}"
       if [[ "$(_fsDockerVarsCompare_ "${_dockerImage}")" -eq 0 ]]; then
-        _fsMsg_ "Image installed: ${_dockerRepo}:${_dockerTag}"
+        _fsMsg_ "Image installed: ${_dockerImage}"
         _dockerStatus=1
       fi
     fi
   elif [[ "${_dockerCompare}" -eq 2 ]]; then
       # docker hub image version is unknown
-    if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" -eq 0 ]]; then
+    if [[ "$(_fsDockerImageInstalled_ "${_dockerImage}")" -eq 0 ]]; then
       _dockerStatus=0
     fi
   fi
   
   if [[ "${_dockerStatus}" -eq 2 ]]; then
-      _fsMsgError_ "Image not found: ${_dockerRepo}:${_dockerTag}"
+      _fsMsgError_ "Image not found: ${_dockerImage}"
   else
-    _dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerRepo}" "${_dockerTag}")"
+    _dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerImage}")"
       # return local version docker image digest
     echo "${_dockerVersionLocal}"
   fi
 }
 
 _fsDockerImageInstalled_() {
-  [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-  local _dockerRepo="${1}"
-  local _dockerTag="${2}"
+  local _dockerImage="${1}"
   local _dockerImages=''
   
-  _dockerImages="$(docker images -q "${_dockerRepo}:${_dockerTag}" 2> /dev/null)"
+  _dockerImages="$(docker images -q "${_dockerImage}" 2> /dev/null)"
   
   if [[ -n "${_dockerImages}" ]]; then
       # docker image is installed
@@ -267,7 +235,7 @@ _fsDockerImageInstalled_() {
   fi
 }
 
-_fsDockerPsName_() {
+_fsDockerContainerPs_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _dockerName="${1}"
@@ -279,14 +247,10 @@ _fsDockerPsName_() {
   # credit: https://serverfault.com/a/733498
   # credit: https://stackoverflow.com/a/44731522
   if [[ "${_dockerMode}" = "all" ]]; then
-    _dockerPsAll="$(docker ps -a --format '{{.Names}}' | grep -ow "${_dockerName}")" \
-    || _dockerPsAll=""
-    
+    _dockerPsAll="$(docker ps -a --format '{{.Names}}' | grep -ow "${_dockerName}" || true)"
     [[ -n "${_dockerPsAll}" ]] && _dockerMatch=0
   else
-    _dockerPs="$(docker ps --format '{{.Names}}' | grep -ow "${_dockerName}")" \
-    || _dockerPs=""
-    
+    _dockerPs="$(docker ps --format '{{.Names}}' | grep -ow "${_dockerName}" || true)"
     [[ -n "${_dockerPs}" ]] && _dockerMatch=0
   fi
   
@@ -299,7 +263,7 @@ _fsDockerPsName_() {
   fi
 }
 
-_fsDockerId2Name_() {
+_fsDockerContainerName_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _dockerId="${1}"
@@ -318,13 +282,13 @@ _fsDockerRemove_() {
   
   local _dockerName="${1}"
   
-  # stop and remove active and non-active docker container
-  if [[ "$(_fsDockerPsName_ "${_dockerName}" "all")" -eq 0 ]]; then
+    # stop and remove active and non-active docker container
+  if [[ "$(_fsDockerContainerPs_ "${_dockerName}" "all")" -eq 0 ]]; then
     docker update --restart=no "${_dockerName}" > /dev/null
     docker stop "${_dockerName}" > /dev/null
     docker rm -f "${_dockerName}" > /dev/null
     
-    if [[ "$(_fsDockerPsName_ "${_dockerName}" "all")" -eq 0 ]]; then
+    if [[ "$(_fsDockerContainerPs_ "${_dockerName}" "all")" -eq 0 ]]; then
       _fsMsgError_ "Cannot remove container: ${_dockerName}"
     fi
   fi
@@ -433,7 +397,7 @@ _fsDockerProjectStrategies_() {
       for _strategyDir in "${_strategiesDirDeduped[@]}"; do
         _strategyPath="${_strategyDir}"'/'"${_strategy}"'.py'
         _strategyFile="${_strategyPath##*/}"
-        if [[ "$(_fsFile_ "${_strategyPath}")" -eq 0 ]]; then
+        if [[ -f "${_strategyPath}" ]]; then
           _strategyPathFound=0
           break
         fi
@@ -485,7 +449,7 @@ _fsDockerProjectConfigs_() {
     
     for _config in "${_configsDeduped[@]}"; do
       _configPath="${FS_DIR}/${_config}"
-      if [[ "$(_fsFile_ "${_configPath}")" -eq 1 ]]; then
+      if [[ ! -f "${_configPath}" ]]; then
         _fsMsg_ "\"$(basename "${_configPath}")\" config file does not exist."
         _error=$((_error+1))
       fi
@@ -538,10 +502,7 @@ _fsDockerProject_() {
   local _strategyPath=''
   local _regex="(${FS_PROXY_KUCOIN}|${FS_PROXY_BINANCE}|${FS_NGINX}|${FS_CERTBOT}|${FS_FREQUI})"
   local _error=0
-  local _url=0
-  
-  _url="$(_fsValueGet_ "${FS_CONFIG}" '.url' 2> /dev/null || true)"
-
+  local _url=''
   
   if [[ -n "${_projectArgs}" ]]; then
     shift;shift;shift
@@ -553,8 +514,8 @@ _fsDockerProject_() {
   _projectFileName="${_projectFile%.*}"
   _projectName="${_projectFileName//\-/\_}"
   _procjectJson=()
-  _projectContainers=()
   _containerConfPath="${FS_DIR}/${_projectFileName}.conf.json"
+  _url="$(_fsValueGet_ "${FS_CONFIG}" '.url')"
   
     # unset filetype if its matching file
   [[ "${_projectFile}" = "${_projectFileType}" ]] && _projectFileType=''
@@ -564,7 +525,7 @@ _fsDockerProject_() {
     _fsMsgError_ "File type is missing: ${_projectFile}"
   else
     if [[ "${_projectFileType}" = 'yml' ]]; then
-      if [[ "$(_fsFile_ "${_projectPath}")" -eq 1 ]]; then
+      if [[ ! -f "${_projectPath}" ]]; then
         _fsMsgError_ "File not found: ${_projectFile}"
       fi
     else
@@ -620,13 +581,14 @@ _fsDockerProject_() {
   fi
   
   if [[ "${_error}" -eq 0 ]] && [[ ! "${_projectMode}" =~ 'run' ]]; then
+    _projectContainers=()
     while read -r; do
       _projectContainers+=( "$REPLY" )
     done < <(cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" ps -q)
     
     for _projectContainer in "${_projectContainers[@]}"; do
-      _containerName="$(_fsDockerId2Name_ "${_projectContainer}")"
-      _containerActive="$(_fsDockerPsName_ "${_containerName}")"
+      _containerName="$(_fsDockerContainerName_ "${_projectContainer}")"
+      _containerActive="$(_fsDockerContainerPs_ "${_containerName}")"
       _containerJsonInner=''
       _strategyUpdate=''
       _containerStrategyUpdate=''
@@ -638,13 +600,13 @@ _fsDockerProject_() {
       
         # start container
       if [[ "${_projectMode}" =~ "compose" ]]; then
-          # skip container if autostart is active but not true
+          # skip container if autoupdate is active but not true
         if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ ! "${_containerAutoupdate}" = 'true' ]]; then
           continue
         fi
         
         if [[ "${_containerActive}" -eq 1 ]]; then
-          if [[ ! $_containerName =~ $_regex ]]; then
+          if [[ ! "${_containerName}" =~ $_regex ]]; then
             if [[ "$(_fsCaseConfirmation_ "Start container?")" -eq 1 ]]; then
               _fsDockerRemove_ "${_containerName}"
               continue
@@ -652,10 +614,10 @@ _fsDockerProject_() {
           fi
         fi
         
-          # create docker network if it does not exist; credit: https://stackoverflow.com/a/59878917
+          # create docker network; credit: https://stackoverflow.com/a/59878917
         docker network create --subnet="${FS_NETWORK_SUBNET}" --gateway "${FS_NETWORK_GATEWAY}" "${FS_NETWORK}" > /dev/null 2> /dev/null || true
         
-          # connect container to docker network excl. nginx and certbot
+          # connect container to docker network
         if [[ "${_containerName}" = "${FS_PROXY_BINANCE}" ]]; then
           docker network connect --ip "${FS_PROXY_BINANCE_IP}" "${FS_NETWORK}" "${_containerName}" > /dev/null 2> /dev/null || true
         elif [[ "${_containerName}" = "${FS_PROXY_KUCOIN}" ]]; then
@@ -739,7 +701,7 @@ _fsDockerProject_() {
           _containerApiJson="$(echo "${_containerCmd}" | grep -o "${FS_FREQUI}.json" || true)"
           
           if [[ -n "${_containerApiJson}" ]]; then
-            _fsMsg_ "FreqUI: ${_url}/${FS_NAME}/${_containerName}"
+            _fsMsg_ "FreqUI (API Url): ${_url}/${FS_NAME}/${_containerName}"
           else
             _fsMsg_ "Bot is not exposed to FreqUI."
           fi
@@ -813,7 +775,7 @@ _fsDockerProject_() {
         if [[ "$(_fsCaseConfirmation_ "Quit container?")" -eq 0 ]]; then
           _fsValueUpdate_ "${_containerConfPath}" '.'"${_containerName}"'.autoupdate' 'false'
           _fsDockerRemove_ "${_containerName}"
-          if [[ "$(_fsDockerPsName_ "${_containerName}")" -eq 1 ]]; then
+          if [[ "$(_fsDockerContainerPs_ "${_containerName}")" -eq 1 ]]; then
             _fsMsg_ "[SUCCESS] Container is removed: ${_containerName}"
           else
             _fsMsgWarning_ "Container not removed: ${_containerName}"
@@ -875,14 +837,22 @@ _fsDockerStrategy_() {
   local _setup=0
   local _error=0
   
-    # create the only necessary strategy for proxies if file doesnt exist or use strategies file from git or create your own
-  if [[ "$(_fsFile_ "${FS_STRATEGIES}")" -eq 1 ]]; then
-    _fsFileCreate_ "${FS_STRATEGIES}" \
-    "{" \
-    "  \"DoesNothingStrategy\": [" \
-    "    \"https://raw.githubusercontent.com/freqtrade/freqtrade-strategies/master/user_data/strategies/berlinguyinca/DoesNothingStrategy.py\"" \
-    "  ]" \
-    "}"
+    # create the strategy config
+  if [[ ! -f "${FS_STRATEGIES}" ]]; then
+    if [[ "$(_fsCaseConfirmation_ "Download latest strategies config?")" -eq 0 ]]; then
+      curl --connect-timeout 10 -fsSL "https://raw.githubusercontent.com/berndhofer/freqstart/stable/freqstart.strategies.json" -o "${FS_STRATEGIES}"
+      
+      _fsFileExit_ "${FS_STRATEGIES}"
+    else
+      _fsFileCreate_ "${FS_STRATEGIES}" \
+      '{' \
+      '  "DoesNothingStrategy": [' \
+      '    "https://raw.githubusercontent.com/freqtrade/freqtrade-strategies/master/user_data/strategies/berlinguyinca/DoesNothingStrategy.py"' \
+      '  ]' \
+      '}'
+      
+      _fsMsgWarning_ 'Only necessary strategy for FreqUI is implemented.'
+    fi
   fi
   
   _strategyUrls=()
@@ -911,7 +881,7 @@ _fsDockerStrategy_() {
         curl --connect-timeout 10 -s -L "${_strategyUrl}" -o "${_strategyPathTmp}"
         
         if [[ "$(_fsFileEmpty_ "${_strategyPathTmp}")" -eq 0 ]]; then
-          if [[ "$(_fsFile_ "${_strategyPath}")" -eq 0 ]]; then
+          if [[ -f "${_strategyPath}" ]]; then
               # only update file if it is different
             if ! cmp --silent "${_strategyPathTmp}" "${_strategyPath}"; then
                 # note: sudo because of freqtrade docker user
@@ -936,7 +906,6 @@ _fsDockerStrategy_() {
     if [[ "${_error}" -gt 0 ]]; then
       _fsMsgWarning_ "Failed to install or update: ${_strategyName}"
     elif [[ "${_setup}" -gt 0 ]]; then
-      _fsMsg_ "Strategy updated: ${_strategyName}"
       _strategyUpdate="$(_fsTimestamp_)"
       _strategyJson="$(jq -n \
         --arg update "${_strategyUpdate}" \
@@ -944,6 +913,8 @@ _fsDockerStrategy_() {
       )"
         # note: sudo because of freqtrade docker user
       printf '%s\n' "${_strategyJson}" | jq . | sudo tee "${_strategyDir}/${_strategyName}.conf.json" > /dev/null
+      
+      _fsMsg_ "Strategy updated: ${_strategyName}"
     else
       _fsMsg_ "Strategy is installed: ${_strategyName}"
     fi
@@ -963,7 +934,7 @@ _fsDockerAutoupdate_() {
   
   _projectAutoupdates=()
   _projectAutoupdates+=("#!/usr/bin/env bash")
-  if [[ "$(_fsFile_ "${FS_AUTOUPDATE}")" -eq 0 ]]; then
+  if [[ -f "${FS_AUTOUPDATE}" ]]; then
     while read -r; do
     _projectAutoupdates+=("$REPLY")
     done < <(grep -v "${_projectAutoupdate}" "${FS_AUTOUPDATE}" | sed "s,#!/usr/bin/env bash,," | sed "/^$/d")
@@ -986,6 +957,7 @@ _fsDockerAutoupdate_() {
 
 _fsDockerPurge_() {
   _fsCrontabRemove_ "${FS_AUTOUPDATE}"
+  _fsCrontabRemove_ "${FS_CERTBOT_CRON}"
   rm -f "${FS_AUTOUPDATE}"
   
   if [[ "$(_fsPkgsStatus_ "docker-ce")" -eq 0 ]]; then
@@ -1098,7 +1070,7 @@ _fsSetupUser_() {
         else
           if [[ "$(_fsCaseConfirmation_ "Is the username \"${_userTmp}\" correct?")" -eq 0 ]]; then
             if [[ "${_nr}" -eq 1 ]]; then
-              if [[ "$(_fsUserValidate_ "${_userTmp}")" -eq 0 ]]; then
+              if id -u "${_userTmp}" >/dev/null 2>&1; then
                 _fsMsgWarning_ "User already exist."
                 
                 if [[ "$(_fsCaseConfirmation_ "Login to user \"${_userTmp}\" now?")" -eq 0 ]]; then
@@ -1111,7 +1083,7 @@ _fsSetupUser_() {
                 break
               fi
             elif [[ "${_nr}" -eq 2 ]]; then
-              if [[ "$(_fsUserValidate_ "${_userTmp}")" -eq 1 ]]; then
+              if ! id -u "${_userTmp}" >/dev/null 2>&1; then
                 _fsMsgWarning_ "User does not exist. "
                 
                 if [[ "$(_fsCaseConfirmation_ "Create user \"${_userTmp}\" now?")" -eq 0 ]]; then
@@ -1243,47 +1215,47 @@ _fsSetupChrony_() {
 _fsSetupFirewall_() {
   local _status=''
   local _portSSH=22
+  local _regex='^[[:digit:]]+$'
   
   _fsPkgs_ "ufw"
   
   _fsMsgTitle_ 'Configurate firewall for Nginx proxy.'
   
-  if [[ "$(_fsCaseConfirmation_ 'Is the default SSH port "22/tcp"?')" -eq 1 ]]; then
+  if [[ "$(_fsCaseConfirmation_ 'Is "22" the default SSH port?')" -eq 1 ]]; then
     while true; do
-      read -rp '? SSH port (Press [ENTER] for default "22/tcp"): ' _portSSH
-      case ${_portSSH} in
-        '')
-          _portSSH=22
-          ;;
-        *)
-          _fsMsg_ 'Do not continue if the default SSH port is not: '"${_portSSH}"
-          if [[ "$(_fsCaseConfirmation_ 'Continue?')" -eq 0 ]]; then
-            break
-          fi
-          ;;
-      esac
+      read -rp '? SSH port: ' _portSSH
+      
+      if [[ "${_portSSH}" =~ $_regex ]]; then
+       _fsMsg_ 'Do not continue if the default SSH port is not: '"${_portSSH}"
+       
+        if [[ "$(_fsCaseConfirmation_ 'Continue?')" -eq 0 ]]; then
+          break
+        fi
+      else
+        _portSSH=''
+        _fsCaseInvalid_
+      fi
     done
   fi
   
-  yes $'y' | sudo ufw reset || true
-  sudo ufw default deny incoming
+  sudo ufw --force reset > /dev/null
+  sudo ufw default deny incoming > /dev/null
     # ports for ssh access and nginx proxy forward for frequi
-  sudo ufw allow ssh
-  sudo ufw allow "${_portSSH}"/tcp
-  sudo ufw allow 80/tcp
-  sudo ufw allow 443/tcp
-  sudo ufw allow out http
-  sudo ufw allow out https
+  sudo ufw allow ssh > /dev/null
+  sudo ufw allow "${_portSSH}"/tcp > /dev/null
+  sudo ufw allow 80/tcp > /dev/null
+  sudo ufw allow 443/tcp > /dev/null
+  sudo ufw allow out http > /dev/null
+  sudo ufw allow out https > /dev/null
     # allow ntp sync on port 123
-  sudo ufw allow 123/udp
-  sudo ufw allow out 123/udp
-  yes $'y' | sudo ufw enable || true
+  sudo ufw allow 123/udp > /dev/null
+  sudo ufw allow out 123/udp > /dev/null
+  sudo ufw --force enable > /dev/null
 }
 
 # FREQTRADE
 
 _fsSetupFreqtrade_() {
-  local _docker="freqtradeorg/freqtrade:stable"
   local _dockerYml="${FS_DIR}/${FS_NAME}_setup.yml"
   local _configName=''
   local _configFile=''
@@ -1292,13 +1264,13 @@ _fsSetupFreqtrade_() {
   _fsMsgTitle_ "FREQTRADE"
   
   _fsFileCreate_ "${_dockerYml}" \
-  "---" \
+  '---' \
   "version: '3'" \
-  "services:" \
-  "  freqtrade:" \
-  "    image: freqtradeorg/freqtrade:stable" \
-  "    container_name: freqtrade" \
-  "    volumes:" \
+  'services:' \
+  '  freqtrade:' \
+  '    image: freqtradeorg/freqtrade:stable' \
+  '    container_name: freqtrade' \
+  '    volumes:' \
   '      - "'"${FS_DIR_USER_DATA}"':/freqtrade/user_data"'
   
   _fsFileExit_ "${_dockerYml}"
@@ -1349,7 +1321,7 @@ _fsSetupFreqtrade_() {
     _configFile="${FS_DIR_USER_DATA}/${_configName}.json"
     _configFileTmp="${FS_DIR_USER_DATA}/${_configName}.tmp.json"
     
-    if [[ "$(_fsFile_ "${_configFile}")" -eq 0 ]]; then
+    if [[ -f "${_configFile}" ]]; then
       _fsMsg_ "The config file already exist: ${_configFile}"
       if [[ "$(_fsCaseConfirmation_ "Replace the existing config file?")" -eq 1 ]]; then
         _configName=''
@@ -1375,13 +1347,12 @@ _fsSetupFreqtrade_() {
 # credit: https://github.com/nightshift2k/binance-proxy
 
 _fsSetupBinanceProxy_() {
-  local _docker="nightshift2k/binance-proxy:latest"
   local _yml="${FS_DIR}/${FS_PROXY_BINANCE}.yml"
   
   _fsMsgTitle_ 'PROXY FOR BINANCE'
   
   while true; do
-    if [[ "$(_fsDockerPsName_ "${FS_PROXY_BINANCE}")" -eq 0 ]]; then
+    if [[ "$(_fsDockerContainerPs_ "${FS_PROXY_BINANCE}")" -eq 0 ]]; then
       _fsMsg_ 'Is already running. (Port: 8990-8991)'
       
       if [[ "$(_fsCaseConfirmation_ "Skip update?")" -eq 0 ]]; then
@@ -1397,41 +1368,41 @@ _fsSetupBinanceProxy_() {
     
       # binance proxy json file; note: sudo because of freqtrade docker user
     _fsFileCreate_ "${FS_DIR_USER_DATA}/${FS_PROXY_BINANCE}.json" 'sudo' \
-    "{" \
-    "    \"exchange\": {" \
-    "        \"name\": \"binance\"," \
-    "        \"ccxt_config\": {" \
-    "            \"enableRateLimit\": false," \
-    "            \"urls\": {" \
-    "                \"api\": {" \
-    "                    \"public\": \"http://${FS_PROXY_BINANCE_IP}:8990/api/v3\"" \
-    "                }" \
-    "            }" \
-    "        }," \
-    "        \"ccxt_async_config\": {" \
-    "            \"enableRateLimit\": false" \
-    "        }" \
-    "    }" \
-    "}"
+    '{' \
+    '    "exchange": {' \
+    '        "name": "binance",' \
+    '        "ccxt_config": {' \
+    '            "enableRateLimit": false,' \
+    '            "urls": {' \
+    '                "api": {' \
+    '                    "public": "http://'"${FS_PROXY_BINANCE_IP}"':8990/api/v3"' \
+    '                }' \
+    '            }' \
+    '        },' \
+    '        "ccxt_async_config": {' \
+    '            "enableRateLimit": false' \
+    '        }' \
+    '    }' \
+    '}'
     
       # binance proxy futures json file; note: sudo because of freqtrade docker user
     _fsFileCreate_ "${FS_DIR_USER_DATA}/${FS_PROXY_BINANCE}_futures.json" 'sudo' \
-    "{" \
-    "    \"exchange\": {" \
-    "        \"name\": \"binance\"," \
-    "        \"ccxt_config\": {" \
-    "            \"enableRateLimit\": false," \
-    "            \"urls\": {" \
-    "                \"api\": {" \
-    "                    \"public\": \"http://${FS_PROXY_BINANCE_IP}:8991/api/v3\"" \
-    "                }" \
-    "            }" \
-    "        }," \
-    "        \"ccxt_async_config\": {" \
-    "            \"enableRateLimit\": false" \
-    "        }" \
-    "    }" \
-    "}"
+    '{' \
+    '    "exchange": {' \
+    '        "name": "binance",' \
+    '        "ccxt_config": {' \
+    '            "enableRateLimit": false,' \
+    '            "urls": {' \
+    '                "api": {' \
+    '                    "public": "http://'"${FS_PROXY_BINANCE_IP}"':8991/api/v3"' \
+    '                }' \
+    '            }' \
+    '        },' \
+    '        "ccxt_async_config": {' \
+    '            "enableRateLimit": false' \
+    '        }' \
+    '    }' \
+    '}'
     
       # binance proxy project file
     _fsFileCreate_ "${_yml}" \
@@ -1439,14 +1410,14 @@ _fsSetupBinanceProxy_() {
     "version: '3'" \
     "services:" \
     "  ${FS_PROXY_BINANCE}:" \
-    "    image: ${_docker}" \
+    "    image: nightshift2k/binance-proxy:latest" \
     "    container_name: ${FS_PROXY_BINANCE}" \
     "    command: >" \
     "      --port-spot=8990" \
     "      --port-futures=8991" \
     "      --verbose" \
     
-    _fsDockerProject_ "$(basename "${_yml}")" 'compose-force'
+    _fsDockerProject_ "${_yml##*/}" 'compose-force'
     
     break
   done
@@ -1456,13 +1427,12 @@ _fsSetupBinanceProxy_() {
 # credit: https://github.com/mikekonan/exchange-proxy
 
 _fsSetupKucoinProxy_() {
-  local _docker="mikekonan/exchange-proxy:latest-amd64"
   local _yml="${FS_DIR}/${FS_PROXY_KUCOIN}.yml"
   
   _fsMsgTitle_ 'PROXY FOR KUCOIN'
   
   while true; do
-    if [[ "$(_fsDockerPsName_ "${FS_PROXY_KUCOIN}")" -eq 0 ]]; then
+    if [[ "$(_fsDockerContainerPs_ "${FS_PROXY_KUCOIN}")" -eq 0 ]]; then
       _fsMsg_ 'Is already running. (Port: 8980)'
       
       if [[ "$(_fsCaseConfirmation_ "Skip update?")" -eq 0 ]]; then
@@ -1478,25 +1448,25 @@ _fsSetupKucoinProxy_() {
     
       # kucoin proxy json file; note: sudo because of freqtrade docker user
     _fsFileCreate_ "${FS_DIR_USER_DATA}/${FS_PROXY_KUCOIN}.json" 'sudo' \
-    "{" \
-    "    \"exchange\": {" \
-    "        \"name\": \"kucoin\"," \
-    "        \"ccxt_config\": {" \
-    "            \"enableRateLimit\": false," \
-    "            \"timeout\": 60000," \
-    "            \"urls\": {" \
-    "                \"api\": {" \
-    "                    \"public\": \"http://${FS_PROXY_KUCOIN_IP}:8980/kucoin\"," \
-    "                    \"private\": \"http://${FS_PROXY_KUCOIN_IP}:8980/kucoin\"" \
-    "                }" \
-    "            }" \
-    "        }," \
-    "        \"ccxt_async_config\": {" \
-    "            \"enableRateLimit\": false," \
-    "            \"timeout\": 60000" \
-    "        }" \
-    "    }" \
-    "}"
+    '{' \
+    '    "exchange": {' \
+    '        "name": "kucoin",' \
+    '        "ccxt_config": {' \
+    '            "enableRateLimit": false,' \
+    '            "timeout": 60000,' \
+    '            "urls": {' \
+    '                "api": {' \
+    '                    "public": "http://'"${FS_PROXY_KUCOIN_IP}"':8980/kucoin",' \
+    '                    "private": "http://'"${FS_PROXY_KUCOIN_IP}"':8980/kucoin"' \
+    '                }' \
+    '            }' \
+    '        },' \
+    '        "ccxt_async_config": {' \
+    '            "enableRateLimit": false,' \
+    '            "timeout": 60000' \
+    '        }' \
+    '    }' \
+    '}'
     
       # kucoin proxy project file
     _fsFileCreate_ "${_yml}" \
@@ -1504,13 +1474,13 @@ _fsSetupKucoinProxy_() {
     "version: '3'" \
     "services:" \
     "  ${FS_PROXY_KUCOIN}:" \
-    "    image: ${_docker}" \
+    "    image: mikekonan/exchange-proxy:latest-amd64" \
     "    container_name: ${FS_PROXY_KUCOIN}" \
     "    command: >" \
     "      -port 8980" \
     "      -verbose 1"
     
-    _fsDockerProject_ "$(basename "${_yml}")" 'compose-force'
+    _fsDockerProject_ "${_yml##*/}" 'compose-force'
     
     break
   done
@@ -1535,7 +1505,7 @@ _fsSetupNginx_() {
   _ipLocal="$(_fsValueGet_ "${FS_CONFIG}" '.ip_local')"
   
   while true; do
-    if [[ "$(_fsDockerPsName_ "${FS_NGINX}_ip")" -eq 0 ]] || [[ "$(_fsDockerPsName_ "${FS_NGINX}_domain")" -eq 0 ]]; then
+    if [[ "$(_fsDockerContainerPs_ "${FS_NGINX}_ip")" -eq 0 ]] || [[ "$(_fsDockerContainerPs_ "${FS_NGINX}_domain")" -eq 0 ]]; then
       if [[ -n "${_ipPublic}" ]] || [[ -n "${_ipLocal}" ]]; then
         if [[ -n "${_ipPublic}" ]]; then
           _ipPublicTemp="$(dig +short myip.opendns.com @resolver1.opendns.com)"
@@ -1568,11 +1538,11 @@ _fsSetupNginx_() {
     
     _fsSymlinkCreate_ "${_sysctl}" "${_sysctlSymlink}"
     
-    sudo sysctl -p "${_sysctlSymlink}"
+    sudo sysctl -p "${_sysctlSymlink}" > /dev/null
     
       # create frequi login data
     while true; do
-      if [[ "$(_fsFile_ "${_htpasswd}")" -eq 0 ]]; then
+      if [[ -f "${_htpasswd}" ]]; then
         _fsMsg_ "FreqUI login data already found."
         
         if [[ "$(_fsCaseConfirmation_ "Skip generating new FreqUI login data?")" -eq 0 ]]; then
@@ -1581,15 +1551,14 @@ _fsSetupNginx_() {
         fi
       fi
       
-      _fsMsg_ "Create FreqUI login data now!"
+      _fsMsg_ "Create FreqUI access login data now!"
       
+          # create login data
       if [[ "$(_fsCaseConfirmation_ "Create login data manually?")" -eq 0 ]]; then
-          # create login data to access frequi
         _loginData="$(_fsLoginData_)"
         _username="$(_fsLoginDataUsername_ "${_loginData}")"
         _password="$(_fsLoginDataPassword_ "${_loginData}")"
       else
-          # generate login data if first time setup is non-interactive
         _username="$(_fsRandomBase64_ 16)"
         _password="$(_fsRandomBase64_ 16)"
         _fsMsgWarning_ 'FreqUI login data created automatically:'
@@ -1699,7 +1668,7 @@ _fsSetupNginxOpenssl_() {
   done
   
     # remove autorenew certificate for domains
-  _fsCrontabRemove_ "freqstart --cert --yes" 
+  _fsCrontabRemove_ "${FS_CERTBOT_CRON}" 
     # stop nginx domain container
   _fsDockerRemove_ "${FS_NGINX}_domain"
   
@@ -1873,9 +1842,7 @@ _fsSetupNginxOpenssl_() {
     fi
     
     touch "${FS_DIR_PROXY}${_sslParam}"
-
-    #sudo chown -R "${FS_ROOTLESS}":"${FS_ROOTLESS}" "${FS_DIR_PROXY}"
-
+    
       # generate self-signed certificate
     _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_NGINX}_ip" \
     "/bin/sh -c" \
@@ -1888,7 +1855,7 @@ _fsSetupNginxOpenssl_() {
     # start nginx ip container
   _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force'
   
-  if [[ "$(_fsDockerPsName_ "${FS_NGINX}_ip")" -eq 1 ]]; then
+  if [[ "$(_fsDockerContainerPs_ "${FS_NGINX}_ip")" -eq 1 ]]; then
     _fsMsgError_ 'Nginx container is not running!'
   fi
 }
@@ -1904,7 +1871,6 @@ _setupNginxLetsencrypt_() {
   local _sslNginx="${FS_DIR_PROXY}/certbot/conf/options-ssl-nginx.conf"
   local _sslDhparams="${FS_DIR_PROXY}/certbot/conf/ssl-dhparams.pem"
   local _certEmail=''
-  local _cronCmd="freqstart --cert --yes"
   local _cronUpdate="30 0 * * 0" # update at 0:30am UTC on sunday every week
   
   _ipPublic="$(dig +short myip.opendns.com @resolver1.opendns.com)"
@@ -1997,7 +1963,7 @@ _setupNginxLetsencrypt_() {
     "      - ${FS_DIR_PROXY}/certbot/www:/var/www/certbot"
     
       # download recommended TLS parameters
-    if [[ "$(_fsFile_ "${_sslNginx}")" -eq 1 ]] || [[ "$(_fsFile_ "${_sslDhparams}")" -eq 1 ]]; then
+    if [[ ! -f "${_sslNginx}" ]] || [[ ! -f "${_sslDhparams}" ]]; then
       curl --connect-timeout 10 -s \
       "https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf" \
       > "${_sslNginx}"
@@ -2011,7 +1977,7 @@ _setupNginxLetsencrypt_() {
     fi
     
       # workaround for first setup while missing cert files
-    if [[ "$(_fsFile_ "${_sslCert}")" -eq 1 ]] || [[ "$(_fsFile_ "${_sslKey}")" -eq 1 ]]; then
+    if [[ ! -f "${_sslCert}" ]] || [[ ! -f "${_sslKey}" ]]; then
       _fsFileCreate_ "${FS_DIR_PROXY}${FS_NGINX_CONFD_FREQUI}" \
       "server {" \
       "    listen 0.0.0.0:80;" \
@@ -2089,12 +2055,12 @@ _setupNginxLetsencrypt_() {
       # start nginx domain container
     _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force' "${FS_NGINX}_domain"
     
-    if [[ "$(_fsDockerPsName_ "${FS_NGINX}_domain")" -eq 1 ]]; then
+    if [[ "$(_fsDockerContainerPs_ "${FS_NGINX}_domain")" -eq 1 ]]; then
       _fsMsgError_ 'Nginx container is not running!'
     fi
     
       # set cron for domain autorenew certificate
-    _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
+    _fsCrontab_ "${FS_CERTBOT_CRON}" "${_cronUpdate}"
   fi
 }
 
@@ -2108,7 +2074,7 @@ _fsSetupFrequi_() {
   _fsMsgTitle_ "FREQUI"
   
   while true; do
-    if [[ "$(_fsDockerPsName_ "${FS_FREQUI}")" -eq 0 ]]; then
+    if [[ "$(_fsDockerContainerPs_ "${FS_FREQUI}")" -eq 0 ]]; then
       _fsMsg_ "Is active: ${_url}"
       if [[ "$(_fsCaseConfirmation_ "Skip update?")" -eq 0 ]]; then
         break
@@ -2153,14 +2119,14 @@ _fsSetupFrequiJson_() {
       fi
     fi
     
-    _fsMsg_ "Create API login data now!"
+    _fsMsg_ "Create FreqUI API(!) login data now!"
     
+      # generate login data
     if [[ "$(_fsCaseConfirmation_ "Create login data manually?")" -eq 0 ]]; then
       _loginData="$(_fsLoginData_)"
       _username="$(_fsLoginDataUsername_ "${_loginData}")"
       _password="$(_fsLoginDataPassword_ "${_loginData}")"
     else
-        # generate login data if first time setup is non-interactive
       _username="$(_fsRandomBase64_ 16)"
       _password="$(_fsRandomBase64_ 16)"
       _fsMsgWarning_ 'API login data created automatically:'
@@ -2203,44 +2169,44 @@ _fsSetupFrequiCompose_() {
   
     # note: sudo because of freqtrade docker user
   _fsFileCreate_ "${_jsonServer}" 'sudo' \
-  "{" \
-  "    \"max_open_trades\": 1," \
-  "    \"stake_currency\": \"BTC\"," \
-  "    \"stake_amount\": 0.05," \
-  "    \"fiat_display_currency\": \"USD\"," \
-  "    \"dry_run\": true," \
-  "    \"entry_pricing\": {" \
-  "        \"price_side\": \"same\"," \
-  "        \"use_order_book\": true," \
-  "        \"order_book_top\": 1," \
-  "        \"price_last_balance\": 0.0," \
-  "        \"check_depth_of_market\": {" \
-  "            \"enabled\": false," \
-  "            \"bids_to_ask_delta\": 1" \
-  "        }" \
-  "    }," \
-  "    \"exit_pricing\": {" \
-  "        \"price_side\": \"same\"," \
-  "        \"use_order_book\": true," \
-  "        \"order_book_top\": 1" \
-  "    }," \
-  "    \"exchange\": {" \
-  "        \"name\": \"binance\"," \
-  "        \"key\": \"\"," \
-  "        \"secret\": \"\"," \
-  "        \"ccxt_config\": {}," \
-  "        \"ccxt_async_config\": {" \
-  "        }," \
-  "        \"pair_whitelist\": [" \
-  "            \"ETH/BTC\"" \
-  "        ]" \
-  "    }," \
-  "    \"pairlists\": [" \
-  "        {\"method\": \"StaticPairList\"}" \
-  "    ]," \
-  "    \"bot_name\": \"${FS_FREQUI}\"," \
-  "    \"initial_state\": \"running\"" \
-  "}"
+  '{' \
+  '    "max_open_trades": 1,' \
+  '    "stake_currency": "BTC",' \
+  '    "stake_amount": 0.05,' \
+  '    "fiat_display_currency": "USD",' \
+  '    "dry_run": true,' \
+  '    "entry_pricing": {' \
+  '        "price_side": "same",' \
+  '        "use_order_book": true,' \
+  '        "order_book_top": 1,' \
+  '        "price_last_balance": 0.0,' \
+  '        "check_depth_of_market": {' \
+  '            "enabled": false,' \
+  '            "bids_to_ask_delta": 1' \
+  '        }' \
+  '    },' \
+  '    "exit_pricing": {' \
+  '        "price_side": "same",' \
+  '        "use_order_book": true,' \
+  '        "order_book_top": 1' \
+  '    },' \
+  '    "exchange": {' \
+  '        "name": "binance",' \
+  '        "key": "",' \
+  '        "secret": "",' \
+  '        "ccxt_config": {},' \
+  '        "ccxt_async_config": {' \
+  '        },' \
+  '        "pair_whitelist": [' \
+  '            "ETH/BTC"' \
+  '        ]' \
+  '    },' \
+  '    "pairlists": [' \
+  '        {"method": "StaticPairList"}' \
+  '    ],' \
+  '    "bot_name": "'"${FS_FREQUI}"'",' \
+  '    "initial_state": "running"' \
+  '}'
   
   _fsFileCreate_ "${_yml}" \
   "---" \
@@ -2271,7 +2237,7 @@ _fsStart_() {
   local _yml="${1:-}"
   local _symlink="${FS_SYMLINK}"
     
-  # check if symlink from setup routine exist
+    # check if symlink from setup routine exist
   if [[ "$(_fsSymlinkValidate_ "${_symlink}")" -eq 1 ]]; then
     _fsMsgError_ "Start setup first!"
   fi
@@ -2354,7 +2320,7 @@ _fsConf_() {
   local _user=''
   local _userTmp=''
   
-  if [[ "$(_fsFile_ "${FS_CONFIG}")" -eq 0 ]]; then
+  if [[ -f "${FS_CONFIG}" ]]; then
     _domain="$(_fsValueGet_ "${FS_CONFIG}" '.domain')"
     _url="$(_fsValueGet_ "${FS_CONFIG}" '.url')"
     _ipPublic="$(_fsValueGet_ "${FS_CONFIG}" '.ip_public')"
@@ -2397,22 +2363,10 @@ _fsConf_() {
   '}'
 }
 
-_fsFile_() {
-  local _file="${1:-}" # optional: path to file
-  
-  if [[ -z "${_file}" ]]; then
-    echo 1
-  elif [[ -f "${_file}" ]]; then
-    echo 0
-  else
-    echo 1
-  fi
-}
-
 _fsFileEmpty_() {
   local _file="${1:-}" # optional: path to file
   
-  if [[ "$(_fsFile_ "${_file}")" -eq 0 ]]; then
+  if [[ -f "${_file}" ]]; then
     if [[ -s "${_file}" ]]; then
       echo 0
     else
@@ -2424,9 +2378,11 @@ _fsFileEmpty_() {
 }
 
 _fsFileExit_() {
-  local _file="${1:-}" # optional: path to file
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-  if [[ "$(_fsFile_ "${_file}")" -eq 1 ]]; then
+  local _file="${1}"
+  
+  if [[ ! -f "${_file}" ]]; then
     _fsMsgError_ "File does not exist: ${_file}"
   fi
 }
@@ -2471,6 +2427,7 @@ _fsCrontab_() {
   
   local _cronCmd="${1}"
   local _cronJob="${2} ${_cronCmd}"
+  
     # credit: https://stackoverflow.com/a/17975418
   ( crontab -l 2> /dev/null | grep -v -F "${_cronCmd}" || : ; echo "${_cronJob}" ) | crontab -
   
@@ -2483,12 +2440,12 @@ _fsCrontabRemove_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _cronCmd="${1}"
-    # credit: https://stackoverflow.com/a/17975418
   if [[ "$(_fsCrontabValidate_ "${_cronCmd}")" -eq 0 ]]; then
+      # credit: https://stackoverflow.com/a/17975418
     ( crontab -l 2> /dev/null | grep -v -F "${_cronCmd}" || : ) | crontab -
     
     if [[ "$(_fsCrontabValidate_ "${_cronCmd}")" -eq 0 ]]; then
-      _fsMsgError_ "Cron not removed: ${_cronCmd}"
+      _fsMsgWarning_ "Cron not removed: ${_cronCmd}"
     fi
   fi
 }
@@ -2498,7 +2455,11 @@ _fsCrontabValidate_() {
   
   local _cronCmd="${1}"
   
-  crontab -l 2> /dev/null | grep -q "${_cronCmd}"  && echo 0 || echo 1
+  if crontab -l 2> /dev/null | grep -q "${_cronCmd}"; then
+    echo 0
+  else
+    echo 1
+  fi
 }
 
 _fsValueGet_() {
@@ -2509,18 +2470,9 @@ _fsValueGet_() {
   local _key="${2}"
   local _value=''
   
-  if [[ "$(_fsFile_ "${_filePath}")" -eq 0 ]]; then
-    if [[ "${_fileType}" = 'json' ]]; then
-        # get value from json
-      _value="$(jq -r "${_key}"' // empty' "${_filePath}")"
-    else
-        # get value from other filetypes
-      _value="$(cat "${_filePath}" | { grep -o "${_key}\"\?: \"\?.*\"\?" || true; } \
-      | sed "s,\",,g" \
-      | sed "s,\s,,g" \
-      | sed "s#,##g" \
-      | sed "s,${_key}:,,")"
-    fi
+  if [[ -f "${_filePath}" ]]; then
+      # get value from json
+    _value="$(jq -r "${_key}"' // empty' "${_filePath}")"
     
     if [[ -n "${_value}" ]]; then
       echo "${_value}"
@@ -2533,7 +2485,6 @@ _fsValueUpdate_() {
   
   local _filePath="${1}"
   local _file="${_filePath##*/}"
-  local _fileType="${_filePath##*.}"
   local _fileHash=''
   local _fileTmp=''
   local _json=''
@@ -2546,29 +2497,13 @@ _fsValueUpdate_() {
   _fileHash="$(_fsRandomHex_ 8)"
   _fileTmp="${FS_TMP}/${_fileHash}_${_file}"
   
-  if [[ "${_fileType}" = 'json' ]]; then
-      # update value for json
-    _json="$(_fsValueGet_ "${_filePath}" '.')"
-      # credit: https://stackoverflow.com/a/24943373
-    _jsonUpdate="$(jq "${_key}"' = $newVal' --arg newVal "${_value}" <<< "${_json}")"
-    
-    printf '%s\n' "${_jsonUpdate}" | jq . | tee "${_fileTmp}" > /dev/null
-  else
-      # update value for other filetypes
-    cp "${_filePath}" "${_fileTmp}"
-    
-    if grep -qow "\"${_key}\": \".*\"" "${_fileTmp}"; then # "key": "value"
-      sed -i "s,\"${_key}\": \".*\",\"${_key}\": \"${_value}\"," "${_fileTmp}"
-    elif grep -qow "\"${_key}\": \".*\"" "${_fileTmp}"; then # "key": value
-      sed -i "s,\"${_key}\": .*,\"${_key}\": ${_value}," "${_fileTmp}"
-    elif grep -qow "${_key}: \".*\"" "${_fileTmp}"; then # key: "value"
-      sed -i "s,${_key}: \".*\",${_key}: \"${_value}\"," "${_fileTmp}"
-    elif grep -qow "${_key}: \".*\"" "${_fileTmp}"; then # key: value
-      sed -i "s,${_key}: .*,${_key}: ${_value}," "${_fileTmp}"
-    else
-      _fsMsgError_ 'Cannot find key "'"${_key}"'" in: '"${_filePath}"
-    fi
-  fi
+    # update value for json
+  _json="$(_fsValueGet_ "${_filePath}" '.')"
+    # credit: https://stackoverflow.com/a/24943373
+  _jsonUpdate="$(jq "${_key}"' = $newVal' --arg newVal "${_value}" <<< "${_json}")"
+  
+  printf '%s\n' "${_jsonUpdate}" | jq . | tee "${_fileTmp}" > /dev/null
+  
     # override file if different
   if ! cmp --silent "${_fileTmp}" "${_filePath}"; then
     cp "${_fileTmp}" "${_filePath}"
@@ -2722,18 +2657,6 @@ _fsReset_() {
   fi
 }
 
-_fsUserValidate_() {
-  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
-  
-  local _user="${1}"
-
-  if id -u "${_user}" >/dev/null 2>&1; then
-    echo 0 # user exist
-  else
-    echo 1 # user does not exist
-  fi
-}
-
 _fsPkgs_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
@@ -2745,7 +2668,6 @@ _fsPkgs_() {
   for _pkg in "${_pkgs[@]}"; do
     if [[ "$(_fsPkgsStatus_ "${_pkg}")" -eq 1 ]]; then
       if [[ "${_pkg}" = 'docker-ce' ]]; then
-          # thanks: tomjrtsmith
         curl --connect-timeout 10 -fsSL "https://get.docker.com" -o "${_getDocker}"
         _fsFileExit_ "${_getDocker}"
         sudo chmod +x "${_getDocker}"
