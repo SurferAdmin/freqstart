@@ -1214,25 +1214,26 @@ _fsSetupChrony_() {
 _fsSetupFirewall_() {
   local _status=''
   local _portSSH=22
+  local _regex='^[[:digit:]]+$'
   
   _fsPkgs_ "ufw"
   
   _fsMsgTitle_ 'Configurate firewall for Nginx proxy.'
   
-  if [[ "$(_fsCaseConfirmation_ 'Is the default SSH port "22/tcp"?')" -eq 1 ]]; then
+  if [[ "$(_fsCaseConfirmation_ 'Is "22" the default SSH port?')" -eq 1 ]]; then
     while true; do
-      read -rp '? SSH port (Press [ENTER] for default "22/tcp"): ' _portSSH
-      case ${_portSSH} in
-        '')
-          _portSSH=22
-          ;;
-        *)
-          _fsMsg_ 'Do not continue if the default SSH port is not: '"${_portSSH}"
-          if [[ "$(_fsCaseConfirmation_ 'Continue?')" -eq 0 ]]; then
-            break
-          fi
-          ;;
-      esac
+      read -rp '? SSH port: ' _portSSH
+      
+      if [[ "${_portSSH}" =~ $_regex ]]; then
+       _fsMsg_ 'Do not continue if the default SSH port is not: '"${_portSSH}"
+       
+        if [[ "$(_fsCaseConfirmation_ 'Continue?')" -eq 0 ]]; then
+          break
+        fi
+      else
+        _portSSH=''
+        _fsCaseInvalid_
+      fi
     done
   fi
   
