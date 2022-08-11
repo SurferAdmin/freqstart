@@ -2453,7 +2453,11 @@ _fsCrontabValidate_() {
   
   local _cronCmd="${1}"
   
-  crontab -l 2> /dev/null | grep -q "${_cronCmd}"  && echo 0 || echo 1
+  if crontab -l 2> /dev/null | grep -q "${_cronCmd}"; then
+    echo 0
+  else
+    echo 1
+  fi
 }
 
 _fsValueGet_() {
