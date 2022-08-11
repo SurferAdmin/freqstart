@@ -53,6 +53,7 @@ readonly FS_NGINX_CONFD_FREQUI="${FS_NGINX_CONFD}/frequi.conf"
 readonly FS_NGINX_CONFD_HTPASSWD="${FS_NGINX_CONFD}/.htpasswd"
 
 readonly FS_CERTBOT="${FS_NAME}_certbot"
+readonly FS_CERTBOT_CRON="freqstart --cert --yes"
 readonly FS_FREQUI="${FS_NAME}_frequi"
 readonly FS_HASH="$(xxd -l 8 -ps /dev/urandom)"
 
@@ -956,6 +957,7 @@ _fsDockerAutoupdate_() {
 
 _fsDockerPurge_() {
   _fsCrontabRemove_ "${FS_AUTOUPDATE}"
+  _fsCrontabRemove_ "${FS_CERTBOT_CRON}"
   rm -f "${FS_AUTOUPDATE}"
   
   if [[ "$(_fsPkgsStatus_ "docker-ce")" -eq 0 ]]; then
@@ -1666,7 +1668,7 @@ _fsSetupNginxOpenssl_() {
   done
   
     # remove autorenew certificate for domains
-  _fsCrontabRemove_ "freqstart --cert --yes" 
+  _fsCrontabRemove_ "${FS_CERTBOT_CRON}" 
     # stop nginx domain container
   _fsDockerRemove_ "${FS_NGINX}_domain"
   
@@ -1869,7 +1871,6 @@ _setupNginxLetsencrypt_() {
   local _sslNginx="${FS_DIR_PROXY}/certbot/conf/options-ssl-nginx.conf"
   local _sslDhparams="${FS_DIR_PROXY}/certbot/conf/ssl-dhparams.pem"
   local _certEmail=''
-  local _cronCmd="freqstart --cert --yes"
   local _cronUpdate="30 0 * * 0" # update at 0:30am UTC on sunday every week
   
   _ipPublic="$(dig +short myip.opendns.com @resolver1.opendns.com)"
@@ -2059,7 +2060,7 @@ _setupNginxLetsencrypt_() {
     fi
     
       # set cron for domain autorenew certificate
-    _fsCrontab_ "${_cronCmd}" "${_cronUpdate}"
+    _fsCrontab_ "${FS_CERTBOT_CRON}" "${_cronUpdate}"
   fi
 }
 
@@ -2426,6 +2427,7 @@ _fsCrontab_() {
   
   local _cronCmd="${1}"
   local _cronJob="${2} ${_cronCmd}"
+  
     # credit: https://stackoverflow.com/a/17975418
   ( crontab -l 2> /dev/null | grep -v -F "${_cronCmd}" || : ; echo "${_cronJob}" ) | crontab -
   
@@ -2438,12 +2440,12 @@ _fsCrontabRemove_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _cronCmd="${1}"
-    # credit: https://stackoverflow.com/a/17975418
   if [[ "$(_fsCrontabValidate_ "${_cronCmd}")" -eq 0 ]]; then
+      # credit: https://stackoverflow.com/a/17975418
     ( crontab -l 2> /dev/null | grep -v -F "${_cronCmd}" || : ) | crontab -
     
     if [[ "$(_fsCrontabValidate_ "${_cronCmd}")" -eq 0 ]]; then
-      _fsMsgError_ "Cron not removed: ${_cronCmd}"
+      _fsMsgWarning_ "Cron not removed: ${_cronCmd}"
     fi
   fi
 }
