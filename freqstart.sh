@@ -987,7 +987,7 @@ _fsSetupUser_() {
   local _userTmp=''
   local _userTmpDir=''
   local _userTmpDPath=''
-  local _nr=''
+  local _userAdd=0
   
   _fsMsgTitle_ "USER"
   
@@ -995,111 +995,80 @@ _fsSetupUser_() {
   _userId="$(id -u)"
   
   if [[ "${_userId}" -eq 0 ]]; then
-    _fsMsgWarning_ "Your are logged in as root!"
+    _fsMsgWarning_ "Your are logged in as root! Create or new login to existing user now."
     
     while true; do
-      printf -- '%s\n' \
-      "? Create a new or login to existing non-root user?" \
-      "  1) Create new user" \
-      "  2) Login to existing non-root user" >&2
+      read -rp '? Enter the username: ' _userTmp
       
-      read -rp "  Choose number: " _nr
-      
-      case ${_nr} in 
-        [1])
-          _fsMsg_ "Continue with 1) ..."
-          ;;
-        [2])
-          _fsMsg_ "Continue with 2) ..."
-          ;;
-        *)
-          _fsCaseInvalid_
-          ;;
-      esac
-    
-      while true; do
-        read -rp '? Enter the username: ' _userTmp
-        
-        if [[ "${_userTmp}" = '' ]]; then
-          _fsCaseEmpty_
-        elif [[ "$(_fsIsAlphaDashUscore_ "${_userTmp}")" -eq 1 ]]; then
-          _userTmp=''
-        else
-          if [[ "$(_fsCaseConfirmation_ "Is the username \"${_userTmp}\" correct?")" -eq 0 ]]; then
-            if [[ "${_nr}" -eq 1 ]]; then
-              if id -u "${_userTmp}" >/dev/null 2>&1; then
-                _fsMsgWarning_ "User already exist."
-                
-                if [[ "$(_fsCaseConfirmation_ "Login to user \"${_userTmp}\" now?")" -eq 0 ]]; then
-                  _nr=2
-                  break
-                else
-                  _userTmp=''
-                fi
-              else
-                break
-              fi
-            elif [[ "${_nr}" -eq 2 ]]; then
-              if ! id -u "${_userTmp}" >/dev/null 2>&1; then
-                _fsMsgWarning_ "User does not exist. "
-                
-                if [[ "$(_fsCaseConfirmation_ "Create user \"${_userTmp}\" now?")" -eq 0 ]]; then
-                  _nr=1
-                  break
-                else
-                  _userTmp=''
-                fi
-              else
-                break
-              fi
+      if [[ -z "${_userTmp}" ]]; then
+        _userTmp=''
+        _fsCaseEmpty_
+      elif [[ "$(_fsIsAlphaDashUscore_ "${_userTmp}")" -eq 1 ]]; then
+        _userTmp=''
+      else
+        if [[ "$(_fsCaseConfirmation_ "Is the username \"${_userTmp}\" correct?")" -eq 0 ]]; then
+          if id -u "${_userTmp}" >/dev/null 2>&1; then            
+            if [[ "$(_fsCaseConfirmation_ "Login to user \"${_userTmp}\" now?")" -eq 0 ]]; then
+              break
+            else
+              _userTmp=''
             fi
           else
-            _userTmp=''
+            if [[ "$(_fsCaseConfirmation_ "Create user \"${_userTmp}\" now?")" -eq 0 ]]; then
+              _userAdd=1
+              break
+            else
+              _userTmp=''
+            fi
           fi
+        else
+          _userTmp=''
         fi
-      done
-      
-      break
+      fi
     done
     
-    if [[ "${_nr}" -eq 1 ]]; then
+    if [[ "${_userAdd}" -eq 1 ]]; then
       sudo adduser --gecos '' "${_userTmp}"
     fi
-    
-      # add user to sudo group
-    sudo usermod -a -G sudo "${_userTmp}" || true
-    
-    _userTmpDir="$(bash -c "cd ~$(printf %q "${_userTmp}") && pwd")"'/'"${FS_NAME}"
-    _userTmpDPath="${_userTmpDir}/${FS_NAME}.sh"
-    _userTmpSudoer="${_userTmp} ALL=(root) NOPASSWD: ${_userTmpDPath}"
-    
-      # append only freqstart to sudoers for autoupdate
-    if ! sudo -l | grep -q "${_userTmpSudoer}"; then
-      echo "${_userTmpSudoer}" | sudo tee -a /etc/sudoers > /dev/null
+
+    if id -u "${_userTmp}" >/dev/null 2>&1; then            
+        # add user to sudo group
+      sudo usermod -a -G sudo "${_userTmp}" || true
+      
+      _userTmpDir="$(bash -c "cd ~$(printf %q "${_userTmp}") && pwd")"'/'"${FS_NAME}"
+      _userTmpDPath="${_userTmpDir}/${FS_NAME}.sh"
+      _userTmpSudoer="${_userTmp} ALL=(root) NOPASSWD: ${_userTmpDPath}"
+      
+        # append only freqstart to sudoers for autoupdate
+      if ! sudo -l | grep -q "${_userTmpSudoer}"; then
+        echo "${_userTmpSudoer}" | sudo tee -a /etc/sudoers > /dev/null
+      fi
+      
+      mkdir -p "${_userTmpDir}"
+      
+        # copy freqstart incl. strategies to new user home
+      cp -a "${FS_PATH}" "${_userTmpDir}/${FS_FILE}" 2> /dev/null || true
+      cp -a "${FS_STRATEGIES}" "${_userTmpDir}/${FS_STRATEGIES##*/}" 2> /dev/null || true
+      
+      sudo chown -R "${_userTmp}":"${_userTmp}" "${_userTmpDir}"
+      sudo chmod +x "${_userTmpDPath}"
+      
+      if [[ "$(_fsCaseConfirmation_ "Disable \"${_user}\" user (recommended)?")" -eq 0 ]]; then
+        sudo usermod -L "${_user}"
+      fi
+      
+      _fsMsg_ ' +'
+      _fsMsgWarning_ "Manually restart script: ${_userTmpDir}/${FS_FILE} --setup"
+      _fsMsg_ ' +'
+      sudo rm -rf "${FS_TMP}"
+      sudo rm -f "${FS_SYMLINK}"
+      
+        # machinectl is needed to set $XDG_RUNTIME_DIR properly
+      sudo rm -f "${FS_PATH}" && sudo machinectl shell "${_userTmp}@"
+      exit 0
+    else
+      _fsMsgError_ "Cannot create user: ${_userTmp}"
     fi
-    
-    mkdir -p "${_userTmpDir}"
-    
-      # copy freqstart incl. strategies to new user home
-    cp -a "${FS_PATH}" "${_userTmpDir}/${FS_FILE}" 2> /dev/null || true
-    cp -a "${FS_STRATEGIES}" "${_userTmpDir}/${FS_STRATEGIES##*/}" 2> /dev/null || true
-    
-    sudo chown -R "${_userTmp}":"${_userTmp}" "${_userTmpDir}"
-    sudo chmod +x "${_userTmpDPath}"
-    
-    if [[ "$(_fsCaseConfirmation_ "Disable \"${_user}\" user (recommended)?")" -eq 0 ]]; then
-      sudo usermod -L "${_user}"
-    fi
-    
-    _fsMsg_ ' +'
-    _fsMsgWarning_ "Manually restart script: ${_userTmpDir}/${FS_FILE} --setup"
-    _fsMsg_ ' +'
-    sudo rm -rf "${FS_TMP}"
-    sudo rm -f "${FS_SYMLINK}"
-    
-      # machinectl is needed to set $XDG_RUNTIME_DIR properly
-    sudo rm -f "${FS_PATH}" && sudo machinectl shell "${_userTmp}@"
-    exit 0
   else
     _fsMsg_ "Your are logged in as non-root."
   fi
