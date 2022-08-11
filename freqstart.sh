@@ -81,7 +81,7 @@ _fsDockerVersionCompare_() {
   _dockerVersionHub="$(_fsDockerVersionHub_ "${_dockerImage}")"
   _dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerImage}")"
   
-  # compare versions
+    # compare versions
   if [[ -z "${_dockerVersionHub}" ]]; then
     echo 2 # unkown
   else
@@ -99,7 +99,7 @@ _fsDockerVersionLocal_() {
   local _dockerImage="${1}"
   local _dockerVersionLocal=''
   
-  if [[ "$(_fsDockerImageInstalled_ "${_dockerImage}")" -eq 0 ]]; then
+  if [[ -n "$(docker images -q "${_dockerImage}")" ]]; then
     _dockerVersionLocal="$(docker inspect --format='{{index .RepoDigests 0}}' "${_dockerImage}" \
     | sed 's/.*@//')"
     
@@ -190,7 +190,8 @@ _fsDockerImage_() {
     fi
   elif [[ "${_dockerCompare}" -eq 2 ]]; then
       # docker hub image version is unknown
-    if [[ "$(_fsDockerImageInstalled_ "${_dockerImage}")" -eq 0 ]]; then
+      
+    if [[ -n "$(docker images -q "${_dockerImage}")" ]]; then
       _dockerStatus=0
     fi
   fi
@@ -201,23 +202,6 @@ _fsDockerImage_() {
     _dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerImage}")"
       # return local version docker image digest
     echo "${_dockerVersionLocal}"
-  fi
-}
-
-_fsDockerImageInstalled_() {
-  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
-  
-  local _dockerImage="${1}"
-  local _dockerImages=''
-  
-  _dockerImages="$(docker images -q "${_dockerImage}" 2> /dev/null)"
-  
-  if [[ -n "${_dockerImages}" ]]; then
-      # docker image is installed
-    echo 0
-  else
-      # docker image is not installed
-    echo 1
   fi
 }
 
@@ -285,9 +269,8 @@ _fsDockerProjectImages_() {
   
   local _ymlPath="${1}"
   local _ymlImages=''
-  local _ymlImagesDeduped=''
+  local _ymlImagesDeduped=()
   local _ymlImage=''
-  local _dockerImage=''
   local _dockerImage=''
   local _error=0
   
@@ -301,7 +284,6 @@ _fsDockerProjectImages_() {
   | sed "s,image:,,g" || true)
   
   if (( ${#_ymlImages[@]} )); then
-    _ymlImagesDeduped=()
     while read -r; do
     _ymlImagesDeduped+=( "$REPLY" )
     done < <(_fsDedupeArray_ "${_ymlImages[@]}")
@@ -332,7 +314,7 @@ _fsDockerProjectStrategies_() {
   local _strategiesDeduped=''
   local _strategy=''
   local _strategiesDir=''
-  local _strategiesDirDeduped=''
+  local _strategiesDirDeduped=()
   local _strategyDir=''
   local _strategyPath=''
   local _strategyFile=''
@@ -372,7 +354,6 @@ _fsDockerProjectStrategies_() {
       # add default strategy path
     _strategiesDir+=( "${FS_DIR_USER_DATA}/strategies" )
     
-    _strategiesDirDeduped=()
     while read -r; do
       _strategiesDirDeduped+=( "$REPLY" )
     done < <(_fsDedupeArray_ "${_strategiesDir[@]}")
@@ -410,7 +391,7 @@ _fsDockerProjectConfigs_() {
   
   local _ymlPath="${1}"
   local _configs=''
-  local _configsDeduped=''
+  local _configsDeduped=()
   local _config=''
   local _configPath=''
   local _error=0
@@ -428,7 +409,6 @@ _fsDockerProjectConfigs_() {
   | sed "s,\/freqtrade\/,,g" || true)
   
   if (( ${#_configs[@]} )); then
-    _configsDeduped=()
     while read -r; do
       _configsDeduped+=( "$REPLY" )
     done < <(_fsDedupeArray_ "${_configs[@]}")
@@ -463,9 +443,9 @@ _fsDockerProject_() {
   local _projectImages=1
   local _projectStrategies=1
   local _projectConfigs=1
-  local _projectContainers=''
+  local _projectContainers=()
   local _projectContainer=''
-  local _procjectJson=''
+  local _procjectJson=()
   local _projectShell=''
   local _containerCmd=''
   local _containerActive=''
@@ -499,7 +479,6 @@ _fsDockerProject_() {
   _projectFileType="${_projectFile##*.}"
   _projectFileName="${_projectFile%.*}"
   _projectName="${_projectFileName//\-/\_}"
-  _procjectJson=()
   _containerConfPath="${FS_DIR}/${_projectFileName}.conf.json"
   _url="$(_fsValueGet_ "${FS_CONFIG}" '.url')"
   
@@ -567,7 +546,6 @@ _fsDockerProject_() {
   fi
   
   if [[ "${_error}" -eq 0 ]] && [[ ! "${_projectMode}" =~ 'run' ]]; then
-    _projectContainers=()
     while read -r; do
       _projectContainers+=( "$REPLY" )
     done < <(cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" ps -q)
@@ -814,8 +792,8 @@ _fsDockerStrategy_() {
   local _strategyUpdate=''
   local _strategyTmp="${FS_TMP}/${FS_HASH}_${_strategyName}"
   local _strategyDir="${FS_DIR_USER_DATA}/strategies/${_strategyName}"
-  local _strategyUrls=''
-  local _strategyUrlsDeduped=''
+  local _strategyUrls=()
+  local _strategyUrlsDeduped=()
   local _strategyUrl=''
   local _strategyPath=''
   local _strategyPathTmp=''
@@ -841,12 +819,10 @@ _fsDockerStrategy_() {
     fi
   fi
   
-  _strategyUrls=()
   while read -r; do
   _strategyUrls+=( "$REPLY" )
   done < <(jq -r ".${_strategyName}[]?" "${FS_STRATEGIES}")
   
-  _strategyUrlsDeduped=()
   if (( ${#_strategyUrls[@]} )); then
     while read -r; do
     _strategyUrlsDeduped+=( "$REPLY" )
@@ -915,10 +891,9 @@ _fsDockerAutoupdate_() {
   local _projectFile="${1}"
   local _projectAutoupdate='freqstart --compose '"${_projectFile}"' --auto --yes'
   local _projectAutoupdateMode="${2:-}" # optional: remove
-  local _projectAutoupdates=""
+  local _projectAutoupdates=()
   local _cronUpdate="3 */12 * * *" # update every 12 hours and 3 minutes; thanks: ECO
   
-  _projectAutoupdates=()
   _projectAutoupdates+=("#!/usr/bin/env bash")
   if [[ -f "${FS_AUTOUPDATE}" ]]; then
     while read -r; do
