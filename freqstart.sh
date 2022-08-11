@@ -71,7 +71,7 @@ trap '_fsErr_ "${FUNCNAME:-.}" ${LINENO}' ERR
 ###
 # DOCKER
 
-_fsDockerVarsCompare_() {
+_fsDockerVersionCompare_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _dockerImage="${1}"
@@ -91,18 +91,6 @@ _fsDockerVarsCompare_() {
       echo 1 # greater
     fi
   fi
-}
-
-_fsDockerVarsName_() {
-  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
-  
-  local _dockerImage="${1}"
-  local _dockerRepo="${_dockerImage%:*}"
-  local _dockerName=''
-  
-  _dockerName="${FS_NAME}"'_'"$(echo "${_dockerRepo}" | sed "s,\/,_,g" | sed "s,\-,_,g")"
-  
-  echo "${_dockerName}"
 }
 
 _fsDockerVersionLocal_() {
@@ -133,7 +121,7 @@ _fsDockerVersionHub_() {
   local _dockerName=''
   local _dockerManifest=''
   
-  _dockerName="$(_fsDockerVarsName_ "${_dockerImage}")"
+  _dockerName="${FS_NAME}"'_'"$(echo "${_dockerRepo}" | sed "s,\/,_,g" | sed "s,\-,_,g")"
   _dockerManifest="${FS_TMP}"'/'"${FS_HASH}"'_'"${_dockerName}"'_'"${_dockerTag}"'.md'
   _token="$(curl --connect-timeout 10 -s "https://auth.docker.io/token?scope=repository:${_dockerRepo}:pull&service=registry.docker.io"  | jq -r '.token')"
   
@@ -163,13 +151,11 @@ _fsDockerImage_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _dockerImage="${1}"
-  local _dockerName=''
   local _dockerCompare=''
   local _dockerStatus=2
   local _dockerVersionLocal=''
   
-  _dockerName="$(_fsDockerVarsName_ "${_dockerImage}")"
-  _dockerCompare="$(_fsDockerVarsCompare_ "${_dockerImage}")"
+  _dockerCompare="$(_fsDockerVersionCompare_ "${_dockerImage}")"
   
   if [[ "${_dockerCompare}" -eq 0 ]]; then
       # docker hub image version is equal
@@ -186,7 +172,7 @@ _fsDockerImage_() {
       if [[ "$(_fsCaseConfirmation_ "Do you want to update now?")" -eq 0 ]]; then
         docker pull "${_dockerImage}"
         
-        if [[ "$(_fsDockerVarsCompare_ "${_dockerImage}")" -eq 0 ]]; then
+        if [[ "$(_fsDockerVersionCompare_ "${_dockerImage}")" -eq 0 ]]; then
           _fsMsg_ "Updated..."
           _dockerStatus=1
         fi
@@ -197,7 +183,7 @@ _fsDockerImage_() {
     else
         # install from docker hub
       docker pull "${_dockerImage}"
-      if [[ "$(_fsDockerVarsCompare_ "${_dockerImage}")" -eq 0 ]]; then
+      if [[ "$(_fsDockerVersionCompare_ "${_dockerImage}")" -eq 0 ]]; then
         _fsMsg_ "Image installed: ${_dockerImage}"
         _dockerStatus=1
       fi
