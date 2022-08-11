@@ -148,7 +148,8 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 ### Changelog
 
 `v2.0.3`
-* TBA
+* Removed deprecated code in docker routine and value get/update functions
+* Removed unnecessary output from ufw function
 
 `v2.0.2`
 * Improved sudoers function
