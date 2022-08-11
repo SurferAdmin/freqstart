@@ -143,10 +143,9 @@ _fsDockerVersionHub_() {
   fi
   
   if [[ -f "${_dockerManifest}" ]]; then    
-    _dockerVersionHub="$(grep -o 'etag:' "${_dockerManifest}" \
-    | sed "s,\",,g" \
-    | sed "s,\s,,g" \
-    | sed "s,etag:,," \
+    _dockerVersionHub="$(grep -oE 'etag: "(.*)"' "${_dockerManifest}" \
+    | sed 's,\",,g' \
+    | sed 's,etag: ,,' \
     || true)"
     
     if [[ -n "${_dockerVersionHub}" ]]; then
@@ -397,7 +396,7 @@ _fsDockerProjectStrategies_() {
       for _strategyDir in "${_strategiesDirDeduped[@]}"; do
         _strategyPath="${_strategyDir}"'/'"${_strategy}"'.py'
         _strategyFile="${_strategyPath##*/}"
-        if [[ "$(_fsFile_ "${_strategyPath}")" -eq 0 ]]; then
+        if [[ -f "${_strategyPath}" ]]; then
           _strategyPathFound=0
           break
         fi
@@ -449,7 +448,7 @@ _fsDockerProjectConfigs_() {
     
     for _config in "${_configsDeduped[@]}"; do
       _configPath="${FS_DIR}/${_config}"
-      if [[ "$(_fsFile_ "${_configPath}")" -eq 1 ]]; then
+      if [[ ! -f "${_configPath}" ]]; then
         _fsMsg_ "\"$(basename "${_configPath}")\" config file does not exist."
         _error=$((_error+1))
       fi
@@ -525,7 +524,7 @@ _fsDockerProject_() {
     _fsMsgError_ "File type is missing: ${_projectFile}"
   else
     if [[ "${_projectFileType}" = 'yml' ]]; then
-      if [[ "$(_fsFile_ "${_projectPath}")" -eq 1 ]]; then
+      if [[ ! -f "${_projectPath}" ]]; then
         _fsMsgError_ "File not found: ${_projectFile}"
       fi
     else
@@ -838,7 +837,7 @@ _fsDockerStrategy_() {
   local _error=0
   
     # create the strategy config
-  if [[ "$(_fsFile_ "${FS_STRATEGIES}")" -eq 1 ]]; then
+  if [[ ! -f "${FS_STRATEGIES}" ]]; then
     if [[ "$(_fsCaseConfirmation_ "Download latest strategies config?")" -eq 0 ]]; then
       curl --connect-timeout 10 -fsSL "https://raw.githubusercontent.com/berndhofer/freqstart/stable/freqstart.strategies.json" -o "${FS_STRATEGIES}"
       
@@ -881,7 +880,7 @@ _fsDockerStrategy_() {
         curl --connect-timeout 10 -s -L "${_strategyUrl}" -o "${_strategyPathTmp}"
         
         if [[ "$(_fsFileEmpty_ "${_strategyPathTmp}")" -eq 0 ]]; then
-          if [[ "$(_fsFile_ "${_strategyPath}")" -eq 0 ]]; then
+          if [[ -f "${_strategyPath}" ]]; then
               # only update file if it is different
             if ! cmp --silent "${_strategyPathTmp}" "${_strategyPath}"; then
                 # note: sudo because of freqtrade docker user
@@ -934,7 +933,7 @@ _fsDockerAutoupdate_() {
   
   _projectAutoupdates=()
   _projectAutoupdates+=("#!/usr/bin/env bash")
-  if [[ "$(_fsFile_ "${FS_AUTOUPDATE}")" -eq 0 ]]; then
+  if [[ -f "${FS_AUTOUPDATE}" ]]; then
     while read -r; do
     _projectAutoupdates+=("$REPLY")
     done < <(grep -v "${_projectAutoupdate}" "${FS_AUTOUPDATE}" | sed "s,#!/usr/bin/env bash,," | sed "/^$/d")
@@ -1255,7 +1254,6 @@ _fsSetupFirewall_() {
 # FREQTRADE
 
 _fsSetupFreqtrade_() {
-  local _docker="freqtradeorg/freqtrade:stable"
   local _dockerYml="${FS_DIR}/${FS_NAME}_setup.yml"
   local _configName=''
   local _configFile=''
@@ -1264,13 +1262,13 @@ _fsSetupFreqtrade_() {
   _fsMsgTitle_ "FREQTRADE"
   
   _fsFileCreate_ "${_dockerYml}" \
-  "---" \
+  '---' \
   "version: '3'" \
-  "services:" \
-  "  freqtrade:" \
-  "    image: freqtradeorg/freqtrade:stable" \
-  "    container_name: freqtrade" \
-  "    volumes:" \
+  'services:' \
+  '  freqtrade:' \
+  '    image: freqtradeorg/freqtrade:stable' \
+  '    container_name: freqtrade' \
+  '    volumes:' \
   '      - "'"${FS_DIR_USER_DATA}"':/freqtrade/user_data"'
   
   _fsFileExit_ "${_dockerYml}"
@@ -1321,7 +1319,7 @@ _fsSetupFreqtrade_() {
     _configFile="${FS_DIR_USER_DATA}/${_configName}.json"
     _configFileTmp="${FS_DIR_USER_DATA}/${_configName}.tmp.json"
     
-    if [[ "$(_fsFile_ "${_configFile}")" -eq 0 ]]; then
+    if [[ -f "${_configFile}" ]]; then
       _fsMsg_ "The config file already exist: ${_configFile}"
       if [[ "$(_fsCaseConfirmation_ "Replace the existing config file?")" -eq 1 ]]; then
         _configName=''
@@ -1347,7 +1345,6 @@ _fsSetupFreqtrade_() {
 # credit: https://github.com/nightshift2k/binance-proxy
 
 _fsSetupBinanceProxy_() {
-  local _docker="nightshift2k/binance-proxy:latest"
   local _yml="${FS_DIR}/${FS_PROXY_BINANCE}.yml"
   
   _fsMsgTitle_ 'PROXY FOR BINANCE'
@@ -1411,14 +1408,14 @@ _fsSetupBinanceProxy_() {
     "version: '3'" \
     "services:" \
     "  ${FS_PROXY_BINANCE}:" \
-    "    image: ${_docker}" \
+    "    image: nightshift2k/binance-proxy:latest" \
     "    container_name: ${FS_PROXY_BINANCE}" \
     "    command: >" \
     "      --port-spot=8990" \
     "      --port-futures=8991" \
     "      --verbose" \
     
-    _fsDockerProject_ "$(basename "${_yml}")" 'compose-force'
+    _fsDockerProject_ "${_yml##*/}" 'compose-force'
     
     break
   done
@@ -1428,7 +1425,6 @@ _fsSetupBinanceProxy_() {
 # credit: https://github.com/mikekonan/exchange-proxy
 
 _fsSetupKucoinProxy_() {
-  local _docker="mikekonan/exchange-proxy:latest-amd64"
   local _yml="${FS_DIR}/${FS_PROXY_KUCOIN}.yml"
   
   _fsMsgTitle_ 'PROXY FOR KUCOIN'
@@ -1476,13 +1472,13 @@ _fsSetupKucoinProxy_() {
     "version: '3'" \
     "services:" \
     "  ${FS_PROXY_KUCOIN}:" \
-    "    image: ${_docker}" \
+    "    image: mikekonan/exchange-proxy:latest-amd64" \
     "    container_name: ${FS_PROXY_KUCOIN}" \
     "    command: >" \
     "      -port 8980" \
     "      -verbose 1"
     
-    _fsDockerProject_ "$(basename "${_yml}")" 'compose-force'
+    _fsDockerProject_ "${_yml##*/}" 'compose-force'
     
     break
   done
@@ -1544,7 +1540,7 @@ _fsSetupNginx_() {
     
       # create frequi login data
     while true; do
-      if [[ "$(_fsFile_ "${_htpasswd}")" -eq 0 ]]; then
+      if [[ -f "${_htpasswd}" ]]; then
         _fsMsg_ "FreqUI login data already found."
         
         if [[ "$(_fsCaseConfirmation_ "Skip generating new FreqUI login data?")" -eq 0 ]]; then
@@ -1966,7 +1962,7 @@ _setupNginxLetsencrypt_() {
     "      - ${FS_DIR_PROXY}/certbot/www:/var/www/certbot"
     
       # download recommended TLS parameters
-    if [[ "$(_fsFile_ "${_sslNginx}")" -eq 1 ]] || [[ "$(_fsFile_ "${_sslDhparams}")" -eq 1 ]]; then
+    if [[ ! -f "${_sslNginx}" ]] || [[ ! -f "${_sslDhparams}" ]]; then
       curl --connect-timeout 10 -s \
       "https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf" \
       > "${_sslNginx}"
@@ -1980,7 +1976,7 @@ _setupNginxLetsencrypt_() {
     fi
     
       # workaround for first setup while missing cert files
-    if [[ "$(_fsFile_ "${_sslCert}")" -eq 1 ]] || [[ "$(_fsFile_ "${_sslKey}")" -eq 1 ]]; then
+    if [[ ! -f "${_sslCert}" ]] || [[ ! -f "${_sslKey}" ]]; then
       _fsFileCreate_ "${FS_DIR_PROXY}${FS_NGINX_CONFD_FREQUI}" \
       "server {" \
       "    listen 0.0.0.0:80;" \
@@ -2323,7 +2319,7 @@ _fsConf_() {
   local _user=''
   local _userTmp=''
   
-  if [[ "$(_fsFile_ "${FS_CONFIG}")" -eq 0 ]]; then
+  if [[ -f "${FS_CONFIG}" ]]; then
     _domain="$(_fsValueGet_ "${FS_CONFIG}" '.domain')"
     _url="$(_fsValueGet_ "${FS_CONFIG}" '.url')"
     _ipPublic="$(_fsValueGet_ "${FS_CONFIG}" '.ip_public')"
@@ -2366,22 +2362,10 @@ _fsConf_() {
   '}'
 }
 
-_fsFile_() {
-  local _file="${1:-}" # optional: path to file
-  
-  if [[ -z "${_file}" ]]; then
-    echo 1
-  elif [[ -f "${_file}" ]]; then
-    echo 0
-  else
-    echo 1
-  fi
-}
-
 _fsFileEmpty_() {
   local _file="${1:-}" # optional: path to file
   
-  if [[ "$(_fsFile_ "${_file}")" -eq 0 ]]; then
+  if [[ -f "${_file}" ]]; then
     if [[ -s "${_file}" ]]; then
       echo 0
     else
@@ -2393,9 +2377,11 @@ _fsFileEmpty_() {
 }
 
 _fsFileExit_() {
-  local _file="${1:-}" # optional: path to file
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-  if [[ "$(_fsFile_ "${_file}")" -eq 1 ]]; then
+  local _file="${1}"
+  
+  if [[ ! -f "${_file}" ]]; then
     _fsMsgError_ "File does not exist: ${_file}"
   fi
 }
