@@ -149,7 +149,8 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 
 `v2.0.3`
 * Removed deprecated code in docker routine and value get/update functions
-* Improved ufw ssh port confirmation and removed unnecessary output in function 
+* Improved ufw ssh port confirmation and removed unnecessary output in function
+* Improved cron routine for certbot and added cron remove to docker purge
 
 `v2.0.2`
 * Improved sudoers function
