@@ -1064,7 +1064,7 @@ _fsSetupUser_() {
         else
           if [[ "$(_fsCaseConfirmation_ "Is the username \"${_userTmp}\" correct?")" -eq 0 ]]; then
             if [[ "${_nr}" -eq 1 ]]; then
-              if [[ "$(_fsUserValidate_ "${_userTmp}")" -eq 0 ]]; then
+              if id -u "${_userTmp}" >/dev/null 2>&1; then
                 _fsMsgWarning_ "User already exist."
                 
                 if [[ "$(_fsCaseConfirmation_ "Login to user \"${_userTmp}\" now?")" -eq 0 ]]; then
@@ -1077,7 +1077,7 @@ _fsSetupUser_() {
                 break
               fi
             elif [[ "${_nr}" -eq 2 ]]; then
-              if [[ "$(_fsUserValidate_ "${_userTmp}")" -eq 1 ]]; then
+              if ! id -u "${_userTmp}" >/dev/null 2>&1; then
                 _fsMsgWarning_ "User does not exist. "
                 
                 if [[ "$(_fsCaseConfirmation_ "Create user \"${_userTmp}\" now?")" -eq 0 ]]; then
@@ -1547,15 +1547,14 @@ _fsSetupNginx_() {
         fi
       fi
       
-      _fsMsg_ "Create FreqUI login data now!"
+      _fsMsg_ "Create FreqUI access login data now!"
       
+          # create login data
       if [[ "$(_fsCaseConfirmation_ "Create login data manually?")" -eq 0 ]]; then
-          # create login data to access frequi
         _loginData="$(_fsLoginData_)"
         _username="$(_fsLoginDataUsername_ "${_loginData}")"
         _password="$(_fsLoginDataPassword_ "${_loginData}")"
       else
-          # generate login data if first time setup is non-interactive
         _username="$(_fsRandomBase64_ 16)"
         _password="$(_fsRandomBase64_ 16)"
         _fsMsgWarning_ 'FreqUI login data created automatically:'
@@ -1839,9 +1838,7 @@ _fsSetupNginxOpenssl_() {
     fi
     
     touch "${FS_DIR_PROXY}${_sslParam}"
-
-    #sudo chown -R "${FS_ROOTLESS}":"${FS_ROOTLESS}" "${FS_DIR_PROXY}"
-
+    
       # generate self-signed certificate
     _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_NGINX}_ip" \
     "/bin/sh -c" \
@@ -2119,14 +2116,14 @@ _fsSetupFrequiJson_() {
       fi
     fi
     
-    _fsMsg_ "Create API login data now!"
+    _fsMsg_ "Create FreqUI API(!) login data now!"
     
+      # generate login data
     if [[ "$(_fsCaseConfirmation_ "Create login data manually?")" -eq 0 ]]; then
       _loginData="$(_fsLoginData_)"
       _username="$(_fsLoginDataUsername_ "${_loginData}")"
       _password="$(_fsLoginDataPassword_ "${_loginData}")"
     else
-        # generate login data if first time setup is non-interactive
       _username="$(_fsRandomBase64_ 16)"
       _password="$(_fsRandomBase64_ 16)"
       _fsMsgWarning_ 'API login data created automatically:'
@@ -2169,44 +2166,44 @@ _fsSetupFrequiCompose_() {
   
     # note: sudo because of freqtrade docker user
   _fsFileCreate_ "${_jsonServer}" 'sudo' \
-  "{" \
-  "    \"max_open_trades\": 1," \
-  "    \"stake_currency\": \"BTC\"," \
-  "    \"stake_amount\": 0.05," \
-  "    \"fiat_display_currency\": \"USD\"," \
-  "    \"dry_run\": true," \
-  "    \"entry_pricing\": {" \
-  "        \"price_side\": \"same\"," \
-  "        \"use_order_book\": true," \
-  "        \"order_book_top\": 1," \
-  "        \"price_last_balance\": 0.0," \
-  "        \"check_depth_of_market\": {" \
-  "            \"enabled\": false," \
-  "            \"bids_to_ask_delta\": 1" \
-  "        }" \
-  "    }," \
-  "    \"exit_pricing\": {" \
-  "        \"price_side\": \"same\"," \
-  "        \"use_order_book\": true," \
-  "        \"order_book_top\": 1" \
-  "    }," \
-  "    \"exchange\": {" \
-  "        \"name\": \"binance\"," \
-  "        \"key\": \"\"," \
-  "        \"secret\": \"\"," \
-  "        \"ccxt_config\": {}," \
-  "        \"ccxt_async_config\": {" \
-  "        }," \
-  "        \"pair_whitelist\": [" \
-  "            \"ETH/BTC\"" \
-  "        ]" \
-  "    }," \
-  "    \"pairlists\": [" \
-  "        {\"method\": \"StaticPairList\"}" \
-  "    ]," \
-  "    \"bot_name\": \"${FS_FREQUI}\"," \
-  "    \"initial_state\": \"running\"" \
-  "}"
+  '{' \
+  '    "max_open_trades": 1,' \
+  '    "stake_currency": "BTC",' \
+  '    "stake_amount": 0.05,' \
+  '    "fiat_display_currency": "USD",' \
+  '    "dry_run": true,' \
+  '    "entry_pricing": {' \
+  '        "price_side": "same",' \
+  '        "use_order_book": true,' \
+  '        "order_book_top": 1,' \
+  '        "price_last_balance": 0.0,' \
+  '        "check_depth_of_market": {' \
+  '            "enabled": false,' \
+  '            "bids_to_ask_delta": 1' \
+  '        }' \
+  '    },' \
+  '    "exit_pricing": {' \
+  '        "price_side": "same",' \
+  '        "use_order_book": true,' \
+  '        "order_book_top": 1' \
+  '    },' \
+  '    "exchange": {' \
+  '        "name": "binance",' \
+  '        "key": "",' \
+  '        "secret": "",' \
+  '        "ccxt_config": {},' \
+  '        "ccxt_async_config": {' \
+  '        },' \
+  '        "pair_whitelist": [' \
+  '            "ETH/BTC"' \
+  '        ]' \
+  '    },' \
+  '    "pairlists": [' \
+  '        {"method": "StaticPairList"}' \
+  '    ],' \
+  '    "bot_name": "'"${FS_FREQUI}"'",' \
+  '    "initial_state": "running"' \
+  '}'
   
   _fsFileCreate_ "${_yml}" \
   "---" \
@@ -2237,7 +2234,7 @@ _fsStart_() {
   local _yml="${1:-}"
   local _symlink="${FS_SYMLINK}"
     
-  # check if symlink from setup routine exist
+    # check if symlink from setup routine exist
   if [[ "$(_fsSymlinkValidate_ "${_symlink}")" -eq 1 ]]; then
     _fsMsgError_ "Start setup first!"
   fi
@@ -2688,18 +2685,6 @@ _fsReset_() {
   fi
 }
 
-_fsUserValidate_() {
-  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
-  
-  local _user="${1}"
-
-  if id -u "${_user}" >/dev/null 2>&1; then
-    echo 0 # user exist
-  else
-    echo 1 # user does not exist
-  fi
-}
-
 _fsPkgs_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
@@ -2711,7 +2696,6 @@ _fsPkgs_() {
   for _pkg in "${_pkgs[@]}"; do
     if [[ "$(_fsPkgsStatus_ "${_pkg}")" -eq 1 ]]; then
       if [[ "${_pkg}" = 'docker-ce' ]]; then
-          # thanks: tomjrtsmith
         curl --connect-timeout 10 -fsSL "https://get.docker.com" -o "${_getDocker}"
         _fsFileExit_ "${_getDocker}"
         sudo chmod +x "${_getDocker}"
