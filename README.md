@@ -149,7 +149,7 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 
 `v2.0.3`
 * Removed deprecated code in docker routine and value get/update functions
-* Removed unnecessary output from ufw function
+* Improved ufw ssh port confirmation and removed unnecessary output in function 
 
 `v2.0.2`
 * Improved sudoers function
