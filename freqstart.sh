@@ -70,28 +70,15 @@ trap '_fsErr_ "${FUNCNAME:-.}" ${LINENO}' ERR
 ###
 # DOCKER
 
-_fsDockerVarsRepo_() {
-  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
-  
-  local _docker="${1}"
-  local _dockerRepo="${_docker%:*}"
-  
-  echo "${_dockerRepo}"
-}
-
 _fsDockerVarsCompare_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-  local _docker="${1}"
-  local _dockerRepo=''
-  local _dockerTag=''
+  local _dockerImage="${1}"
   local _dockerVersionLocal=''
   local _dockerVersionHub=''
   
-  _dockerRepo="$(_fsDockerVarsRepo_ "${_docker}")"
-  _dockerTag="$(_fsDockerVarsTag_ "${_docker}")"
-  _dockerVersionHub="$(_fsDockerVersionHub_ "${_dockerRepo}" "${_dockerTag}")"
-  _dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerRepo}" "${_dockerTag}")"
+  _dockerVersionHub="$(_fsDockerVersionHub_ "${_dockerImage}")"
+  _dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerImage}")"
   
   # compare versions
   if [[ -z "${_dockerVersionHub}" ]]; then
@@ -108,38 +95,23 @@ _fsDockerVarsCompare_() {
 _fsDockerVarsName_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-  local _docker="${1}"
-  local _dockerRepo=''
+  local _dockerImage="${1}"
+  local _dockerRepo="${_dockerImage%:*}"
   local _dockerName=''
   
-  _dockerRepo="$(_fsDockerVarsRepo_ "${_docker}")"
   _dockerName="${FS_NAME}"'_'"$(echo "${_dockerRepo}" | sed "s,\/,_,g" | sed "s,\-,_,g")"
   
   echo "${_dockerName}"
 }
 
-_fsDockerVarsTag_() {
+_fsDockerVersionLocal_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-  local _docker="${1}"
-  local _dockerTag="${_docker##*:}"
-  
-  if [[ "${_dockerTag}" = "${_docker}" ]]; then
-    _dockerTag="latest"
-  fi
-  
-  echo "${_dockerTag}"
-}
-
-_fsDockerVersionLocal_() {
-  [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
-  
-  local _dockerRepo="${1}"
-  local _dockerTag="${2}"
+  local _dockerImage="${1}"
   local _dockerVersionLocal=''
   
-  if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" -eq 0 ]]; then
-    _dockerVersionLocal="$(docker inspect --format='{{index .RepoDigests 0}}' "${_dockerRepo}:${_dockerTag}" \
+  if [[ "$(_fsDockerImageInstalled_ "${_dockerImage}")" -eq 0 ]]; then
+    _dockerVersionLocal="$(docker inspect --format='{{index .RepoDigests 0}}' "${_dockerImage}" \
     | sed 's/.*@//')"
     
     if [[ -n "${_dockerVersionLocal}" ]]; then
@@ -149,17 +121,18 @@ _fsDockerVersionLocal_() {
 }
 
 _fsDockerVersionHub_() {
-  [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-  local _dockerRepo="${1}"
-  local _dockerTag="${2}"
+  local _dockerImage="${1}"
+  local _dockerRepo="${_dockerImage%:*}"
+  local _dockerTag="${_dockerImage##*:}"
   local _token=''
   local _acceptM="application/vnd.docker.distribution.manifest.v2+json"
   local _acceptML="application/vnd.docker.distribution.manifest.list.v2+json"
   local _dockerName=''
   local _dockerManifest=''
   
-  _dockerName="$(_fsDockerVarsName_ "${_dockerRepo}")"
+  _dockerName="$(_fsDockerVarsName_ "${_dockerImage}")"
   _dockerManifest="${FS_TMP}"'/'"${FS_HASH}"'_'"${_dockerName}"'_'"${_dockerTag}"'.md'
   _token="$(curl --connect-timeout 10 -s "https://auth.docker.io/token?scope=repository:${_dockerRepo}:pull&service=registry.docker.io"  | jq -r '.token')"
   
@@ -169,17 +142,12 @@ _fsDockerVersionHub_() {
     -I -s -L "https://registry-1.docker.io/v2/${_dockerRepo}/manifests/${_dockerTag}"
   fi
   
-  if [[ "$(_fsFile_ "${_dockerManifest}")" -eq 0 ]]; then
-    _status="$(grep -o "200 OK" "${_dockerManifest}" || true)"
-    
-    if [[ -n "${_status}" ]]; then
+  if [[ -f "${_dockerManifest}" ]]; then    
+    if grep -q '200 OK' "${_dockerManifest}"; then
       _dockerVersionHub="$(_fsValueGet_ "${_dockerManifest}" 'etag')"
-      
-      if [[ -n "${_dockerVersionHub}" ]]; then
-        echo "${_dockerVersionHub}"
-      else
-        _fsMsgWarning_ 'Cannot retrieve docker manifest.'
-      fi
+      echo "${_dockerVersionHub}"
+    else
+      _fsMsgWarning_ 'Cannot retrieve docker manifest.'
     fi
   else
     _fsMsgWarning_ 'Cannot connect to docker hub.'
@@ -190,32 +158,28 @@ _fsDockerImage_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _dockerImage="${1}"
-  local _dockerRepo=''
-  local _dockerTag=''
   local _dockerName=''
   local _dockerCompare=''
   local _dockerStatus=2
   local _dockerVersionLocal=''
   
-  _dockerRepo="$(_fsDockerVarsRepo_ "${_dockerImage}")"
-  _dockerTag="$(_fsDockerVarsTag_ "${_dockerImage}")"
   _dockerName="$(_fsDockerVarsName_ "${_dockerImage}")"
   _dockerCompare="$(_fsDockerVarsCompare_ "${_dockerImage}")"
   
   if [[ "${_dockerCompare}" -eq 0 ]]; then
       # docker hub image version is equal
-    _fsMsg_ "Image is installed: ${_dockerRepo}:${_dockerTag}"
+    _fsMsg_ "Image is installed: ${_dockerImage}"
     _dockerStatus=0
   elif [[ "${_dockerCompare}" -eq 1 ]]; then
       # docker hub image version is greater
-    _dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerRepo}" "${_dockerTag}")"
+    _dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerImage}")"
     
     if [[ -n "${_dockerVersionLocal}" ]]; then
         # update from docker hub
-      _fsMsg_ "Image update found for: ${_dockerRepo}:${_dockerTag}"
+      _fsMsg_ "Image update found for: ${_dockerImage}"
       
       if [[ "$(_fsCaseConfirmation_ "Do you want to update now?")" -eq 0 ]]; then
-        docker pull "${_dockerRepo}"':'"${_dockerTag}"
+        docker pull "${_dockerImage}"
         
         if [[ "$(_fsDockerVarsCompare_ "${_dockerImage}")" -eq 0 ]]; then
           _fsMsg_ "Updated..."
@@ -227,36 +191,35 @@ _fsDockerImage_() {
       fi
     else
         # install from docker hub
-      docker pull "${_dockerRepo}:${_dockerTag}"
+      docker pull "${_dockerImage}"
       if [[ "$(_fsDockerVarsCompare_ "${_dockerImage}")" -eq 0 ]]; then
-        _fsMsg_ "Image installed: ${_dockerRepo}:${_dockerTag}"
+        _fsMsg_ "Image installed: ${_dockerImage}"
         _dockerStatus=1
       fi
     fi
   elif [[ "${_dockerCompare}" -eq 2 ]]; then
       # docker hub image version is unknown
-    if [[ "$(_fsDockerImageInstalled_ "${_dockerRepo}" "${_dockerTag}")" -eq 0 ]]; then
+    if [[ "$(_fsDockerImageInstalled_ "${_dockerImage}")" -eq 0 ]]; then
       _dockerStatus=0
     fi
   fi
   
   if [[ "${_dockerStatus}" -eq 2 ]]; then
-      _fsMsgError_ "Image not found: ${_dockerRepo}:${_dockerTag}"
+      _fsMsgError_ "Image not found: ${_dockerImage}"
   else
-    _dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerRepo}" "${_dockerTag}")"
+    _dockerVersionLocal="$(_fsDockerVersionLocal_ "${_dockerImage}")"
       # return local version docker image digest
     echo "${_dockerVersionLocal}"
   fi
 }
 
 _fsDockerImageInstalled_() {
-  [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
+  [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-  local _dockerRepo="${1}"
-  local _dockerTag="${2}"
+  local _dockerImage="${1}"
   local _dockerImages=''
   
-  _dockerImages="$(docker images -q "${_dockerRepo}:${_dockerTag}" 2> /dev/null)"
+  _dockerImages="$(docker images -q "${_dockerImage}" 2> /dev/null)"
   
   if [[ -n "${_dockerImages}" ]]; then
       # docker image is installed
@@ -299,7 +262,7 @@ _fsDockerPsName_() {
   fi
 }
 
-_fsDockerId2Name_() {
+_fsDockerIdName_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _dockerId="${1}"
@@ -318,7 +281,7 @@ _fsDockerRemove_() {
   
   local _dockerName="${1}"
   
-  # stop and remove active and non-active docker container
+    # stop and remove active and non-active docker container
   if [[ "$(_fsDockerPsName_ "${_dockerName}" "all")" -eq 0 ]]; then
     docker update --restart=no "${_dockerName}" > /dev/null
     docker stop "${_dockerName}" > /dev/null
@@ -625,7 +588,7 @@ _fsDockerProject_() {
     done < <(cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" ps -q)
     
     for _projectContainer in "${_projectContainers[@]}"; do
-      _containerName="$(_fsDockerId2Name_ "${_projectContainer}")"
+      _containerName="$(_fsDockerIdName_ "${_projectContainer}")"
       _containerActive="$(_fsDockerPsName_ "${_containerName}")"
       _containerJsonInner=''
       _strategyUpdate=''
@@ -638,7 +601,7 @@ _fsDockerProject_() {
       
         # start container
       if [[ "${_projectMode}" =~ "compose" ]]; then
-          # skip container if autostart is active but not true
+          # skip container if autoupdate is active but not true
         if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ ! "${_containerAutoupdate}" = 'true' ]]; then
           continue
         fi
@@ -652,10 +615,10 @@ _fsDockerProject_() {
           fi
         fi
         
-          # create docker network if it does not exist; credit: https://stackoverflow.com/a/59878917
+          # create docker network; credit: https://stackoverflow.com/a/59878917
         docker network create --subnet="${FS_NETWORK_SUBNET}" --gateway "${FS_NETWORK_GATEWAY}" "${FS_NETWORK}" > /dev/null 2> /dev/null || true
         
-          # connect container to docker network excl. nginx and certbot
+          # connect container to docker network
         if [[ "${_containerName}" = "${FS_PROXY_BINANCE}" ]]; then
           docker network connect --ip "${FS_PROXY_BINANCE_IP}" "${FS_NETWORK}" "${_containerName}" > /dev/null 2> /dev/null || true
         elif [[ "${_containerName}" = "${FS_PROXY_KUCOIN}" ]]; then
