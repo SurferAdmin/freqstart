@@ -230,7 +230,7 @@ _fsDockerImageInstalled_() {
   fi
 }
 
-_fsDockerPsName_() {
+_fsDockerContainerPs_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _dockerName="${1}"
@@ -242,14 +242,10 @@ _fsDockerPsName_() {
   # credit: https://serverfault.com/a/733498
   # credit: https://stackoverflow.com/a/44731522
   if [[ "${_dockerMode}" = "all" ]]; then
-    _dockerPsAll="$(docker ps -a --format '{{.Names}}' | grep -ow "${_dockerName}")" \
-    || _dockerPsAll=""
-    
+    _dockerPsAll="$(docker ps -a --format '{{.Names}}' | grep -ow "${_dockerName}" || true)"
     [[ -n "${_dockerPsAll}" ]] && _dockerMatch=0
   else
-    _dockerPs="$(docker ps --format '{{.Names}}' | grep -ow "${_dockerName}")" \
-    || _dockerPs=""
-    
+    _dockerPs="$(docker ps --format '{{.Names}}' | grep -ow "${_dockerName}" || true)"
     [[ -n "${_dockerPs}" ]] && _dockerMatch=0
   fi
   
@@ -262,7 +258,7 @@ _fsDockerPsName_() {
   fi
 }
 
-_fsDockerIdName_() {
+_fsDockerContainerName_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _dockerId="${1}"
@@ -282,12 +278,12 @@ _fsDockerRemove_() {
   local _dockerName="${1}"
   
     # stop and remove active and non-active docker container
-  if [[ "$(_fsDockerPsName_ "${_dockerName}" "all")" -eq 0 ]]; then
+  if [[ "$(_fsDockerContainerPs_ "${_dockerName}" "all")" -eq 0 ]]; then
     docker update --restart=no "${_dockerName}" > /dev/null
     docker stop "${_dockerName}" > /dev/null
     docker rm -f "${_dockerName}" > /dev/null
     
-    if [[ "$(_fsDockerPsName_ "${_dockerName}" "all")" -eq 0 ]]; then
+    if [[ "$(_fsDockerContainerPs_ "${_dockerName}" "all")" -eq 0 ]]; then
       _fsMsgError_ "Cannot remove container: ${_dockerName}"
     fi
   fi
@@ -512,6 +508,7 @@ _fsDockerProject_() {
   _projectFileType="${_projectFile##*.}"
   _projectFileName="${_projectFile%.*}"
   _projectName="${_projectFileName//\-/\_}"
+  _procjectJson=()
   _containerConfPath="${FS_DIR}/${_projectFileName}.conf.json"
   _url="$(_fsValueGet_ "${FS_CONFIG}" '.url')"
   
@@ -579,13 +576,14 @@ _fsDockerProject_() {
   fi
   
   if [[ "${_error}" -eq 0 ]] && [[ ! "${_projectMode}" =~ 'run' ]]; then
+    _projectContainers=()
     while read -r; do
       _projectContainers+=( "$REPLY" )
     done < <(cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" ps -q)
     
     for _projectContainer in "${_projectContainers[@]}"; do
-      _containerName="$(_fsDockerIdName_ "${_projectContainer}")"
-      _containerActive="$(_fsDockerPsName_ "${_containerName}")"
+      _containerName="$(_fsDockerContainerName_ "${_projectContainer}")"
+      _containerActive="$(_fsDockerContainerPs_ "${_containerName}")"
       _containerJsonInner=''
       _strategyUpdate=''
       _containerStrategyUpdate=''
@@ -698,7 +696,7 @@ _fsDockerProject_() {
           _containerApiJson="$(echo "${_containerCmd}" | grep -o "${FS_FREQUI}.json" || true)"
           
           if [[ -n "${_containerApiJson}" ]]; then
-            _fsMsg_ "FreqUI: ${_url}/${FS_NAME}/${_containerName}"
+            _fsMsg_ "FreqUI (API Url): ${_url}/${FS_NAME}/${_containerName}"
           else
             _fsMsg_ "Bot is not exposed to FreqUI."
           fi
@@ -772,7 +770,7 @@ _fsDockerProject_() {
         if [[ "$(_fsCaseConfirmation_ "Quit container?")" -eq 0 ]]; then
           _fsValueUpdate_ "${_containerConfPath}" '.'"${_containerName}"'.autoupdate' 'false'
           _fsDockerRemove_ "${_containerName}"
-          if [[ "$(_fsDockerPsName_ "${_containerName}")" -eq 1 ]]; then
+          if [[ "$(_fsDockerContainerPs_ "${_containerName}")" -eq 1 ]]; then
             _fsMsg_ "[SUCCESS] Container is removed: ${_containerName}"
           else
             _fsMsgWarning_ "Container not removed: ${_containerName}"
@@ -1349,7 +1347,7 @@ _fsSetupBinanceProxy_() {
   _fsMsgTitle_ 'PROXY FOR BINANCE'
   
   while true; do
-    if [[ "$(_fsDockerPsName_ "${FS_PROXY_BINANCE}")" -eq 0 ]]; then
+    if [[ "$(_fsDockerContainerPs_ "${FS_PROXY_BINANCE}")" -eq 0 ]]; then
       _fsMsg_ 'Is already running. (Port: 8990-8991)'
       
       if [[ "$(_fsCaseConfirmation_ "Skip update?")" -eq 0 ]]; then
@@ -1430,7 +1428,7 @@ _fsSetupKucoinProxy_() {
   _fsMsgTitle_ 'PROXY FOR KUCOIN'
   
   while true; do
-    if [[ "$(_fsDockerPsName_ "${FS_PROXY_KUCOIN}")" -eq 0 ]]; then
+    if [[ "$(_fsDockerContainerPs_ "${FS_PROXY_KUCOIN}")" -eq 0 ]]; then
       _fsMsg_ 'Is already running. (Port: 8980)'
       
       if [[ "$(_fsCaseConfirmation_ "Skip update?")" -eq 0 ]]; then
@@ -1503,7 +1501,7 @@ _fsSetupNginx_() {
   _ipLocal="$(_fsValueGet_ "${FS_CONFIG}" '.ip_local')"
   
   while true; do
-    if [[ "$(_fsDockerPsName_ "${FS_NGINX}_ip")" -eq 0 ]] || [[ "$(_fsDockerPsName_ "${FS_NGINX}_domain")" -eq 0 ]]; then
+    if [[ "$(_fsDockerContainerPs_ "${FS_NGINX}_ip")" -eq 0 ]] || [[ "$(_fsDockerContainerPs_ "${FS_NGINX}_domain")" -eq 0 ]]; then
       if [[ -n "${_ipPublic}" ]] || [[ -n "${_ipLocal}" ]]; then
         if [[ -n "${_ipPublic}" ]]; then
           _ipPublicTemp="$(dig +short myip.opendns.com @resolver1.opendns.com)"
@@ -1856,7 +1854,7 @@ _fsSetupNginxOpenssl_() {
     # start nginx ip container
   _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force'
   
-  if [[ "$(_fsDockerPsName_ "${FS_NGINX}_ip")" -eq 1 ]]; then
+  if [[ "$(_fsDockerContainerPs_ "${FS_NGINX}_ip")" -eq 1 ]]; then
     _fsMsgError_ 'Nginx container is not running!'
   fi
 }
@@ -2057,7 +2055,7 @@ _setupNginxLetsencrypt_() {
       # start nginx domain container
     _fsDockerProject_ "${FS_NGINX_YML}" 'compose-force' "${FS_NGINX}_domain"
     
-    if [[ "$(_fsDockerPsName_ "${FS_NGINX}_domain")" -eq 1 ]]; then
+    if [[ "$(_fsDockerContainerPs_ "${FS_NGINX}_domain")" -eq 1 ]]; then
       _fsMsgError_ 'Nginx container is not running!'
     fi
     
@@ -2076,7 +2074,7 @@ _fsSetupFrequi_() {
   _fsMsgTitle_ "FREQUI"
   
   while true; do
-    if [[ "$(_fsDockerPsName_ "${FS_FREQUI}")" -eq 0 ]]; then
+    if [[ "$(_fsDockerContainerPs_ "${FS_FREQUI}")" -eq 0 ]]; then
       _fsMsg_ "Is active: ${_url}"
       if [[ "$(_fsCaseConfirmation_ "Skip update?")" -eq 0 ]]; then
         break
