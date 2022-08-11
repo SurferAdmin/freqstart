@@ -1368,41 +1368,41 @@ _fsSetupBinanceProxy_() {
     
       # binance proxy json file; note: sudo because of freqtrade docker user
     _fsFileCreate_ "${FS_DIR_USER_DATA}/${FS_PROXY_BINANCE}.json" 'sudo' \
-    "{" \
-    "    \"exchange\": {" \
-    "        \"name\": \"binance\"," \
-    "        \"ccxt_config\": {" \
-    "            \"enableRateLimit\": false," \
-    "            \"urls\": {" \
-    "                \"api\": {" \
-    "                    \"public\": \"http://${FS_PROXY_BINANCE_IP}:8990/api/v3\"" \
-    "                }" \
-    "            }" \
-    "        }," \
-    "        \"ccxt_async_config\": {" \
-    "            \"enableRateLimit\": false" \
-    "        }" \
-    "    }" \
-    "}"
+    '{' \
+    '    "exchange": {' \
+    '        "name": "binance",' \
+    '        "ccxt_config": {' \
+    '            "enableRateLimit": false,' \
+    '            "urls": {' \
+    '                "api": {' \
+    '                    "public": "http://'"${FS_PROXY_BINANCE_IP}"':8990/api/v3"' \
+    '                }' \
+    '            }' \
+    '        },' \
+    '        "ccxt_async_config": {' \
+    '            "enableRateLimit": false' \
+    '        }' \
+    '    }' \
+    '}'
     
       # binance proxy futures json file; note: sudo because of freqtrade docker user
     _fsFileCreate_ "${FS_DIR_USER_DATA}/${FS_PROXY_BINANCE}_futures.json" 'sudo' \
-    "{" \
-    "    \"exchange\": {" \
-    "        \"name\": \"binance\"," \
-    "        \"ccxt_config\": {" \
-    "            \"enableRateLimit\": false," \
-    "            \"urls\": {" \
-    "                \"api\": {" \
-    "                    \"public\": \"http://${FS_PROXY_BINANCE_IP}:8991/api/v3\"" \
-    "                }" \
-    "            }" \
-    "        }," \
-    "        \"ccxt_async_config\": {" \
-    "            \"enableRateLimit\": false" \
-    "        }" \
-    "    }" \
-    "}"
+    '{' \
+    '    "exchange": {' \
+    '        "name": "binance",' \
+    '        "ccxt_config": {' \
+    '            "enableRateLimit": false,' \
+    '            "urls": {' \
+    '                "api": {' \
+    '                    "public": "http://'"${FS_PROXY_BINANCE_IP}"':8991/api/v3"' \
+    '                }' \
+    '            }' \
+    '        },' \
+    '        "ccxt_async_config": {' \
+    '            "enableRateLimit": false' \
+    '        }' \
+    '    }' \
+    '}'
     
       # binance proxy project file
     _fsFileCreate_ "${_yml}" \
@@ -1449,25 +1449,25 @@ _fsSetupKucoinProxy_() {
     
       # kucoin proxy json file; note: sudo because of freqtrade docker user
     _fsFileCreate_ "${FS_DIR_USER_DATA}/${FS_PROXY_KUCOIN}.json" 'sudo' \
-    "{" \
-    "    \"exchange\": {" \
-    "        \"name\": \"kucoin\"," \
-    "        \"ccxt_config\": {" \
-    "            \"enableRateLimit\": false," \
-    "            \"timeout\": 60000," \
-    "            \"urls\": {" \
-    "                \"api\": {" \
-    "                    \"public\": \"http://${FS_PROXY_KUCOIN_IP}:8980/kucoin\"," \
-    "                    \"private\": \"http://${FS_PROXY_KUCOIN_IP}:8980/kucoin\"" \
-    "                }" \
-    "            }" \
-    "        }," \
-    "        \"ccxt_async_config\": {" \
-    "            \"enableRateLimit\": false," \
-    "            \"timeout\": 60000" \
-    "        }" \
-    "    }" \
-    "}"
+    '{' \
+    '    "exchange": {' \
+    '        "name": "kucoin",' \
+    '        "ccxt_config": {' \
+    '            "enableRateLimit": false,' \
+    '            "timeout": 60000,' \
+    '            "urls": {' \
+    '                "api": {' \
+    '                    "public": "http://'"${FS_PROXY_KUCOIN_IP}"':8980/kucoin",' \
+    '                    "private": "http://'"${FS_PROXY_KUCOIN_IP}"':8980/kucoin"' \
+    '                }' \
+    '            }' \
+    '        },' \
+    '        "ccxt_async_config": {' \
+    '            "enableRateLimit": false,' \
+    '            "timeout": 60000' \
+    '        }' \
+    '    }' \
+    '}'
     
       # kucoin proxy project file
     _fsFileCreate_ "${_yml}" \
