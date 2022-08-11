@@ -143,8 +143,13 @@ _fsDockerVersionHub_() {
   fi
   
   if [[ -f "${_dockerManifest}" ]]; then    
-    if grep -q '200 OK' "${_dockerManifest}"; then
-      _dockerVersionHub="$(_fsValueGet_ "${_dockerManifest}" 'etag')"
+    _dockerVersionHub="$(grep -o 'etag:' "${_dockerManifest}" \
+    | sed "s,\",,g" \
+    | sed "s,\s,,g" \
+    | sed "s,etag:,," \
+    || true)"
+    
+    if [[ -n "${_dockerVersionHub}" ]]; then
       echo "${_dockerVersionHub}"
     else
       _fsMsgWarning_ 'Cannot retrieve docker manifest.'
@@ -2472,18 +2477,9 @@ _fsValueGet_() {
   local _key="${2}"
   local _value=''
   
-  if [[ "$(_fsFile_ "${_filePath}")" -eq 0 ]]; then
-    if [[ "${_fileType}" = 'json' ]]; then
-        # get value from json
-      _value="$(jq -r "${_key}"' // empty' "${_filePath}")"
-    else
-        # get value from other filetypes
-      _value="$(cat "${_filePath}" | { grep -o "${_key}\"\?: \"\?.*\"\?" || true; } \
-      | sed "s,\",,g" \
-      | sed "s,\s,,g" \
-      | sed "s#,##g" \
-      | sed "s,${_key}:,,")"
-    fi
+  if [[ -f "${_filePath}" ]]; then
+      # get value from json
+    _value="$(jq -r "${_key}"' // empty' "${_filePath}")"
     
     if [[ -n "${_value}" ]]; then
       echo "${_value}"
@@ -2496,7 +2492,6 @@ _fsValueUpdate_() {
   
   local _filePath="${1}"
   local _file="${_filePath##*/}"
-  local _fileType="${_filePath##*.}"
   local _fileHash=''
   local _fileTmp=''
   local _json=''
@@ -2509,29 +2504,13 @@ _fsValueUpdate_() {
   _fileHash="$(_fsRandomHex_ 8)"
   _fileTmp="${FS_TMP}/${_fileHash}_${_file}"
   
-  if [[ "${_fileType}" = 'json' ]]; then
-      # update value for json
-    _json="$(_fsValueGet_ "${_filePath}" '.')"
-      # credit: https://stackoverflow.com/a/24943373
-    _jsonUpdate="$(jq "${_key}"' = $newVal' --arg newVal "${_value}" <<< "${_json}")"
-    
-    printf '%s\n' "${_jsonUpdate}" | jq . | tee "${_fileTmp}" > /dev/null
-  else
-      # update value for other filetypes
-    cp "${_filePath}" "${_fileTmp}"
-    
-    if grep -qow "\"${_key}\": \".*\"" "${_fileTmp}"; then # "key": "value"
-      sed -i "s,\"${_key}\": \".*\",\"${_key}\": \"${_value}\"," "${_fileTmp}"
-    elif grep -qow "\"${_key}\": \".*\"" "${_fileTmp}"; then # "key": value
-      sed -i "s,\"${_key}\": .*,\"${_key}\": ${_value}," "${_fileTmp}"
-    elif grep -qow "${_key}: \".*\"" "${_fileTmp}"; then # key: "value"
-      sed -i "s,${_key}: \".*\",${_key}: \"${_value}\"," "${_fileTmp}"
-    elif grep -qow "${_key}: \".*\"" "${_fileTmp}"; then # key: value
-      sed -i "s,${_key}: .*,${_key}: ${_value}," "${_fileTmp}"
-    else
-      _fsMsgError_ 'Cannot find key "'"${_key}"'" in: '"${_filePath}"
-    fi
-  fi
+    # update value for json
+  _json="$(_fsValueGet_ "${_filePath}" '.')"
+    # credit: https://stackoverflow.com/a/24943373
+  _jsonUpdate="$(jq "${_key}"' = $newVal' --arg newVal "${_value}" <<< "${_json}")"
+  
+  printf '%s\n' "${_jsonUpdate}" | jq . | tee "${_fileTmp}" > /dev/null
+  
     # override file if different
   if ! cmp --silent "${_fileTmp}" "${_filePath}"; then
     cp "${_fileTmp}" "${_filePath}"
