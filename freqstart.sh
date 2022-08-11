@@ -214,8 +214,8 @@ _fsDockerContainerPs_() {
   local _dockerPsAll=''
   local _dockerMatch=1
   
-  # credit: https://serverfault.com/a/733498
-  # credit: https://stackoverflow.com/a/44731522
+    # credit: https://serverfault.com/a/733498
+    # credit: https://stackoverflow.com/a/44731522
   if [[ "${_dockerMode}" = "all" ]]; then
     _dockerPsAll="$(docker ps -a --format '{{.Names}}' | grep -ow "${_dockerName}" || true)"
     [[ -n "${_dockerPsAll}" ]] && _dockerMatch=0
@@ -310,10 +310,10 @@ _fsDockerProjectStrategies_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _ymlPath="${1}"
-  local _strategies=''
-  local _strategiesDeduped=''
+  local _strategies=()
+  local _strategiesDeduped=()
   local _strategy=''
-  local _strategiesDir=''
+  local _strategiesDir=()
   local _strategiesDirDeduped=()
   local _strategyDir=''
   local _strategyPath=''
@@ -322,7 +322,6 @@ _fsDockerProjectStrategies_() {
   local _error=0
   
     # download or update implemented strategies
-  _strategies=()
   while read -r; do
     _strategies+=( "$REPLY" )
   done < <(grep -vE '^\s+#' "${_ymlPath}" \
@@ -334,13 +333,11 @@ _fsDockerProjectStrategies_() {
   | sed "s,\-\-strategy,,g" || true)
   
   if (( ${#_strategies[@]} )); then
-    _strategiesDeduped=()
     while read -r; do
       _strategiesDeduped+=( "$REPLY" )
     done < <(_fsDedupeArray_ "${_strategies[@]}")
     
       # validate optional strategy paths in project file
-    _strategiesDir=()
     while read -r; do
       _strategiesDir+=( "$REPLY" )
     done < <(grep -vE '^\s+#' "${_ymlPath}" \
@@ -390,13 +387,12 @@ _fsDockerProjectConfigs_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _ymlPath="${1}"
-  local _configs=''
+  local _configs=()
   local _configsDeduped=()
   local _config=''
   local _configPath=''
   local _error=0
   
-  _configs=()
   while read -r; do
     _configs+=( "$REPLY" )
   done < <(grep -vE '^\s+#' "${_ymlPath}" \
@@ -416,7 +412,7 @@ _fsDockerProjectConfigs_() {
     for _config in "${_configsDeduped[@]}"; do
       _configPath="${FS_DIR}/${_config}"
       if [[ ! -f "${_configPath}" ]]; then
-        _fsMsg_ "\"$(basename "${_configPath}")\" config file does not exist."
+        _fsMsg_ "Config file does not exist: ${_configPath##*/}"
         _error=$((_error+1))
       fi
     done
@@ -773,7 +769,7 @@ _fsDockerProject_() {
       _fsDockerAutoupdate_ "${_projectFile}" 'remove'
     fi
     
-      # clear deprecated networks
+      # clear orphaned networks
     yes $'y' | docker network prune > /dev/null || true
   elif [[ "${_projectMode}" = "quit" ]]; then
     _fsDockerAutoupdate_ "${_projectFile}" "remove"
@@ -1066,8 +1062,7 @@ _fsSetupUser_() {
       break
     done
     
-    if [[ "${_nr}" -eq 1 ]] && [[ -n "${_userTmp}" ]]; then
-        # do not add the user to the lastlog and faillog databases to avoid excessive log files
+    if [[ "${_nr}" -eq 1 ]]; then
       sudo adduser --gecos '' "${_userTmp}"
     fi
     
@@ -1215,6 +1210,7 @@ _fsSetupFirewall_() {
 }
 
 # FREQTRADE
+# credit: https://github.com/freqtrade/freqtrade
 
 _fsSetupFreqtrade_() {
   local _dockerYml="${FS_DIR}/${FS_NAME}_setup.yml"
@@ -1709,7 +1705,7 @@ _fsSetupNginxOpenssl_() {
   "  ${FS_NGINX}_ip:" \
   "    container_name: ${FS_NGINX}_ip" \
   '    image: amd64/nginx:stable' \
-  "    ports:" \
+  '    ports:' \
   '      - "0.0.0.0:80:80"' \
   '      - "0.0.0.0:443:443"' \
   '    volumes:' \
@@ -1773,6 +1769,8 @@ _fsSetupNginxOpenssl_() {
   "ssl_certificate ${_sslCert};" \
   "ssl_certificate_key ${_sslKey};"
   
+    # thanks: this part was the initiator for freqstart
+    # credit: https://github.com/DutchCryptoDad/SecureFreqtradeServer
   _fsFileCreate_ "${FS_DIR_PROXY}${_sslConfParam}" \
   "ssl_protocols TLSv1.2;" \
   "ssl_prefer_server_ciphers on;" \
@@ -2610,7 +2608,7 @@ _fsRandomBase64UrlSafe_() {
 
 _fsReset_() {
   _fsMsgTitle_ 'RESET'
-  _fsMsgWarning_ 'Stopp and remove all containers, networks and images!'
+  _fsMsgWarning_ 'Stopp and remove all containers, networks and images (keep all files)!'
   
   if [[ "$(_fsCaseConfirmation_ "Are you sure you want to continue?")" -eq 0 ]]; then
       # stop and remove docker images, container and networks but keeps all files
@@ -2716,7 +2714,7 @@ _fsScriptLock_() {
   
   if [[ -n "${FS_TMP}" ]]; then
     if [[ -d "${_lockDir}" ]]; then
-        # set error to 99 and do not remove tmp dir
+        # set error to 99 and do not remove tmp dir for debugging
       _fsMsgError_ "Script is already running! Delete folder if this is an error: sudo rm -rf ${FS_TMP}" 99
     elif ! mkdir -p "${_lockDir}" 2> /dev/null; then
       _fsMsgError_ "Unable to acquire script lock: ${_lockDir}"
