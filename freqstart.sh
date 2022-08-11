@@ -501,10 +501,7 @@ _fsDockerProject_() {
   local _strategyPath=''
   local _regex="(${FS_PROXY_KUCOIN}|${FS_PROXY_BINANCE}|${FS_NGINX}|${FS_CERTBOT}|${FS_FREQUI})"
   local _error=0
-  local _url=0
-  
-  _url="$(_fsValueGet_ "${FS_CONFIG}" '.url' 2> /dev/null || true)"
-
+  local _url=''
   
   if [[ -n "${_projectArgs}" ]]; then
     shift;shift;shift
@@ -515,9 +512,8 @@ _fsDockerProject_() {
   _projectFileType="${_projectFile##*.}"
   _projectFileName="${_projectFile%.*}"
   _projectName="${_projectFileName//\-/\_}"
-  _procjectJson=()
-  _projectContainers=()
   _containerConfPath="${FS_DIR}/${_projectFileName}.conf.json"
+  _url="$(_fsValueGet_ "${FS_CONFIG}" '.url')"
   
     # unset filetype if its matching file
   [[ "${_projectFile}" = "${_projectFileType}" ]] && _projectFileType=''
@@ -607,7 +603,7 @@ _fsDockerProject_() {
         fi
         
         if [[ "${_containerActive}" -eq 1 ]]; then
-          if [[ ! $_containerName =~ $_regex ]]; then
+          if [[ ! "${_containerName}" =~ $_regex ]]; then
             if [[ "$(_fsCaseConfirmation_ "Start container?")" -eq 1 ]]; then
               _fsDockerRemove_ "${_containerName}"
               continue
@@ -838,14 +834,22 @@ _fsDockerStrategy_() {
   local _setup=0
   local _error=0
   
-    # create the only necessary strategy for proxies if file doesnt exist or use strategies file from git or create your own
+    # create the strategy config
   if [[ "$(_fsFile_ "${FS_STRATEGIES}")" -eq 1 ]]; then
-    _fsFileCreate_ "${FS_STRATEGIES}" \
-    "{" \
-    "  \"DoesNothingStrategy\": [" \
-    "    \"https://raw.githubusercontent.com/freqtrade/freqtrade-strategies/master/user_data/strategies/berlinguyinca/DoesNothingStrategy.py\"" \
-    "  ]" \
-    "}"
+    if [[ "$(_fsCaseConfirmation_ "Download latest strategies config?")" -eq 0 ]]; then
+      curl --connect-timeout 10 -fsSL "https://raw.githubusercontent.com/berndhofer/freqstart/stable/freqstart.strategies.json" -o "${FS_STRATEGIES}"
+      
+      _fsFileExit_ "${FS_STRATEGIES}"
+    else
+      _fsFileCreate_ "${FS_STRATEGIES}" \
+      '{' \
+      '  "DoesNothingStrategy": [' \
+      '    "https://raw.githubusercontent.com/freqtrade/freqtrade-strategies/master/user_data/strategies/berlinguyinca/DoesNothingStrategy.py"' \
+      '  ]' \
+      '}'
+      
+      _fsMsgWarning_ 'Only necessary strategy for FreqUI is implemented.'
+    fi
   fi
   
   _strategyUrls=()
@@ -899,7 +903,6 @@ _fsDockerStrategy_() {
     if [[ "${_error}" -gt 0 ]]; then
       _fsMsgWarning_ "Failed to install or update: ${_strategyName}"
     elif [[ "${_setup}" -gt 0 ]]; then
-      _fsMsg_ "Strategy updated: ${_strategyName}"
       _strategyUpdate="$(_fsTimestamp_)"
       _strategyJson="$(jq -n \
         --arg update "${_strategyUpdate}" \
@@ -907,6 +910,8 @@ _fsDockerStrategy_() {
       )"
         # note: sudo because of freqtrade docker user
       printf '%s\n' "${_strategyJson}" | jq . | sudo tee "${_strategyDir}/${_strategyName}.conf.json" > /dev/null
+      
+      _fsMsg_ "Strategy updated: ${_strategyName}"
     else
       _fsMsg_ "Strategy is installed: ${_strategyName}"
     fi
