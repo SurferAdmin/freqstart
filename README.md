@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v2.0.3 - rootless
+# FREQSTART v2.0.4 - rootless
 (Requires full setup. Do not update from versions below v2.0.0)
 
 See what has been changed: <a href="#changelog">Changelog</a>
@@ -34,7 +34,7 @@ The following list is in alphabetical order and does not represent any recommend
 * MultiMA_TSL (Author: stash86, https://github.com/stash86/MultiMA_TSL/)
 * NostalgiaForInfinityX (Author: iterativ, https://github.com/iterativv/NostalgiaForInfinity)
 
-Help expanding the strategies list and include config files if possible: [freqstart.strategies.json](https://github.com/berndhofer/freqstart/blob/develop/freqstart.strategies.json)
+Help expanding the strategies list and include config files if possible: [freqstart.strategies.json](https://github.com/berndhofer/freqstart/blob/develop/script/strategies.json)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -146,6 +146,12 @@ With Freqstart you are no longer bound to a single docker-compose.yml and can fr
 See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full list of proposed features (and known issues).
 
 ### Changelog
+
+`v2.0.4`
+* Fixed missing docker host variable while running script from conrjob (Review "crontab -e" if necessary)
+* Added "/script" directory to maintain a cleaner approach
+* Docker project routine can run now projects from different directories and defaults to script directory when no directory is set (Feel free to place your custom project yml files wherever you like)
+* Improved strategies routine to allow additional custom strategies file (Do not change "/script/strategies.json" but add "/strategies.json" file optionally)
 
 `v2.0.3`
 * Removed deprecated code in docker routine and value get/update functions

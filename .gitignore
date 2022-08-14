@@ -1,7 +1,5 @@
-
 *.json
-!spec/freqstart.strategies.json
-freqstart.autoupdate.sh
+!spec/strategies.json
 *.yml
 user_data/
-proxy/
+script/
