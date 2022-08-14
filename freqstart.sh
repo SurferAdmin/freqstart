@@ -2329,10 +2329,12 @@ _fsSudoer_() {
   local _user=''
   local _userId=''
   local _userSudoer=''
+  local _userSudoerFile=''
   
   _user="$(id -u -n)"
   _userId="$(id -u)"
   _userSudoer="${_user} ALL=(ALL:ALL) NOPASSWD: ALL"
+  _userSudoerFile="/etc/sudoers.d/${_user}"
   
   if [[ "${_userId}" -ne 0 ]]; then
       # validate if user can use sudo
@@ -2340,9 +2342,9 @@ _fsSudoer_() {
       _fsMsgError_ 'User cannot use sudo! Login to root and run command: '"sudo usermod -a -G sudo ${_user}"
     fi
     
-    if ! sudo -l | grep -q "${_userSudoer}"; then
+    if ! sudo grep -q "${_userSudoer}" "${_userSudoerFile}" 2> /dev/null; then
       echo "${_userSudoer}" | sudo tee "/etc/sudoers.d/${_user}" > /dev/null
-      _fsMsg_ 'Added to sudoer!'
+      _fsMsgTitle_ 'User added to sudoers (No password for sudo commands)!'
     fi
   fi
 }
