@@ -29,12 +29,12 @@ readonly FS_SYMLINK="/usr/local/bin/${FS_NAME}"
 readonly FS_DIR="$(dirname "$(readlink --canonicalize-existing "${0}" 2> /dev/null)")"
 readonly FS_FILE="${0##*/}"
 readonly FS_PATH="${FS_DIR}/${FS_FILE}"
-readonly FS_DIR_PROXY="${FS_DIR}/proxy"
+readonly FS_DIR_SCRIPT="${FS_DIR}/script"
 readonly FS_DIR_USER_DATA="${FS_DIR}/user_data"
 
-readonly FS_CONFIG="${FS_DIR}/${FS_NAME}.conf.json"
-readonly FS_STRATEGIES="${FS_DIR}/${FS_NAME}.strategies.json"
-readonly FS_AUTOUPDATE="${FS_DIR}/${FS_NAME}.autoupdate.sh"
+readonly FS_CONFIG="${FS_DIR_SCRIPT}/conf.json"
+readonly FS_STRATEGIES="${FS_DIR_SCRIPT}/strategies.json"
+readonly FS_AUTO="${FS_DIR_SCRIPT}/auto.sh"
 
 readonly FS_NETWORK="${FS_NAME}_network"
 readonly FS_NETWORK_SUBNET='172.35.0.0/16'
@@ -45,15 +45,16 @@ readonly FS_PROXY_BINANCE_IP='172.35.0.253'
 
 readonly FS_PROXY_KUCOIN="${FS_NAME}_proxy_kucoin"
 readonly FS_PROXY_KUCOIN_IP='172.35.0.252'
+readonly FS_PROXY_KUCOIN_YML='172.35.0.252'
 
 readonly FS_NGINX="${FS_NAME}_nginx"
-readonly FS_NGINX_YML="${FS_DIR}/${FS_NAME}_nginx.yml"
+readonly FS_NGINX_YML="${FS_DIR_SCRIPT}/${FS_NAME}_nginx.yml"
 readonly FS_NGINX_CONFD="/etc/nginx/conf.d"
 readonly FS_NGINX_CONFD_FREQUI="${FS_NGINX_CONFD}/frequi.conf"
 readonly FS_NGINX_CONFD_HTPASSWD="${FS_NGINX_CONFD}/.htpasswd"
 
 readonly FS_CERTBOT="${FS_NAME}_certbot"
-readonly FS_CERTBOT_CRON="freqstart --cert --yes"
+readonly FS_CERTBOT_CRON="${FS_NAME} --cert --yes"
 readonly FS_FREQUI="${FS_NAME}_frequi"
 readonly FS_HASH="$(xxd -l 8 -ps /dev/urandom)"
 
@@ -428,14 +429,17 @@ _fsDockerProjectConfigs_() {
 _fsDockerProject_() {
   [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-  local _projectPath="${FS_DIR}/${1##*/}"
+  local _project="${1}"
   local _projectMode="${2}" # compose, compose-force, run, run-force, validate, quit
   local _projectService="${3:-}" # optional: service
   local _projectArgs="${4:-}" # optional: args
-  local _projectFile=''
-  local _projectFileType=''
-  local _projectFileName=''
-  local _projectName=''
+  local _projectDir="${_project%/*}"
+  [[ -z "${_projectDir}" ]] && _projectDir="${FS_DIR}"
+  local _projectFile="${_project##*/}"
+  local _projectFileType="${_projectFile##*.}"
+  local _projectFileName="${_projectFile%.*}"
+  local _projectName="${_projectFileName//\-/\_}"
+  local _projectConf="${_projectDir}/${_projectFileName}.conf.json"
   local _projectImages=1
   local _projectStrategies=1
   local _projectConfigs=1
@@ -443,6 +447,7 @@ _fsDockerProject_() {
   local _projectContainer=''
   local _procjectJson=()
   local _projectShell=''
+  
   local _containerCmd=''
   local _containerActive=''
   local _containerRestart=1
@@ -452,13 +457,13 @@ _fsDockerProject_() {
   local _containerStrategyUpdate=''
   local _containerJson=''
   local _containerJsonInner=''
-  local _containerConfPath=''
   local _containerApiJson=''
   local _containerLogfile=''
   local _containerLogfileTmp=''
   local _containerCount=0
   local _containerAutoupdate='false'
   local _containerAutoupdateCount=0
+  
   local _strategyUpdate=''
   local _strategyDir=''
   local _strategyPath=''
@@ -471,11 +476,14 @@ _fsDockerProject_() {
     _projectArgs="${*:-}" # optional: args
   fi
   
-  _projectFile="${_projectPath##*/}"
-  _projectFileType="${_projectFile##*.}"
-  _projectFileName="${_projectFile%.*}"
-  _projectName="${_projectFileName//\-/\_}"
-  _containerConfPath="${FS_DIR}/${_projectFileName}.conf.json"
+    # export docker host variable
+  _user="$(_fsValueGet_ "${FS_CONFIG}" '.user')"
+
+  if [[ -n "${_user}" ]]; then
+    _userId="$(id -u "${_user}")"
+    export "DOCKER_HOST=unix:///run/user/${_userId}/docker.sock"
+  fi
+  
   _url="$(_fsValueGet_ "${FS_CONFIG}" '.url')"
   
     # unset filetype if its matching file
@@ -486,7 +494,7 @@ _fsDockerProject_() {
     _fsMsgError_ "File type is missing: ${_projectFile}"
   else
     if [[ "${_projectFileType}" = 'yml' ]]; then
-      if [[ ! -f "${_projectPath}" ]]; then
+      if [[ ! -f "${_projectDir}/${_projectFile}" ]]; then
         _fsMsgError_ "File not found: ${_projectFile}"
       fi
     else
@@ -497,9 +505,9 @@ _fsDockerProject_() {
   if [[ "${_projectMode}" =~ "compose" ]]; then
     _fsMsgTitle_ "Compose project: ${_projectFile}"
     
-    _projectStrategies="$(_fsDockerProjectStrategies_ "${_projectPath}")"
-    _projectConfigs="$(_fsDockerProjectConfigs_ "${_projectPath}")"
-    _projectImages="$(_fsDockerProjectImages_ "${_projectPath}")"
+    _projectStrategies="$(_fsDockerProjectStrategies_ "${_project}")"
+    _projectConfigs="$(_fsDockerProjectConfigs_ "${_project}")"
+    _projectImages="$(_fsDockerProjectImages_ "${_project}")"
     
     [[ "${_projectImages}" -eq 1 ]] && _error=$((_error+1))
     [[ "${_projectConfigs}" -eq 1 ]] && _error=$((_error+1))
@@ -508,16 +516,16 @@ _fsDockerProject_() {
     if [[ "${_error}" -eq 0 ]]; then
       if [[ "${_projectMode}" = 'compose-force' ]]; then
           # shellcheck disable=SC2015,SC2086 # ignore shellcheck
-        cd "${FS_DIR}" && docker-compose -f ${_projectFile} -p ${_projectName} up --no-start --force-recreate ${_projectService} || true
+        cd "${_projectDir}" && docker-compose -f ${_projectFile} -p ${_projectName} up --no-start --force-recreate ${_projectService} || true
       else
           # shellcheck disable=SC2015,SC2086 # ignore shellcheck
-        cd "${FS_DIR}" && docker-compose -f ${_projectFile} -p ${_projectName} up --no-start --no-recreate ${_projectService} || true
+        cd "${_projectDir}" && docker-compose -f ${_projectFile} -p ${_projectName} up --no-start --no-recreate ${_projectService} || true
       fi
     fi
   elif [[ "${_projectMode}" =~ "run" ]]; then
     _fsMsgTitle_ "Run project: ${_projectFile}"
     
-    _projectImages="$(_fsDockerProjectImages_ "${_projectPath}")"
+    _projectImages="$(_fsDockerProjectImages_ "${_project}")"
     
     [[ "${_projectImages}" -eq 1 ]] && _error=$((_error+1))
     
@@ -528,10 +536,10 @@ _fsDockerProject_() {
       if [[ -n "${_projectShell}" ]]; then
         _projectArgs="$(printf -- '%s' "${_projectArgs}" | sed 's,/bin/sh -c ,,')"
           # shellcheck disable=SC2015,SC2086 # ignore shellcheck
-        cd "${FS_DIR}" && docker-compose -f ${_projectFile} -p ${_projectName} run --rm "${_projectService}" /bin/sh -c "${_projectArgs}" || true
+        cd "${_projectDir}" && docker-compose -f ${_projectFile} -p ${_projectName} run --rm "${_projectService}" /bin/sh -c "${_projectArgs}" || true
       else
           # shellcheck disable=SC2015,SC2086 # ignore shellcheck
-        cd "${FS_DIR}" && docker-compose -f ${_projectFile} -p ${_projectName} run --rm ${_projectService} ${_projectArgs} || true
+        cd "${_projectDir}" && docker-compose -f ${_projectFile} -p ${_projectName} run --rm ${_projectService} ${_projectArgs} || true
       fi
     fi
   elif [[ "${_projectMode}" = "validate" ]]; then
@@ -544,7 +552,7 @@ _fsDockerProject_() {
   if [[ "${_error}" -eq 0 ]] && [[ ! "${_projectMode}" =~ 'run' ]]; then
     while read -r; do
       _projectContainers+=( "$REPLY" )
-    done < <(cd "${FS_DIR}" && docker-compose -f "${_projectFile}" -p "${_projectName}" ps -q)
+    done < <(cd "${_projectDir}" && docker-compose -f "${_projectFile}" -p "${_projectName}" ps -q)
     
     for _projectContainer in "${_projectContainers[@]}"; do
       _containerName="$(_fsDockerContainerName_ "${_projectContainer}")"
@@ -552,7 +560,7 @@ _fsDockerProject_() {
       _containerJsonInner=''
       _strategyUpdate=''
       _containerStrategyUpdate=''
-      _containerAutoupdate="$(_fsValueGet_ "${_containerConfPath}" '.'"${_containerName}"'.autoupdate')"
+      _containerAutoupdate="$(_fsValueGet_ "${_projectConf}" '.'"${_containerName}"'.autoupdate')"
       
       if [[ ! "${_projectMode}" = "validate" ]]; then
         _fsMsgTitle_ 'Container: '"${_containerName}"
@@ -636,8 +644,8 @@ _fsDockerProject_() {
               _strategyUpdate=""
             fi
             
-            if [[ "$(_fsFileEmpty_ "${_containerConfPath}")" -eq 0 ]]; then
-              _containerStrategyUpdate="$(_fsValueGet_ "${_containerConfPath}" '.'"${_containerName}"'.strategy_update')"
+            if [[ "$(_fsFileEmpty_ "${_projectConf}")" -eq 0 ]]; then
+              _containerStrategyUpdate="$(_fsValueGet_ "${_projectConf}" '.'"${_containerName}"'.strategy_update')"
             else
               _containerStrategyUpdate=""
             fi
@@ -661,7 +669,15 @@ _fsDockerProject_() {
           _containerApiJson="$(echo "${_containerCmd}" | grep -o "${FS_FREQUI}.json" || true)"
           
           if [[ -n "${_containerApiJson}" ]]; then
-            _fsMsg_ "FreqUI (API Url): ${_url}/${FS_NAME}/${_containerName}"
+            if [[ -n "${_url}" ]]; then
+              if [[ "$(_fsDockerContainerPs_ "${FS_FREQUI}")" -eq 0 ]]; then
+                _fsMsg_ "FreqUI (API Url): ${_url}/${FS_NAME}/${_containerName}"
+              else
+                _fsMsgWarning_ "FreqUI is not active!"
+              fi
+            else
+              _fsMsgWarning_ "FreqUI has not been setup!"
+            fi
           else
             _fsMsg_ "Bot is not exposed to FreqUI."
           fi
@@ -725,7 +741,7 @@ _fsDockerProject_() {
           
           _fsMsg_ '[SUCCESS] Container is active: '"${_containerName}"
         else
-          _fsValueUpdate_ "${_containerConfPath}" '.'"${_containerName}"'.autoupdate' 'false'
+          _fsValueUpdate_ "${_projectConf}" '.'"${_containerName}"'.autoupdate' 'false'
           _fsDockerRemove_ "${_containerName}"
           _fsMsgWarning_ 'Container is not active: '"${_containerName}"
         fi
@@ -733,7 +749,7 @@ _fsDockerProject_() {
         # stop container
       elif [[ "${_projectMode}" = "quit" ]]; then
         if [[ "$(_fsCaseConfirmation_ "Quit container?")" -eq 0 ]]; then
-          _fsValueUpdate_ "${_containerConfPath}" '.'"${_containerName}"'.autoupdate' 'false'
+          _fsValueUpdate_ "${_projectConf}" '.'"${_containerName}"'.autoupdate' 'false'
           _fsDockerRemove_ "${_containerName}"
           if [[ "$(_fsDockerContainerPs_ "${_containerName}")" -eq 1 ]]; then
             _fsMsg_ "[SUCCESS] Container is removed: ${_containerName}"
@@ -751,13 +767,13 @@ _fsDockerProject_() {
     if [[ "${_error}" -eq 0 ]]; then
         # create project conf file
       if (( ${#_procjectJson[@]} )); then
-        printf -- '%s\n' "${_procjectJson[@]}" | jq . | tee "${_containerConfPath}" > /dev/null
+        printf -- '%s\n' "${_procjectJson[@]}" | jq . | tee "${_projectConf}" > /dev/null
       else
-        rm -f "${_containerConfPath}"
+        rm -f "${_projectConf}"
       fi
       
         # validate project
-      _fsDockerProject_ "${_projectPath}" "validate"
+      _fsDockerProject_ "${_project}" "validate"
     else
       _fsMsgWarning_ "Cannot start: ${_projectFile}"
     fi
@@ -888,13 +904,13 @@ _fsDockerAutoupdate_() {
   local _projectAutoupdate='freqstart --compose '"${_projectFile}"' --auto --yes'
   local _projectAutoupdateMode="${2:-}" # optional: remove
   local _projectAutoupdates=()
-  local _cronUpdate="3 */12 * * *" # update every 12 hours and 3 minutes; thanks: ECO
+  local _cronTime="3 */12 * * *" # update every 12 hours and 3 minutes; thanks: ECO
   
   _projectAutoupdates+=("#!/usr/bin/env bash")
-  if [[ -f "${FS_AUTOUPDATE}" ]]; then
+  if [[ -f "${FS_AUTO}" ]]; then
     while read -r; do
     _projectAutoupdates+=("$REPLY")
-    done < <(grep -v "${_projectAutoupdate}" "${FS_AUTOUPDATE}" | sed "s,#!/usr/bin/env bash,," | sed "/^$/d")
+    done < <(grep -v "${_projectAutoupdate}" "${FS_AUTO}" | sed "s,#!/usr/bin/env bash,," | sed "/^$/d")
   fi
   
   if [[ ! "${_projectAutoupdateMode}" = "remove" ]]; then
@@ -902,20 +918,20 @@ _fsDockerAutoupdate_() {
   fi
   
   if [[ "${#_projectAutoupdates[@]}" -lt 2 ]]; then
-    _fsCrontabRemove_ "${FS_AUTOUPDATE}"
-    rm -f "${FS_AUTOUPDATE}"
+    _fsCrontabRemove_ "${FS_AUTO}"
+    rm -f "${FS_AUTO}"
   else
-    printf '%s\n' "${_projectAutoupdates[@]}" | tee "${FS_AUTOUPDATE}" > /dev/null
-    sudo chmod +x "${FS_AUTOUPDATE}"
+    printf '%s\n' "${_projectAutoupdates[@]}" | tee "${FS_AUTO}" > /dev/null
+    sudo chmod +x "${FS_AUTO}"
     
-    _fsCrontab_ "${FS_AUTOUPDATE}" "${_cronUpdate}"
+    _fsCrontab_ "${_cronTime}" "${FS_AUTO}"
   fi
 }
 
 _fsDockerPurge_() {
-  _fsCrontabRemove_ "${FS_AUTOUPDATE}"
+  _fsCrontabRemove_ "${FS_AUTO}"
   _fsCrontabRemove_ "${FS_CERTBOT_CRON}"
-  rm -f "${FS_AUTOUPDATE}"
+  rm -f "${FS_AUTO}"
   
   if [[ "$(_fsPkgsStatus_ "docker-ce")" -eq 0 ]]; then
         # credit: https://stackoverflow.com/a/69921248
@@ -1054,6 +1070,7 @@ _fsSetupUser_() {
       sudo chmod +x "${_userTmpDPath}"
       
       if [[ "$(_fsCaseConfirmation_ "Disable \"${_user}\" user (recommended)?")" -eq 0 ]]; then
+          # lock password of root
         sudo usermod -L "${_user}"
       fi
       
@@ -1182,14 +1199,14 @@ _fsSetupFirewall_() {
 # credit: https://github.com/freqtrade/freqtrade
 
 _fsSetupFreqtrade_() {
-  local _dockerYml="${FS_DIR}/${FS_NAME}_setup.yml"
+  local _yml="${FS_DIR_SCRIPT}/freqtrade.yml"
   local _configName=''
   local _configFile=''
   local _configFileTmp=''  
   
   _fsMsgTitle_ "FREQTRADE"
   
-  _fsFileCreate_ "${_dockerYml}" \
+  _fsFileCreate_ "${_yml}" \
   '---' \
   "version: '3'" \
   'services:' \
@@ -1199,11 +1216,11 @@ _fsSetupFreqtrade_() {
   '    volumes:' \
   '      - "'"${FS_DIR_USER_DATA}"':/freqtrade/user_data"'
   
-  _fsFileExit_ "${_dockerYml}"
+  _fsFileExit_ "${_yml}"
   
   if [[ ! -d "${FS_DIR_USER_DATA}" ]]; then
       # create user_data folder
-    _fsDockerProject_ "${_dockerYml}" 'run-force' 'freqtrade' \
+    _fsDockerProject_ "${_yml}" 'run-force' 'freqtrade' \
     "create-userdir --userdir /freqtrade/${FS_DIR_USER_DATA##*/}"
     
     # validate if directory exists and is not empty
@@ -1251,12 +1268,12 @@ _fsSetupFreqtrade_() {
       _fsMsg_ "The config file already exist: ${_configFile}"
       if [[ "$(_fsCaseConfirmation_ "Replace the existing config file?")" -eq 1 ]]; then
         _configName=''
-        sudo rm -f "${_dockerYml}"
+        sudo rm -f "${_yml}"
       fi
     fi
     
     if [[ -n "${_configName}" ]]; then
-      _fsDockerProject_ "${_dockerYml}" 'run-force' 'freqtrade' \
+      _fsDockerProject_ "${_yml}" 'run-force' 'freqtrade' \
       "new-config --config /freqtrade/${FS_DIR_USER_DATA##*/}/${_configFileTmp##*/}"
             
       _fsFileExit_ "${_configFileTmp}"
@@ -1273,7 +1290,7 @@ _fsSetupFreqtrade_() {
 # credit: https://github.com/nightshift2k/binance-proxy
 
 _fsSetupBinanceProxy_() {
-  local _yml="${FS_DIR}/${FS_PROXY_BINANCE}.yml"
+  local _yml="${FS_DIR_SCRIPT}/${FS_PROXY_BINANCE}.yml"
   
   _fsMsgTitle_ 'PROXY FOR BINANCE'
   
@@ -1343,7 +1360,7 @@ _fsSetupBinanceProxy_() {
     "      --port-futures=8991" \
     "      --verbose" \
     
-    _fsDockerProject_ "${_yml##*/}" 'compose-force'
+    _fsDockerProject_ "${_yml}" 'compose-force'
     
     break
   done
@@ -1353,7 +1370,7 @@ _fsSetupBinanceProxy_() {
 # credit: https://github.com/mikekonan/exchange-proxy
 
 _fsSetupKucoinProxy_() {
-  local _yml="${FS_DIR}/${FS_PROXY_KUCOIN}.yml"
+  local _yml="${FS_DIR_SCRIPT}/${FS_PROXY_KUCOIN}.yml"
   
   _fsMsgTitle_ 'PROXY FOR KUCOIN'
   
@@ -1406,7 +1423,7 @@ _fsSetupKucoinProxy_() {
     "      -port 8980" \
     "      -verbose 1"
     
-    _fsDockerProject_ "${_yml##*/}" 'compose-force'
+    _fsDockerProject_ "${_yml}" 'compose-force'
     
     break
   done
@@ -1422,8 +1439,8 @@ _fsSetupNginx_() {
   local _ipPublic=''
   local _ipPublicTemp=''
   local _ipLocal=''
-  local _htpasswd="${FS_DIR_PROXY}${FS_NGINX_CONFD_HTPASSWD}"
-  local _htpasswdDir="${FS_DIR_PROXY}${FS_NGINX_CONFD_HTPASSWD%/*}"
+  local _htpasswd="${FS_DIR_SCRIPT}${FS_NGINX_CONFD_HTPASSWD}"
+  local _htpasswdDir="${FS_DIR_SCRIPT}${FS_NGINX_CONFD_HTPASSWD%/*}"
   local _sysctl="${FS_DIR}/99-${FS_NAME}.conf"
   local _sysctlSymlink="/etc/sysctl.d/${_sysctl##*/}"
   
@@ -1678,14 +1695,14 @@ _fsSetupNginxOpenssl_() {
   '      - "0.0.0.0:80:80"' \
   '      - "0.0.0.0:443:443"' \
   '    volumes:' \
-  "      - ${FS_DIR_PROXY}${FS_NGINX_CONFD}:${FS_NGINX_CONFD}" \
-  "      - ${FS_DIR_PROXY}${_sslSnippets}:${_sslSnippets}" \
-  "      - ${FS_DIR_PROXY}${_sslParam}:${_sslParam}" \
-  "      - ${FS_DIR_PROXY}${_sslCerts}:${_sslCerts}" \
-  "      - ${FS_DIR_PROXY}${_sslPrivate}:${_sslPrivate}"
+  "      - ${FS_DIR_SCRIPT}${FS_NGINX_CONFD}:${FS_NGINX_CONFD}" \
+  "      - ${FS_DIR_SCRIPT}${_sslSnippets}:${_sslSnippets}" \
+  "      - ${FS_DIR_SCRIPT}${_sslParam}:${_sslParam}" \
+  "      - ${FS_DIR_SCRIPT}${_sslCerts}:${_sslCerts}" \
+  "      - ${FS_DIR_SCRIPT}${_sslPrivate}:${_sslPrivate}"
   
     # create nginx conf for ip ssl; credit: https://serverfault.com/a/1060487
-  _fsFileCreate_ "${FS_DIR_PROXY}${FS_NGINX_CONFD_FREQUI}" \
+  _fsFileCreate_ "${FS_DIR_SCRIPT}${FS_NGINX_CONFD_FREQUI}" \
   'map $http_cookie $rate_limit_key {' \
   "    default \$binary_remote_addr;" \
   '    "~__Secure-rl-bypass='"${_bypass}"'" "";' \
@@ -1731,16 +1748,16 @@ _fsSetupNginxOpenssl_() {
   "    }" \
   "}" \
   
-  mkdir -p "${FS_DIR_PROXY}${_sslPrivate}"
-  mkdir -p "${FS_DIR_PROXY}${_sslCerts}"
+  mkdir -p "${FS_DIR_SCRIPT}${_sslPrivate}"
+  mkdir -p "${FS_DIR_SCRIPT}${_sslCerts}"
   
-  _fsFileCreate_ "${FS_DIR_PROXY}${_sslConf}" \
+  _fsFileCreate_ "${FS_DIR_SCRIPT}${_sslConf}" \
   "ssl_certificate ${_sslCert};" \
   "ssl_certificate_key ${_sslKey};"
   
     # thanks: this part was the initiator for freqstart
     # credit: https://github.com/DutchCryptoDad/SecureFreqtradeServer
-  _fsFileCreate_ "${FS_DIR_PROXY}${_sslConfParam}" \
+  _fsFileCreate_ "${FS_DIR_SCRIPT}${_sslConfParam}" \
   "ssl_protocols TLSv1.2;" \
   "ssl_prefer_server_ciphers on;" \
   "ssl_dhparam ${_sslParam};" \
@@ -1758,18 +1775,18 @@ _fsSetupNginxOpenssl_() {
   "add_header X-XSS-Protection \"1; mode=block\";"
   
   while true; do
-    if [[ "$(_fsFileEmpty_ "${FS_DIR_PROXY}${_sslKey}")" -eq 0 ]]; then
+    if [[ "$(_fsFileEmpty_ "${FS_DIR_SCRIPT}${_sslKey}")" -eq 0 ]]; then
       if [[ "$(_fsCaseConfirmation_ "Skip generating new SSL key?")" -eq 0 ]]; then
         _fsMsg_ "Skipping..."
         break
       else
-        sudo rm -f "${FS_DIR_PROXY}${_sslKey}"
-        sudo rm -f "${FS_DIR_PROXY}${_sslCert}"
-        sudo rm -f "${FS_DIR_PROXY}${_sslParam}"
+        sudo rm -f "${FS_DIR_SCRIPT}${_sslKey}"
+        sudo rm -f "${FS_DIR_SCRIPT}${_sslCert}"
+        sudo rm -f "${FS_DIR_SCRIPT}${_sslParam}"
       fi
     fi
     
-    touch "${FS_DIR_PROXY}${_sslParam}"
+    touch "${FS_DIR_SCRIPT}${_sslParam}"
     
       # generate self-signed certificate
     _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_NGINX}_ip" \
@@ -1796,10 +1813,10 @@ _setupNginxLetsencrypt_() {
   local _sslCert=''
   local _sslKey=''
   local _bypass=''
-  local _sslNginx="${FS_DIR_PROXY}/certbot/conf/options-ssl-nginx.conf"
-  local _sslDhparams="${FS_DIR_PROXY}/certbot/conf/ssl-dhparams.pem"
+  local _sslNginx="${FS_DIR_SCRIPT}/certbot/conf/options-ssl-nginx.conf"
+  local _sslDhparams="${FS_DIR_SCRIPT}/certbot/conf/ssl-dhparams.pem"
   local _certEmail=''
-  local _cronUpdate="30 0 * * 0" # update at 0:30am UTC on sunday every week
+  local _cronTime="30 0 * * 0" # update at 0:30am UTC on sunday every week
   
   _ipPublic="$(dig +short myip.opendns.com @resolver1.opendns.com)"
   _bypass="$(_fsRandomBase64UrlSafe_ 16)"
@@ -1865,9 +1882,9 @@ _setupNginxLetsencrypt_() {
     _fsValueUpdate_ "${FS_CONFIG}" '.ip_local' ''
     _fsValueUpdate_ "${FS_CONFIG}" '.url' "${_url}"
     
-    mkdir -p "${FS_DIR_PROXY}/certbot/conf"
-    mkdir -p "${FS_DIR_PROXY}/certbot/www"
-    mkdir -p "${FS_DIR_PROXY}/certbot/conf/live/${_domain}"
+    mkdir -p "${FS_DIR_SCRIPT}/certbot/conf"
+    mkdir -p "${FS_DIR_SCRIPT}/certbot/www"
+    mkdir -p "${FS_DIR_SCRIPT}/certbot/conf/live/${_domain}"
     
       # credit: https://github.com/wmnnd/nginx-certbot/
     _fsFileCreate_ "${FS_NGINX_YML}" \
@@ -1880,15 +1897,15 @@ _setupNginxLetsencrypt_() {
     '      - "0.0.0.0:80:80"' \
     '      - "0.0.0.0:443:443"' \
     '    volumes:' \
-    "      - ${FS_DIR_PROXY}${FS_NGINX_CONFD}:${FS_NGINX_CONFD}" \
-    "      - ${FS_DIR_PROXY}/certbot/conf:/etc/letsencrypt" \
-    "      - ${FS_DIR_PROXY}/certbot/www:/var/www/certbot" \
+    "      - ${FS_DIR_SCRIPT}${FS_NGINX_CONFD}:${FS_NGINX_CONFD}" \
+    "      - ${FS_DIR_SCRIPT}/certbot/conf:/etc/letsencrypt" \
+    "      - ${FS_DIR_SCRIPT}/certbot/www:/var/www/certbot" \
     "  ${FS_CERTBOT}:" \
     '    image: certbot/certbot:latest' \
     "    container_name: ${FS_CERTBOT}" \
     '    volumes:' \
-    "      - ${FS_DIR_PROXY}/certbot/conf:/etc/letsencrypt" \
-    "      - ${FS_DIR_PROXY}/certbot/www:/var/www/certbot"
+    "      - ${FS_DIR_SCRIPT}/certbot/conf:/etc/letsencrypt" \
+    "      - ${FS_DIR_SCRIPT}/certbot/www:/var/www/certbot"
     
       # download recommended TLS parameters
     if [[ ! -f "${_sslNginx}" ]] || [[ ! -f "${_sslDhparams}" ]]; then
@@ -1906,7 +1923,7 @@ _setupNginxLetsencrypt_() {
     
       # workaround for first setup while missing cert files
     if [[ ! -f "${_sslCert}" ]] || [[ ! -f "${_sslKey}" ]]; then
-      _fsFileCreate_ "${FS_DIR_PROXY}${FS_NGINX_CONFD_FREQUI}" \
+      _fsFileCreate_ "${FS_DIR_SCRIPT}${FS_NGINX_CONFD_FREQUI}" \
       "server {" \
       "    listen 0.0.0.0:80;" \
       "    location /.well-known/acme-challenge {" \
@@ -1924,7 +1941,7 @@ _setupNginxLetsencrypt_() {
     "certonly --webroot -w /var/www/certbot ${_certEmail} -d ${_domain} --rsa-key-size 4096 --agree-tos"
     
       # create nginx conf for domain ssl; credit: https://serverfault.com/a/1060487
-    _fsFileCreate_ "${FS_DIR_PROXY}${FS_NGINX_CONFD_FREQUI}" \
+    _fsFileCreate_ "${FS_DIR_SCRIPT}${FS_NGINX_CONFD_FREQUI}" \
     'map $http_cookie $rate_limit_key {' \
     "    default \$binary_remote_addr;" \
     '    "~__Secure-rl-bypass='"${_bypass}"'" "";' \
@@ -1988,7 +2005,7 @@ _setupNginxLetsencrypt_() {
     fi
     
       # set cron for domain autorenew certificate
-    _fsCrontab_ "${FS_CERTBOT_CRON}" "${_cronUpdate}"
+    _fsCrontab_ "${_cronTime}" "${FS_CERTBOT_CRON}"
   fi
 }
 
@@ -2182,6 +2199,21 @@ _fsStart_() {
 }
 
 ###
+# RESET
+
+_fsReset_() {
+  _fsConf_
+  
+  _fsMsgTitle_ 'RESET'
+  _fsMsgWarning_ 'Stopp and remove all containers, networks and images (keep all files)!'
+  
+  if [[ "$(_fsCaseConfirmation_ "Are you sure you want to continue?")" -eq 0 ]]; then
+      # stop and remove docker images, container and networks but keeps all files
+    _fsDockerPurge_
+  fi
+}
+
+###
 # UTILITY
 _fsLogo_() {
   printf -- '%s\n' \
@@ -2291,6 +2323,27 @@ _fsConf_() {
   '}'
 }
 
+_fsSudoer_() {
+  local _user=''
+  local _userId=''
+  local _userSudoer=''
+  
+  _user="$(id -u -n)"
+  _userId="$(id -u)"
+  _userSudoer="${_user} ALL=(ALL:ALL) NOPASSWD: ALL"
+  
+  if [[ "${_userId}" -ne 0 ]]; then
+      # validate if user can use sudo
+    if ! id -nGz "${_user}" | grep -qzxF 'sudo'; then
+      _fsMsgError_ 'User cannot use sudo! Login to root and run command: '"sudo usermod -a -G sudo ${_user}"
+    fi
+    
+    if ! sudo -l | grep -q "${_userSudoer}"; then
+      echo "${_userSudoer}" | sudo tee "/etc/sudoers.d/${_user}" > /dev/null
+    fi
+  fi
+}
+
 _fsFileEmpty_() {
   local _file="${1:-}" # optional: path to file
   
@@ -2353,8 +2406,9 @@ _fsFileCreate_() {
 _fsCrontab_() {
   [[ $# -lt 2 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-  local _cronCmd="${1}"
-  local _cronJob="${2} ${_cronCmd}"
+  local _cronTime="${1}"
+  local _cronCmd="${2}"
+  local _cronJob="${_cronTime} ${_cronCmd}"
   
     # credit: https://stackoverflow.com/a/17975418
   ( crontab -l 2> /dev/null | grep -v -F "${_cronCmd}" || : ; echo "${_cronJob}" ) | crontab -
@@ -2575,16 +2629,6 @@ _fsRandomBase64UrlSafe_() {
   echo "${_string}"
 }
 
-_fsReset_() {
-  _fsMsgTitle_ 'RESET'
-  _fsMsgWarning_ 'Stopp and remove all containers, networks and images (keep all files)!'
-  
-  if [[ "$(_fsCaseConfirmation_ "Are you sure you want to continue?")" -eq 0 ]]; then
-      # stop and remove docker images, container and networks but keeps all files
-    _fsDockerPurge_
-  fi
-}
-
 _fsPkgs_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
@@ -2752,31 +2796,6 @@ _fsLoginDataPassword_() {
   echo "$(cut -d':' -f2 <<< "${_password}")"
 }
 
-_fsSudoer_() {
-  local _user=''
-  local _userId=''
-  local _userSudoer=''
-  
-  _user="$(id -u -n)"
-  _userId="$(id -u)"
-  _userSudoer="${_user} ALL=(ALL:ALL) NOPASSWD: ALL"
-  
-  if [[ "${_userId}" -ne 0 ]]; then
-      # validate if user can use sudo
-    if ! id -nGz "${_user}" | grep -qzxF 'sudo'; then
-      _fsMsgError_ 'User cannot use sudo! Login to root and run command: '"sudo usermod -a -G sudo ${_user}"
-    fi
-    
-    if ! sudo -l | grep -q "${_userSudoer}"; then
-      echo "${_userSudoer}" | sudo tee "/etc/sudoers.d/${_user}" > /dev/null
-    fi
-  fi
-  
-  if ! sudo loginctl show-user "${_user}" 2> /dev/null | grep -q 'Linger=yes'; then
-    export "DOCKER_HOST=unix:///run/user/${_userId}/docker.sock"
-  fi
-}
-
 _fsCleanup_() {
   local _error="${?}"
   local _user=''
@@ -2915,6 +2934,12 @@ elif [[ "${FS_OPTS_QUIT}" -eq 0 ]] && [[ -z "${q_arg}" ]]; then
 elif [[ "${FS_OPTS_SETUP}" -eq 0 ]] && [[ "${FS_OPTS_YES}" -eq 0 ]]; then
   _fsMsgError_ "Option -s or --setup cannot be used with -y or --yes."
 fi
+
+  #_fsCrontabRemove_ "${FS_AUTO}"
+  #_fsCrontab_ '*/10 * * * *' "${FS_AUTO}"
+  
+  #_fsCrontab_ '*/5 * * * *' "touch ${FS_DIR}/test.cron.md"
+  #exit 1
 
   # run code
 if [[ "${FS_OPTS_CERT}" -eq 0 ]]; then
