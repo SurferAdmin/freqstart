@@ -1442,7 +1442,7 @@ _fsSetupNginx_() {
   local _ipLocal=''
   local _htpasswd="${FS_DIR_SCRIPT}${FS_NGINX_CONFD_HTPASSWD}"
   local _htpasswdDir="${FS_DIR_SCRIPT}${FS_NGINX_CONFD_HTPASSWD%/*}"
-  local _sysctl="${FS_DIR}/99-${FS_NAME}.conf"
+  local _sysctl="${FS_DIR_SCRIPT}/99-${FS_NAME}.conf"
   local _sysctlSymlink="/etc/sysctl.d/${_sysctl##*/}"
   
   _ipPublic="$(_fsValueGet_ "${FS_CONFIG}" '.ip_public')"
