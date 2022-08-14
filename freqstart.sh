@@ -1096,7 +1096,7 @@ _fsSetupUser_() {
 _fsSetupRootless_() {
   local	_user=''
   local	_userId=''
-  local _getDocker="${FS_DIR}"'/get-docker-rootless.sh'
+  local _getDocker="${FS_DIR_SCRIPT}/get-docker-rootless.sh"
   
   _fsMsgTitle_ "ROOTLESS (Docker)"
   
@@ -2306,7 +2306,9 @@ _fsConf_() {
     if [[ -n "${_user}" ]] && [[ ! "${_user}" = "${_userTmp}" ]]; then
       _fsMsgWarning_ 'You are not logged in as docker rootless user!'
       _fsCdown_ 5 'to login as: '"${_user}"
+        # remove scriptlock
       sudo rm -rf "${FS_TMP}"
+        # login to rootless docker user
       sudo machinectl shell "${_user}@"
       exit 0
     fi
@@ -2340,6 +2342,7 @@ _fsSudoer_() {
     
     if ! sudo -l | grep -q "${_userSudoer}"; then
       echo "${_userSudoer}" | sudo tee "/etc/sudoers.d/${_user}" > /dev/null
+      _fsMsg_ 'Added to sudoer!'
     fi
   fi
 }
@@ -2635,7 +2638,7 @@ _fsPkgs_() {
   local _pkgs=("$@")
   local _pkg=''
   local _status=''
-  local _getDocker="${FS_DIR}"'/get-docker.sh'
+  local _getDocker="${FS_DIR_SCRIPT}/get-docker.sh"
   
   for _pkg in "${_pkgs[@]}"; do
     if [[ "$(_fsPkgsStatus_ "${_pkg}")" -eq 1 ]]; then
@@ -2934,12 +2937,6 @@ elif [[ "${FS_OPTS_QUIT}" -eq 0 ]] && [[ -z "${q_arg}" ]]; then
 elif [[ "${FS_OPTS_SETUP}" -eq 0 ]] && [[ "${FS_OPTS_YES}" -eq 0 ]]; then
   _fsMsgError_ "Option -s or --setup cannot be used with -y or --yes."
 fi
-
-  #_fsCrontabRemove_ "${FS_AUTO}"
-  #_fsCrontab_ '*/10 * * * *' "${FS_AUTO}"
-  
-  #_fsCrontab_ '*/5 * * * *' "touch ${FS_DIR}/test.cron.md"
-  #exit 1
 
   # run code
 if [[ "${FS_OPTS_CERT}" -eq 0 ]]; then
