@@ -34,7 +34,7 @@ The following list is in alphabetical order and does not represent any recommend
 * MultiMA_TSL (Author: stash86, https://github.com/stash86/MultiMA_TSL/)
 * NostalgiaForInfinityX (Author: iterativ, https://github.com/iterativv/NostalgiaForInfinity)
 
-Help expanding the strategies list and include config files if possible: [freqstart.strategies.json](https://github.com/berndhofer/freqstart/blob/develop/freqstart.strategies.json)
+Help expanding the strategies list and include config files if possible: [freqstart.strategies.json](https://github.com/berndhofer/freqstart/blob/develop/script/strategies.json)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
