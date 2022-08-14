@@ -780,15 +780,15 @@ _fsDockerProject_() {
   elif [[ "${_projectMode}" = "validate" ]]; then
       # add or remove project from autoupdate
     if [[ "${_containerAutoupdateCount}" -gt 0 ]]; then
-      _fsDockerAutoupdate_ "${_projectFile}"
+      _fsDockerAuto_ "${_projectFile}"
     else
-      _fsDockerAutoupdate_ "${_projectFile}" 'remove'
+      _fsDockerAuto_ "${_projectFile}" 'remove'
     fi
     
       # clear orphaned networks
     yes $'y' | docker network prune > /dev/null || true
   elif [[ "${_projectMode}" = "quit" ]]; then
-    _fsDockerAutoupdate_ "${_projectFile}" "remove"
+    _fsDockerAuto_ "${_projectFile}" "remove"
     
     if (( ! ${#_projectContainers[@]} )); then
       _fsMsg_ "No active container in project: ${_projectFile}"
@@ -897,31 +897,31 @@ _fsDockerStrategy_() {
   fi
 }
 
-_fsDockerAutoupdate_() {
+_fsDockerAuto_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _projectFile="${1}"
-  local _projectAutoupdate='freqstart --compose '"${_projectFile}"' --auto --yes'
-  local _projectAutoupdateMode="${2:-}" # optional: remove
-  local _projectAutoupdates=()
+  local _projectAutoCmds=()
+  local _projectAutoCmd='freqstart --compose '"${_projectFile}"' --auto --yes'
+  local _projectAutoMode="${2:-}" # optional: remove
   local _cronTime="3 */12 * * *" # update every 12 hours and 3 minutes; thanks: ECO
   
-  _projectAutoupdates+=("#!/usr/bin/env bash")
+  _projectAutoCmds+=("#!/usr/bin/env bash")
   if [[ -f "${FS_AUTO}" ]]; then
     while read -r; do
-    _projectAutoupdates+=("$REPLY")
-    done < <(grep -v "${_projectAutoupdate}" "${FS_AUTO}" | sed "s,#!/usr/bin/env bash,," | sed "/^$/d")
+    _projectAutoCmds+=("$REPLY")
+    done < <(grep -v "${_projectAutoCmd}" "${FS_AUTO}" | sed "s,#!/usr/bin/env bash,," | sed "/^$/d")
   fi
   
-  if [[ ! "${_projectAutoupdateMode}" = "remove" ]]; then
-    _projectAutoupdates+=("${_projectAutoupdate}")
+  if [[ ! "${_projectAutoMode}" = "remove" ]]; then
+    _projectAutoCmds+=("${_projectAutoCmd}")
   fi
   
-  if [[ "${#_projectAutoupdates[@]}" -lt 2 ]]; then
+  if [[ "${#_projectAutoCmds[@]}" -lt 2 ]]; then
     _fsCrontabRemove_ "${FS_AUTO}"
     rm -f "${FS_AUTO}"
   else
-    printf '%s\n' "${_projectAutoupdates[@]}" | tee "${FS_AUTO}" > /dev/null
+    printf '%s\n' "${_projectAutoCmds[@]}" | tee "${FS_AUTO}" > /dev/null
     sudo chmod +x "${FS_AUTO}"
     
     _fsCrontab_ "${_cronTime}" "${FS_AUTO}"
@@ -1115,8 +1115,10 @@ _fsSetupRootless_() {
     rm -f "${_getDocker}"
     
     sudo loginctl enable-linger "${_user}"
-    
+      
+      # set rootless docker user to conf file
     _fsValueUpdate_ "${FS_CONFIG}" '.user' "${_user}"
+    
     _fsMsg_ 'Docker rootless installed.'
     _fsMsgWarning_ 'Until you log-out/in for the first time, manual docker commands will fail.'
   else
