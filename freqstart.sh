@@ -1132,10 +1132,6 @@ _fsSetupRootless_() {
     "export DOCKER_HOST=unix:///run/user/${_userId}/docker.sock" \
     '' >> ~/.bashrc
   fi
-  
-    # export docker variables
-  #export "PATH=/home/${_user}/bin:\$PATH"
-  export "DOCKER_HOST=unix:///run/user/${_userId}/docker.sock"
 }
 
 # CHRONY
