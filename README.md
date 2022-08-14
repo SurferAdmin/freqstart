@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v2.0.4 - rootless
+# FREQSTART v2.0.5 - rootless
 (Requires full setup. Do not update from versions below v2.0.0)
 
 See what has been changed: <a href="#changelog">Changelog</a>
@@ -146,6 +146,9 @@ With Freqstart you are no longer bound to a single docker-compose.yml and can fr
 See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full list of proposed features (and known issues).
 
 ### Changelog
+
+`v2.0.5`
+* TBA
 
 `v2.0.4`
 * Fixed missing docker host variable while running script from conrjob (Review "crontab -e" if necessary)
