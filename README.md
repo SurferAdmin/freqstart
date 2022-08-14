@@ -147,6 +147,9 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 
 ### Changelog
 
+`v2.0.6`
+* TBA
+
 `v2.0.5`
 * Fast fix for strategies curl error
 
