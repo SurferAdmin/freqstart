@@ -22,7 +22,7 @@ set -o nounset
 set -o pipefail
 
 readonly FS_NAME="freqstart"
-readonly FS_VERSION='v2.0.3'
+readonly FS_VERSION='v2.0.4'
 readonly FS_TMP="/tmp/${FS_NAME}"
 readonly FS_SYMLINK="/usr/local/bin/${FS_NAME}"
 
@@ -435,7 +435,7 @@ _fsDockerProject_() {
   local _project="${1}"
   local _projectMode="${2}" # compose, compose-force, run, run-force, validate, quit
   local _projectService="${3:-}" # optional: service
-  local _projectArgs="${4:-}" # optional: args
+  local _projectArgs="${4:-}" # optional: arguments
   local _projectDir="${_project%/*}"
   local _projectFile="${_project##*/}"
 
@@ -479,14 +479,6 @@ _fsDockerProject_() {
   if [[ -n "${_projectArgs}" ]]; then
     shift;shift;shift
     _projectArgs="${*:-}" # optional: args
-  fi
-  
-    # export docker host variable
-  _user="$(_fsValueGet_ "${FS_CONFIG}" '.user')"
-
-  if [[ -n "${_user}" ]]; then
-    _userId="$(id -u "${_user}")"
-    export "DOCKER_HOST=unix:///run/user/${_userId}/docker.sock"
   fi
   
   _url="$(_fsValueGet_ "${FS_CONFIG}" '.url')"
@@ -678,7 +670,7 @@ _fsDockerProject_() {
               if [[ "$(_fsDockerContainerPs_ "${FS_FREQUI}")" -eq 0 ]]; then
                 _fsMsg_ "FreqUI (API Url): ${_url}/${FS_NAME}/${_containerName}"
               else
-                _fsMsgWarning_ "FreqUI is not active!"
+                _fsMsgWarning_ "FreqUI is not active. Restart setup!"
               fi
             else
               _fsMsgWarning_ "FreqUI has not been setup!"
@@ -959,7 +951,6 @@ _fsSetup_() {
   local _link="${FS_DIR}/${FS_NAME}.sh"
   
   _fsSetupPrerequisites_
-  _fsConf_
   _fsSetupUser_
   _fsSetupRootless_
   _fsSetupChrony_
@@ -1126,15 +1117,15 @@ _fsSetupRootless_() {
     rm -f "${_getDocker}"
     
     sudo loginctl enable-linger "${_user}"
-      
-      # set rootless docker user to conf file
-    _fsValueUpdate_ "${FS_CONFIG}" '.user' "${_user}"
     
     _fsMsg_ 'Docker rootless installed.'
-    _fsMsgWarning_ 'Until you log-out/in for the first time, manual docker commands will fail.'
   else
     _fsMsg_ 'Docker rootless is installed.'
   fi
+  
+    # set rootless docker user to conf file
+  _fsValueUpdate_ "${FS_CONFIG}" '.user' "${_user}"
+  _fsMsg_ "Docker rootless user set to: ${_user}"
   
     # add docker variables to bashrc; note: path variable should be set but left the comment in
   if ! cat ~/.bashrc | grep -q "# ${FS_NAME}"; then
@@ -1144,6 +1135,8 @@ _fsSetupRootless_() {
     "#export PATH=/home/${_user}/bin:\$PATH" \
     "export DOCKER_HOST=unix:///run/user/${_userId}/docker.sock" \
     '' >> ~/.bashrc
+    
+    _fsMsgWarning_ 'Docker host variable added to bashrc. Until you log-out/in for the first time, manual(!) docker commands will fail.'
   fi
 }
 
@@ -2182,6 +2175,11 @@ _fsSetupFrequiCompose_() {
   "      --config /freqtrade/user_data/${_json##*/}"
   
   _fsDockerProject_ "${_yml}" 'compose-force'
+  
+  if [[ "$(_fsDockerContainerPs_ "${FS_FREQUI}")" -eq 1 ]]; then
+      # help: cannot reproduce this error but sometimes the container initially can not connect to binance
+    _fsMsgError__ "FreqUI sometimes can not connect to the exchange. Wait for some time and restart the setup!"
+  fi
 }
 
 ###
@@ -2189,14 +2187,11 @@ _fsSetupFrequiCompose_() {
 
 _fsStart_() {
   local _yml="${1:-}"
-  local _symlink="${FS_SYMLINK}"
-    
+  
     # check if symlink from setup routine exist
-  if [[ "$(_fsSymlinkValidate_ "${_symlink}")" -eq 1 ]]; then
+  if [[ "$(_fsSymlinkValidate_ "${FS_SYMLINK}")" -eq 1 ]]; then
     _fsMsgError_ "Start setup first!"
   fi
-  
-  _fsConf_
   
   if [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
     _fsDockerProject_ "${_yml}" "quit"
@@ -2210,9 +2205,7 @@ _fsStart_() {
 ###
 # RESET
 
-_fsReset_() {
-  _fsConf_
-  
+_fsReset_() {  
   _fsMsgTitle_ 'RESET'
   _fsMsgWarning_ 'Stopp and remove all containers, networks and images (keep all files)!'
   
@@ -2287,9 +2280,12 @@ _fsConf_() {
   local _ipPublicTmp=''
   local _ipLocal=''
   local _user=''
+  local _userId=''
   local _userTmp=''
-  
-  if [[ -f "${FS_CONFIG}" ]]; then
+
+  if [[ "$(_fsSymlinkValidate_ "${FS_SYMLINK}")" -eq 0 ]]; then
+    _fsFileExit_ "${FS_CONFIG}"
+    
     _domain="$(_fsValueGet_ "${FS_CONFIG}" '.domain')"
     _url="$(_fsValueGet_ "${FS_CONFIG}" '.url')"
     _ipPublic="$(_fsValueGet_ "${FS_CONFIG}" '.ip_public')"
@@ -2310,16 +2306,26 @@ _fsConf_() {
     fi
     
     _user="$(_fsValueGet_ "${FS_CONFIG}" '.user')"
-    _userTmp="$(id -u -n)"
-
-    if [[ -n "${_user}" ]] && [[ ! "${_user}" = "${_userTmp}" ]]; then
-      _fsMsgWarning_ 'You are not logged in as docker rootless user!'
-      _fsCdown_ 5 'to login as: '"${_user}"
-        # remove scriptlock
-      sudo rm -rf "${FS_TMP}"
-        # login to rootless docker user
-      sudo machinectl shell "${_user}@"
-      exit 0
+    
+    if [[ -n "${_user}" ]]; then
+      _userId="$(id -u "${_user}")"
+      _userTmp="$(id -u -n)"
+      
+        # validate if current user is rootless docker user
+      if [[ ! "${_user}" = "${_userTmp}" ]]; then
+        _fsMsgWarning_ 'You are not logged in as docker rootless user!'
+        _fsCdown_ 5 'to login as: '"${_user}"
+          # remove scriptlock
+        rm -rf "${FS_TMP}"
+          # login to rootless docker user
+        sudo machinectl shell "${_user}@"
+        exit 0
+      else
+        export "DOCKER_HOST=unix:///run/user/${_userId}/docker.sock"
+      fi
+    elif [[ "${FS_OPTS_SETUP}" -eq 1 ]]; then
+        # validate if user conf is set after setup
+      _fsMsgError_ 'Rootless docker user is not set. Restart setup!'
     fi
   fi
   
@@ -2935,6 +2941,7 @@ _fsScriptLock_
 _fsOptions_ "${@}"
 _fsLogo_
 _fsSudoer_
+_fsConf_
 
   # validate arguments
 if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ "${FS_OPTS_QUIT}" -eq 0 ]]; then
@@ -2951,7 +2958,7 @@ fi
 
   # run code
 if [[ "${FS_OPTS_CERT}" -eq 0 ]]; then
-  _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_CERTBOT}" "renew"
+  _fsDockerProject_ "${FS_NGINX_YML}" 'run-force' "${FS_CERTBOT}" 'renew'
 elif [[ "${FS_OPTS_SETUP}" -eq 0 ]]; then
   _fsSetup_
 elif [[ "${FS_OPTS_COMPOSE}" -eq 0 ]]; then
