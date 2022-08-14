@@ -1,4 +1,3 @@
-
 *.json
 !spec/strategies.json
 *.yml
