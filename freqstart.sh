@@ -25,41 +25,34 @@ readonly FS_NAME="freqstart"
 readonly FS_VERSION='v2.0.4'
 readonly FS_TMP="/tmp/${FS_NAME}"
 readonly FS_SYMLINK="/usr/local/bin/${FS_NAME}"
-
-readonly FS_DIR="$(dirname "$(readlink --canonicalize-existing "${0}" 2> /dev/null)")"
+FS_DIR="$(dirname "$(readlink --canonicalize-existing "${0}" 2> /dev/null)")"
+readonly FS_DIR
 readonly FS_FILE="${0##*/}"
 readonly FS_PATH="${FS_DIR}/${FS_FILE}"
 readonly FS_DIR_SCRIPT="${FS_DIR}/script"
 readonly FS_DIR_USER_DATA="${FS_DIR}/user_data"
-
 readonly FS_CONFIG="${FS_DIR_SCRIPT}/conf.json"
 readonly FS_STRATEGIES="${FS_DIR_SCRIPT}/strategies.json"
 readonly FS_STRATEGIES_URL="https://raw.githubusercontent.com/berndhofer/freqstart/stable/script/strategies.json"
 readonly FS_STRATEGIES_CUSTOM="${FS_DIR}/strategies.json"
-
 readonly FS_AUTO="${FS_DIR_SCRIPT}/auto.sh"
-
 readonly FS_NETWORK="${FS_NAME}_network"
 readonly FS_NETWORK_SUBNET='172.35.0.0/16'
 readonly FS_NETWORK_GATEWAY='172.35.0.1'
-
 readonly FS_PROXY_BINANCE="${FS_NAME}_proxy_binance"
 readonly FS_PROXY_BINANCE_IP='172.35.0.253'
-
 readonly FS_PROXY_KUCOIN="${FS_NAME}_proxy_kucoin"
 readonly FS_PROXY_KUCOIN_IP='172.35.0.252'
-readonly FS_PROXY_KUCOIN_YML='172.35.0.252'
-
 readonly FS_NGINX="${FS_NAME}_nginx"
 readonly FS_NGINX_YML="${FS_DIR_SCRIPT}/${FS_NAME}_nginx.yml"
 readonly FS_NGINX_CONFD="/etc/nginx/conf.d"
 readonly FS_NGINX_CONFD_FREQUI="${FS_NGINX_CONFD}/frequi.conf"
 readonly FS_NGINX_CONFD_HTPASSWD="${FS_NGINX_CONFD}/.htpasswd"
-
 readonly FS_CERTBOT="${FS_NAME}_certbot"
 readonly FS_CERTBOT_CRON="${FS_NAME} --cert --yes"
 readonly FS_FREQUI="${FS_NAME}_frequi"
-readonly FS_HASH="$(xxd -l 8 -ps /dev/urandom)"
+FS_HASH="$(xxd -l 8 -ps /dev/urandom)"
+readonly FS_HASH
 
 FS_OPTS_COMPOSE=1
 FS_OPTS_SETUP=1
@@ -1127,8 +1120,9 @@ _fsSetupRootless_() {
   _fsValueUpdate_ "${FS_CONFIG}" '.user' "${_user}"
   _fsMsg_ "Docker rootless user set to: ${_user}"
   
-    # add docker variables to bashrc; note: path variable should be set but left the comment in
+    # shellcheck disable=SC2002 # ignore shellcheck
   if ! cat ~/.bashrc | grep -q "# ${FS_NAME}"; then
+      # add docker variables to bashrc; note: path variable should be set but left the comment in
     printf -- '%s\n' \
     '' \
     "# ${FS_NAME}" \
@@ -1628,6 +1622,7 @@ _fsSetupNginxOpenssl_() {
     
     # local ip routine
   elif [[ "${_mode}" = 'local' ]]; then
+      # shellcheck disable=SC2162 # ignore shellcheck
     read -a _ipLocals <<< "$(hostname -I)"
     
     printf -- '%s\n' \
@@ -1705,7 +1700,7 @@ _fsSetupNginxOpenssl_() {
   
     # create nginx conf for ip ssl; credit: https://serverfault.com/a/1060487
   _fsFileCreate_ "${FS_DIR_SCRIPT}${FS_NGINX_CONFD_FREQUI}" \
-  'map $http_cookie $rate_limit_key {' \
+  "map \$http_cookie \$rate_limit_key {" \
   "    default \$binary_remote_addr;" \
   '    "~__Secure-rl-bypass='"${_bypass}"'" "";' \
   "}" \
@@ -1727,7 +1722,7 @@ _fsSetupNginxOpenssl_() {
   "        auth_basic \"Restricted\";" \
   "        auth_basic_user_file ${FS_NGINX_CONFD_HTPASSWD};" \
   "        limit_req zone=auth burst=20 nodelay;" \
-  '        add_header Set-Cookie "__Secure-rl-bypass='"${_bypass}"';Max-Age=31536000;Domain=$host;Path=/;Secure;HttpOnly";' \
+  "        add_header Set-Cookie \"__Secure-rl-bypass='${_bypass}';Max-Age=31536000;Domain=\$host;Path=/;Secure;HttpOnly\";" \
   "        proxy_pass http://\$_pass;" \
   "        proxy_set_header X-Real-IP \$remote_addr;" \
   "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" \
@@ -1944,7 +1939,7 @@ _setupNginxLetsencrypt_() {
     
       # create nginx conf for domain ssl; credit: https://serverfault.com/a/1060487
     _fsFileCreate_ "${FS_DIR_SCRIPT}${FS_NGINX_CONFD_FREQUI}" \
-    'map $http_cookie $rate_limit_key {' \
+    "map \$http_cookie \$rate_limit_key {" \
     "    default \$binary_remote_addr;" \
     '    "~__Secure-rl-bypass='"${_bypass}"'" "";' \
     "}" \
@@ -1976,7 +1971,7 @@ _setupNginxLetsencrypt_() {
     "        auth_basic \"Restricted\";" \
     "        auth_basic_user_file ${FS_NGINX_CONFD_HTPASSWD};" \
     "        limit_req zone=auth burst=20 nodelay;" \
-    '        add_header Set-Cookie "__Secure-rl-bypass='"${_bypass}"';Max-Age=31536000;Domain=$host;Path=/;Secure;HttpOnly";' \
+    "        add_header Set-Cookie \"__Secure-rl-bypass='${_bypass}';Max-Age=31536000;Domain=\$host;Path=/;Secure;HttpOnly\";" \
     "        proxy_pass http://\$_pass;" \
     "        proxy_set_header X-Real-IP \$remote_addr;" \
     "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" \
@@ -2178,7 +2173,7 @@ _fsSetupFrequiCompose_() {
   
   if [[ "$(_fsDockerContainerPs_ "${FS_FREQUI}")" -eq 1 ]]; then
       # help: cannot reproduce this error but sometimes the container initially can not connect to binance
-    _fsMsgError__ "FreqUI sometimes can not connect to the exchange. Wait for some time and restart the setup!"
+    _fsMsgError_ "FreqUI sometimes can not connect to the exchange. Wait for some time and restart the setup!"
   fi
 }
 
@@ -2234,6 +2229,7 @@ _fsStats_() {
   local _cpuLoad=''
   local _cpuUsage=''
   
+    # shellcheck disable=SC2116,SC2028 # ignore shellcheck
   _time="$( (time curl --connect-timeout 10 -X GET "https://api.binance.com/api/v3/exchangeInfo?symbol=BNBBTC") 2>&1 > /dev/null \
   | grep -o "real.*s" \
   | sed "s#real$(echo '\t')##" )"
@@ -2579,8 +2575,10 @@ _fsCdown_() {
   
   while [[ "${_secs}" -gt -1 ]]; do
     if [[ "${_secs}" -gt 0 ]]; then
+        # shellcheck disable=SC2059 # ignore shellcheck
       printf '\r\033[K< Waiting '"${_secs}"' seconds '"${_text}" >&2
       sleep 0.5
+        # shellcheck disable=SC2059 # ignore shellcheck
       printf '\r\033[K> Waiting '"${_secs}"' seconds '"${_text}" >&2
       sleep 0.5
     else
@@ -2806,6 +2804,7 @@ _fsLoginDataUsername_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _username="${1}"
+    # shellcheck disable=SC2005 # ignore shellcheck
   echo "$(cut -d':' -f1 <<< "${_username}")"
 }
 
@@ -2813,6 +2812,7 @@ _fsLoginDataPassword_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
   local _password="${1}"
+    # shellcheck disable=SC2005 # ignore shellcheck
   echo "$(cut -d':' -f2 <<< "${_password}")"
 }
 
@@ -2824,8 +2824,9 @@ _fsCleanup_() {
   trap - ERR EXIT SIGINT SIGTERM
   
   _user="$(id -u -n)"
+    # shellcheck disable=SC2012 # ignore shellcheck
   _userTmp="$(ls -ld "${FS_DIR_USER_DATA}" | awk 'NR==1 {print $3}')"
-
+  
     # workaround for freqtrade user_data permissions
   sudo chown -R "${_userTmp}:${_user}" "${FS_DIR_USER_DATA}"
   sudo chmod -R g+w "${FS_DIR_USER_DATA}"
