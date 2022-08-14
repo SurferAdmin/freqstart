@@ -148,7 +148,7 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 ### Changelog
 
 `v2.0.5`
-* TBA
+* Fast fix for strategies curl error
 
 `v2.0.4`
 * Fixed missing docker host variable while running script from conrjob (Review "crontab -e" if necessary)
