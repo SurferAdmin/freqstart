@@ -814,15 +814,17 @@ _fsDockerStrategy_() {
   local _strategyPathTmp=''
   local _strategyJson=''
   local _strategiesTmp="${FS_TMP}/${FS_HASH}_${FS_STRATEGIES}"
-  local _setup=0
+  local _update=0
   local _error=0
   
     # create the strategy config
-  curl --connect-timeout 10 -fsSL "${FS_STRATEGIES_URL}" -o "${_strategiesTmp}"
-  
-    # update strategie file if necessary
-  if ! cmp --silent "${_strategiesTmp}" "${FS_STRATEGIES}"; then
-    cp -a "${_strategiesTmp}" "${FS_STRATEGIES}"
+  if [[ "$(_fsIsUrl_ "${FS_STRATEGIES_URL}")" -eq 0 ]]; then
+    curl --connect-timeout 10 -fsSL "${FS_STRATEGIES_URL}" -o "${_strategiesTmp}"
+    
+      # update strategie file if necessary
+    if ! cmp --silent "${_strategiesTmp}" "${FS_STRATEGIES}"; then
+      cp -a "${_strategiesTmp}" "${FS_STRATEGIES}"
+    fi
   fi
   
   _fsFileExit_ "${FS_STRATEGIES}"
@@ -855,7 +857,7 @@ _fsDockerStrategy_() {
         _strategyPath="${_strategyDir}/${_strategyFile}"
         _strategyPathTmp="${_strategyTmp}/${_strategyFile}"
         
-        curl --connect-timeout 10 -s -L "${_strategyUrl}" -o "${_strategyPathTmp}"
+        curl --connect-timeout 10 -s -L "${_strategyUrl}" -o "${_strategyPathTmp}" 2> /dev/null || true
         
         if [[ "$(_fsFileEmpty_ "${_strategyPathTmp}")" -eq 0 ]]; then
           if [[ -f "${_strategyPath}" ]]; then
@@ -863,26 +865,27 @@ _fsDockerStrategy_() {
             if ! cmp --silent "${_strategyPathTmp}" "${_strategyPath}"; then
                 # note: sudo because of freqtrade docker user
               sudo cp -a "${_strategyPathTmp}" "${_strategyPath}"
-              _setup=$((_setup+1))
               _fsFileExit_ "${_strategyPath}"
+              _update=$((_update+1))
+              _fsMsg_ 'Updated: '"${_strategyUrl}"
             fi
           else
               # note: sudo because of freqtrade docker user
             sudo cp -a "${_strategyPathTmp}" "${_strategyPath}"
-            _setup=$((_setup+1))
             _fsFileExit_ "${_strategyPath}"
+            _fsMsg_ 'Installed: '"${_strategyUrl}"
           fi
         else
-          _fsMsgWarning_ 'Downloaded strategy file was empty.'
+          _fsMsgWarning_ 'Downloaded strategy file was empty: '"${_strategyUrl}"
         fi
       else
-        _fsMsgWarning_ 'Cannot connect to strategy url.'
+        _fsMsgWarning_ 'Cannot connect to strategy URL: '"${_strategyUrl}"
       fi
     done
         
     if [[ "${_error}" -gt 0 ]]; then
       _fsMsgWarning_ "Failed to install or update: ${_strategyName}"
-    elif [[ "${_setup}" -gt 0 ]]; then
+    else
       _strategyUpdate="$(_fsTimestamp_)"
       _strategyJson="$(jq -n \
         --arg update "${_strategyUpdate}" \
@@ -891,9 +894,12 @@ _fsDockerStrategy_() {
         # note: sudo because of freqtrade docker user
       printf '%s\n' "${_strategyJson}" | jq . | sudo tee "${_strategyDir}/${_strategyName}.conf.json" > /dev/null
       
-      _fsMsg_ "Strategy updated: ${_strategyName}"
-    else
-      _fsMsg_ "Strategy is installed: ${_strategyName}"
+      if [[ "${_update}" -gt 0 ]]; then
+
+        _fsMsg_ "Strategy updated: ${_strategyName}"
+      else
+        _fsMsg_ "Strategy is installed: ${_strategyName}"
+      fi
     fi
   else
     _fsMsgWarning_ "Strategy is not implemented: ${_strategyName}"
@@ -1528,7 +1534,7 @@ _fsSetupNginx_() {
       [[ -z "${_ipPublicTemp}" ]] && _ipPublicTemp="$(dig +short myip.opendns.com @resolver1.opendns.com)"
       
       if [[ "${FS_OPTS_YES}" -eq 1 ]]; then
-        read -rp "  Choose number (default: 1): " _nr
+        read -rp "  Choose number: " _nr
       elif  [[ -z "${_ipPublicTemp}" ]]; then
         _fsMsgWarning_ 'Cannot access public IP!'
         local _nr="1"
@@ -1589,7 +1595,7 @@ _fsSetupNginxOpenssl_() {
       _fsMsgWarning_ 'Cannot access public IP!'
       local _nr="2"
     elif [[ "${FS_OPTS_YES}" -eq 1 ]]; then
-      read -rp "  Choose number (default: 1): " _nr
+      read -rp "  Choose number: " _nr
     else
       local _nr="1"
     fi
@@ -1649,7 +1655,7 @@ _fsSetupNginxOpenssl_() {
     
     while true; do
       if [[ "${FS_OPTS_YES}" -eq 1 ]]; then
-        read -rp "  Choose number (default: 1): " _url
+        read -rp "  Choose number: " _url
       else
         local _url='1'
       fi
