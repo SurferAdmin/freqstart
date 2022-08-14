@@ -148,7 +148,9 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 ### Changelog
 
 `v2.0.4`
-* TBA
+* Fixed missing docker host variable while running script from conrjob
+* Added "/script" directory to maintain a cleaner approach
+* Docker project routine can run now projects from different directories and defaults to script directory when no directory is set. (Feel free to place your custom project yml files wherever you like)
 
 `v2.0.3`
 * Removed deprecated code in docker routine and value get/update functions
