@@ -2111,7 +2111,7 @@ _fsSetupFrequiCompose_() {
   local _docker="freqtradeorg/freqtrade:stable"
   local _json="${FS_DIR_USER_DATA}/${FS_FREQUI}.json"
   local _jsonServer="${FS_DIR_USER_DATA}/${FS_FREQUI}_server.json"
-  local _yml="${FS_DIR}/${FS_FREQUI}.yml"
+  local _yml="${FS_DIR_SCRIPT}/${FS_FREQUI}.yml"
   
     # note: sudo because of freqtrade docker user
   _fsFileCreate_ "${_jsonServer}" 'sudo' \
