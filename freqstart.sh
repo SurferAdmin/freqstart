@@ -437,8 +437,10 @@ _fsDockerProject_() {
   local _projectService="${3:-}" # optional: service
   local _projectArgs="${4:-}" # optional: args
   local _projectDir="${_project%/*}"
-  [[ -z "${_projectDir}" ]] && _projectDir="${FS_DIR}"
   local _projectFile="${_project##*/}"
+
+  [[ "${_projectDir}" = "${_projectFile}" ]] && _projectDir="${FS_DIR}"
+
   local _projectFileType="${_projectFile##*.}"
   local _projectFileName="${_projectFile%.*}"
   local _projectName="${_projectFileName//\-/\_}"
@@ -464,8 +466,8 @@ _fsDockerProject_() {
   local _containerLogfile=''
   local _containerLogfileTmp=''
   local _containerCount=0
-  local _containerAutoupdate='false'
-  local _containerAutoupdateCount=0
+  local _containerAuto='false'
+  local _containerAutoCount=0
   
   local _strategyUpdate=''
   local _strategyDir=''
@@ -508,9 +510,9 @@ _fsDockerProject_() {
   if [[ "${_projectMode}" =~ "compose" ]]; then
     _fsMsgTitle_ "Compose project: ${_projectFile}"
     
-    _projectStrategies="$(_fsDockerProjectStrategies_ "${_project}")"
-    _projectConfigs="$(_fsDockerProjectConfigs_ "${_project}")"
-    _projectImages="$(_fsDockerProjectImages_ "${_project}")"
+    _projectStrategies="$(_fsDockerProjectStrategies_ "${_projectDir}/${_projectFile}")"
+    _projectConfigs="$(_fsDockerProjectConfigs_ "${_projectDir}/${_projectFile}")"
+    _projectImages="$(_fsDockerProjectImages_ "${_projectDir}/${_projectFile}")"
     
     [[ "${_projectImages}" -eq 1 ]] && _error=$((_error+1))
     [[ "${_projectConfigs}" -eq 1 ]] && _error=$((_error+1))
@@ -528,7 +530,7 @@ _fsDockerProject_() {
   elif [[ "${_projectMode}" =~ "run" ]]; then
     _fsMsgTitle_ "Run project: ${_projectFile}"
     
-    _projectImages="$(_fsDockerProjectImages_ "${_project}")"
+    _projectImages="$(_fsDockerProjectImages_ "${_projectDir}/${_projectFile}")"
     
     [[ "${_projectImages}" -eq 1 ]] && _error=$((_error+1))
     
@@ -563,7 +565,7 @@ _fsDockerProject_() {
       _containerJsonInner=''
       _strategyUpdate=''
       _containerStrategyUpdate=''
-      _containerAutoupdate="$(_fsValueGet_ "${_projectConf}" '.'"${_containerName}"'.autoupdate')"
+      _containerAuto="$(_fsValueGet_ "${_projectConf}" '.'"${_containerName}"'.autoupdate')"
       
       if [[ ! "${_projectMode}" = "validate" ]]; then
         _fsMsgTitle_ 'Container: '"${_containerName}"
@@ -572,7 +574,7 @@ _fsDockerProject_() {
         # start container
       if [[ "${_projectMode}" =~ "compose" ]]; then
           # skip container if autoupdate is active but not true
-        if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ ! "${_containerAutoupdate}" = 'true' ]]; then
+        if [[ "${FS_OPTS_AUTO}" -eq 0 ]] && [[ ! "${_containerAuto}" = 'true' ]]; then
           continue
         fi
         
@@ -601,9 +603,9 @@ _fsDockerProject_() {
         docker update --restart=no "${_containerName}" > /dev/null
         
           # set container to autoupdate
-        if [[ "${FS_OPTS_AUTO}" -eq 1 ]] && [[ ! "${_containerAutoupdate}" = 'true' ]]; then
-          if [[ "$(_fsCaseConfirmation_ "Update container automatically?")" -eq 0 ]]; then
-            _containerAutoupdate='true'
+        if [[ "${FS_OPTS_AUTO}" -eq 1 ]] && [[ ! "${_containerAuto}" = 'true' ]]; then
+          if [[ "$(_fsCaseConfirmation_ "Update container automatically (recommended)?")" -eq 0 ]]; then
+            _containerAuto='true'
           fi
         else
           _fsMsg_ 'Automatic update is activated.'
@@ -720,7 +722,7 @@ _fsDockerProject_() {
           --arg strategy "${_containerStrategy}" \
           --arg strategy_path "${_containerStrategyDir}" \
           --arg strategy_update "${_containerStrategyUpdate}" \
-          --arg autoupdate "${_containerAutoupdate}" \
+          --arg autoupdate "${_containerAuto}" \
           '$ARGS.named' \
         )"
         _containerJson="$(jq -n \
@@ -738,8 +740,8 @@ _fsDockerProject_() {
             # set restart to unless-stopped
           docker update --restart=unless-stopped "${_containerName}" > /dev/null
           
-          if [[ "${_containerAutoupdate}" = 'true' ]]; then
-            _containerAutoupdateCount=$((_containerAutoupdateCount+1))
+          if [[ "${_containerAuto}" = 'true' ]]; then
+            _containerAutoCount=$((_containerAutoCount+1))
           fi
           
           _fsMsg_ '[SUCCESS] Container is active: '"${_containerName}"
@@ -776,22 +778,22 @@ _fsDockerProject_() {
       fi
       
         # validate project
-      _fsDockerProject_ "${_project}" "validate"
+      _fsDockerProject_ "${_projectDir}/${_projectFile}" "validate"
     else
       _fsMsgWarning_ "Cannot start: ${_projectFile}"
     fi
   elif [[ "${_projectMode}" = "validate" ]]; then
       # add or remove project from autoupdate
-    if [[ "${_containerAutoupdateCount}" -gt 0 ]]; then
-      _fsDockerAuto_ "${_projectFile}"
+    if [[ "${_containerAutoCount}" -gt 0 ]]; then
+      _fsDockerAuto_ "${_projectDir}/${_projectFile}"
     else
-      _fsDockerAuto_ "${_projectFile}" 'remove'
+      _fsDockerAuto_ "${_projectDir}/${_projectFile}" 'remove'
     fi
     
       # clear orphaned networks
     yes $'y' | docker network prune > /dev/null || true
   elif [[ "${_projectMode}" = "quit" ]]; then
-    _fsDockerAuto_ "${_projectFile}" "remove"
+    _fsDockerAuto_ "${_projectDir}/${_projectFile}" "remove"
     
     if (( ! ${#_projectContainers[@]} )); then
       _fsMsg_ "No active container in project: ${_projectFile}"
@@ -909,9 +911,9 @@ _fsDockerStrategy_() {
 _fsDockerAuto_() {
   [[ $# -lt 1 ]] && _fsMsgError_ "Missing required argument to ${FUNCNAME[0]}"
   
-  local _projectFile="${1}"
+  local _project="${1}"
   local _projectAutoCmds=()
-  local _projectAutoCmd='freqstart --compose '"${_projectFile}"' --auto --yes'
+  local _projectAutoCmd='freqstart --compose '"${_project}"' --auto --yes'
   local _projectAutoMode="${2:-}" # optional: remove
   local _cronTime="3 */12 * * *" # update every 12 hours and 3 minutes; thanks: ECO
   
