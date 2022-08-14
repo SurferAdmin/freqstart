@@ -800,7 +800,7 @@ _fsDockerStrategy_() {
   local _strategyPath=''
   local _strategyPathTmp=''
   local _strategyJson=''
-  local _strategiesTmp="${FS_TMP}/${FS_HASH}_${FS_STRATEGIES}"
+  local _strategiesTmp="${FS_TMP}/${FS_HASH}_${FS_STRATEGIES##*/}"
   local _update=0
   local _error=0
   
