@@ -34,6 +34,9 @@ readonly FS_DIR_USER_DATA="${FS_DIR}/user_data"
 
 readonly FS_CONFIG="${FS_DIR_SCRIPT}/conf.json"
 readonly FS_STRATEGIES="${FS_DIR_SCRIPT}/strategies.json"
+readonly FS_STRATEGIES_URL="https://raw.githubusercontent.com/berndhofer/freqstart/stable/script/strategies.json"
+readonly FS_STRATEGIES_CUSTOM="${FS_DIR}/strategies.json"
+
 readonly FS_AUTO="${FS_DIR_SCRIPT}/auto.sh"
 
 readonly FS_NETWORK="${FS_NAME}_network"
@@ -810,30 +813,30 @@ _fsDockerStrategy_() {
   local _strategyPath=''
   local _strategyPathTmp=''
   local _strategyJson=''
+  local _strategiesTmp="${FS_TMP}/${FS_HASH}_${FS_STRATEGIES}"
   local _setup=0
   local _error=0
   
     # create the strategy config
-  if [[ ! -f "${FS_STRATEGIES}" ]]; then
-    if [[ "$(_fsCaseConfirmation_ "Download latest strategies config?")" -eq 0 ]]; then
-      curl --connect-timeout 10 -fsSL "https://raw.githubusercontent.com/berndhofer/freqstart/stable/freqstart.strategies.json" -o "${FS_STRATEGIES}"
-      
-      _fsFileExit_ "${FS_STRATEGIES}"
-    else
-      _fsFileCreate_ "${FS_STRATEGIES}" \
-      '{' \
-      '  "DoesNothingStrategy": [' \
-      '    "https://raw.githubusercontent.com/freqtrade/freqtrade-strategies/master/user_data/strategies/berlinguyinca/DoesNothingStrategy.py"' \
-      '  ]' \
-      '}'
-      
-      _fsMsgWarning_ 'Only necessary strategy for FreqUI is implemented.'
-    fi
+  curl --connect-timeout 10 -fsSL "${FS_STRATEGIES_URL}" -o "${_strategiesTmp}"
+  
+    # update strategie file if necessary
+  if ! cmp --silent "${_strategiesTmp}" "${FS_STRATEGIES}"; then
+    cp -a "${_strategiesTmp}" "${FS_STRATEGIES}"
   fi
+  
+  _fsFileExit_ "${FS_STRATEGIES}"
   
   while read -r; do
   _strategyUrls+=( "$REPLY" )
-  done < <(jq -r ".${_strategyName}[]?" "${FS_STRATEGIES}")
+  done < <(jq -r ".${_strategyName}[]?"' // empty' "${FS_STRATEGIES}")
+  
+    # add custom strategies from file
+  if [[ -f "${FS_STRATEGIES_CUSTOM}" ]]; then
+    while read -r; do
+    _strategyUrls+=( "$REPLY" )
+    done < <(jq -r ".${_strategyName}[]?"' // empty' "${FS_STRATEGIES_CUSTOM}")
+  fi
   
   if (( ${#_strategyUrls[@]} )); then
     while read -r; do
