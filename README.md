@@ -148,7 +148,8 @@ See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full
 ### Changelog
 
 `v2.0.6`
-* TBA
+* Fixed user data validation error in cleanup function
+* Fixed missing docker host variable in initial setup
 
 `v2.0.5`
 * Fast fix for strategies curl error
