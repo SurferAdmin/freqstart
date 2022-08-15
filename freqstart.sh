@@ -2793,15 +2793,17 @@ _fsCleanup_() {
   local _user=''
   local _userTmp=''
   
+  if [[ -d "${FS_DIR_USER_DATA}" ]]; then
+    _user="$(id -u -n)"
+      # shellcheck disable=SC2012 # ignore shellcheck
+    _userTmp="$(ls -ld "${FS_DIR_USER_DATA}" | awk 'NR==1 {print $3}')"
+    
+      # workaround for freqtrade user_data permissions
+    sudo chown -R "${_userTmp}:${_user}" "${FS_DIR_USER_DATA}"
+    sudo chmod -R g+w "${FS_DIR_USER_DATA}"
+  fi
+  
   trap - ERR EXIT SIGINT SIGTERM
-  
-  _user="$(id -u -n)"
-    # shellcheck disable=SC2012 # ignore shellcheck
-  _userTmp="$(ls -ld "${FS_DIR_USER_DATA}" | awk 'NR==1 {print $3}')"
-  
-    # workaround for freqtrade user_data permissions
-  sudo chown -R "${_userTmp}:${_user}" "${FS_DIR_USER_DATA}"
-  sudo chmod -R g+w "${FS_DIR_USER_DATA}"
   
   if [[ "${_error}" -ne 99 ]]; then
     rm -rf "${FS_TMP}"
