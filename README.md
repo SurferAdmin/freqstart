@@ -36,6 +36,8 @@ The following list is in alphabetical order and does not represent any recommend
 
 Help expanding the strategies list and include config files if possible: [freqstart.strategies.json](https://github.com/berndhofer/freqstart/blob/develop/script/strategies.json)
 
+Optional: Copy strategies.json to root directory of Freqstart and add your own URLs from other sources.
+
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 <!-- GETTING STARTED -->
@@ -51,7 +53,7 @@ Packages: git, curl, jq, docker-ce, docker-compose, docker-ce-rootless-extras, s
 
 ### Recommended VPS
 
-Vultr (AMD High Performance / Tokyo): [www.vultr.com](https://www.vultr.com/?ref=9122650-8H)
+Vultr (Intel High Frequency / Tokyo): [www.vultr.com](https://www.vultr.com/?ref=9122650-8H)
 
 ### Installation
 
