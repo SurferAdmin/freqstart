@@ -120,12 +120,11 @@ _fsDockerVersionHub_() {
   
   _dockerName="${FS_NAME}"'_'"$(echo "${_dockerRepo}" | sed "s,\/,_,g" | sed "s,\-,_,g")"
   _dockerManifest="${FS_TMP}"'/'"${FS_HASH}"'_'"${_dockerName}"'_'"${_dockerTag}"'.md'
-  _token="$(curl --connect-timeout 10 -s "https://auth.docker.io/token?scope=repository:${_dockerRepo}:pull&service=registry.docker.io"  | jq -r '.token')"
+  _token="$(curl --connect-timeout 10 -s "https://auth.docker.io/token?scope=repository:${_dockerRepo}:pull&service=registry.docker.io"  | jq -r '.token' || true)"
   
   if [[ -n "${_token}" ]]; then
     curl --connect-timeout 10 -s --header "Accept: ${_acceptM}" --header "Accept: ${_acceptML}" --header "Authorization: Bearer ${_token}" \
-    -o "${_dockerManifest}" \
-    -I -s -L "https://registry-1.docker.io/v2/${_dockerRepo}/manifests/${_dockerTag}"
+    -o "${_dockerManifest}" -I -s -L "https://registry-1.docker.io/v2/${_dockerRepo}/manifests/${_dockerTag}" || true
   fi
   
   if [[ -f "${_dockerManifest}" ]]; then    
@@ -1117,6 +1116,7 @@ _fsSetupRootless_() {
   
     # set rootless docker user to conf file
   _fsValueUpdate_ "${FS_CONFIG}" '.user' "${_user}"
+
   _fsMsg_ "Docker rootless user set to: ${_user}"
   
     # shellcheck disable=SC2002 # ignore shellcheck
@@ -1131,6 +1131,9 @@ _fsSetupRootless_() {
     
     _fsMsgWarning_ 'Docker host variable added to bashrc. Until you log-out/in for the first time, manual(!) docker commands will fail.'
   fi
+  
+    # export docker host for initial setup
+  export "DOCKER_HOST=unix:///run/user/${_userId}/docker.sock"
 }
 
 # CHRONY
