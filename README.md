@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v2.0.5 - rootless
+# FREQSTART v2.0.6 - rootless
 (Requires full setup. Do not update from versions below v2.0.0)
 
 See what has been changed: <a href="#changelog">Changelog</a>
@@ -36,6 +36,8 @@ The following list is in alphabetical order and does not represent any recommend
 
 Help expanding the strategies list and include config files if possible: [freqstart.strategies.json](https://github.com/berndhofer/freqstart/blob/develop/script/strategies.json)
 
+Optional: Copy strategies.json to root directory of Freqstart and add your own URLs from other sources.
+
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 <!-- GETTING STARTED -->
@@ -51,7 +53,7 @@ Packages: git, curl, jq, docker-ce, docker-compose, docker-ce-rootless-extras, s
 
 ### Recommended VPS
 
-Vultr (AMD High Performance / Tokyo): [www.vultr.com](https://www.vultr.com/?ref=9122650-8H)
+Vultr (Intel High Frequency / Tokyo): [www.vultr.com](https://www.vultr.com/?ref=9122650-8H)
 
 ### Installation
 
@@ -146,6 +148,10 @@ With Freqstart you are no longer bound to a single docker-compose.yml and can fr
 See the [open issues](https://github.com/berndhofer/freqstart/issues) for a full list of proposed features (and known issues).
 
 ### Changelog
+
+`v2.0.6`
+* Fixed user data validation error in cleanup function
+* Fixed missing docker host variable in initial setup
 
 `v2.0.5`
 * Fast fix for strategies curl error

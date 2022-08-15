@@ -22,7 +22,7 @@ set -o nounset
 set -o pipefail
 
 readonly FS_NAME="freqstart"
-readonly FS_VERSION='v2.0.5'
+readonly FS_VERSION='v2.0.6'
 readonly FS_TMP="/tmp/${FS_NAME}"
 readonly FS_SYMLINK="/usr/local/bin/${FS_NAME}"
 FS_DIR="$(dirname "$(readlink --canonicalize-existing "${0}" 2> /dev/null)")"
@@ -120,12 +120,11 @@ _fsDockerVersionHub_() {
   
   _dockerName="${FS_NAME}"'_'"$(echo "${_dockerRepo}" | sed "s,\/,_,g" | sed "s,\-,_,g")"
   _dockerManifest="${FS_TMP}"'/'"${FS_HASH}"'_'"${_dockerName}"'_'"${_dockerTag}"'.md'
-  _token="$(curl --connect-timeout 10 -s "https://auth.docker.io/token?scope=repository:${_dockerRepo}:pull&service=registry.docker.io"  | jq -r '.token')"
+  _token="$(curl --connect-timeout 10 -s "https://auth.docker.io/token?scope=repository:${_dockerRepo}:pull&service=registry.docker.io"  | jq -r '.token' || true)"
   
   if [[ -n "${_token}" ]]; then
     curl --connect-timeout 10 -s --header "Accept: ${_acceptM}" --header "Accept: ${_acceptML}" --header "Authorization: Bearer ${_token}" \
-    -o "${_dockerManifest}" \
-    -I -s -L "https://registry-1.docker.io/v2/${_dockerRepo}/manifests/${_dockerTag}"
+    -o "${_dockerManifest}" -I -s -L "https://registry-1.docker.io/v2/${_dockerRepo}/manifests/${_dockerTag}" || true
   fi
   
   if [[ -f "${_dockerManifest}" ]]; then    
@@ -1057,21 +1056,20 @@ _fsSetupUser_() {
       
       mkdir -p "${_userTmpDir}"
       
-        # copy freqstart incl. strategies to new user home
-      cp -a "${FS_PATH}" "${_userTmpDir}/${FS_FILE}" 2> /dev/null || true
-      cp -a "${FS_STRATEGIES}" "${_userTmpDir}/${FS_STRATEGIES##*/}" 2> /dev/null || true
-      
+        # copy freqstart to new user home
+      cp -a "${FS_PATH}" "${_userTmpDir}/${FS_FILE}" 2> /dev/null || true      
       sudo chown -R "${_userTmp}":"${_userTmp}" "${_userTmpDir}"
       sudo chmod +x "${_userTmpDPath}"
       
       if [[ "$(_fsCaseConfirmation_ "Disable \"${_user}\" user (recommended)?")" -eq 0 ]]; then
-          # lock password of root
+          # lock password of root user
         sudo usermod -L "${_user}"
       fi
       
       _fsMsg_ ' +'
       _fsMsgWarning_ "Manually restart script: ${_userTmpDir}/${FS_FILE} --setup"
       _fsMsg_ ' +'
+        # remove scriptlock and symlink
       sudo rm -rf "${FS_TMP}"
       sudo rm -f "${FS_SYMLINK}"
       
@@ -1118,6 +1116,7 @@ _fsSetupRootless_() {
   
     # set rootless docker user to conf file
   _fsValueUpdate_ "${FS_CONFIG}" '.user' "${_user}"
+
   _fsMsg_ "Docker rootless user set to: ${_user}"
   
     # shellcheck disable=SC2002 # ignore shellcheck
@@ -1132,6 +1131,9 @@ _fsSetupRootless_() {
     
     _fsMsgWarning_ 'Docker host variable added to bashrc. Until you log-out/in for the first time, manual(!) docker commands will fail.'
   fi
+  
+    # export docker host for initial setup
+  export "DOCKER_HOST=unix:///run/user/${_userId}/docker.sock"
 }
 
 # CHRONY
@@ -1533,12 +1535,10 @@ _fsSetupNginx_() {
       
       case ${_nr} in 
         [1])
-          _fsMsg_ "Continuing with 1) ..."
           _fsSetupNginxOpenssl_
           break
           ;;
         [2])
-          _fsMsg_ "Continuing with 2) ..."
           _setupNginxLetsencrypt_
           break
           ;;
@@ -1571,8 +1571,7 @@ _fsSetupNginxOpenssl_() {
   local _sslConf="${_sslSnippets}"'/self-signed.conf'
   local _sslConfParam="${_sslSnippets}"'/ssl-params.conf'
   
-  _ipPublic="$(dig +short myip.opendns.com @resolver1.opendns.com || true)"
-  [[ -z "${_ipPublic}" ]] && _ipPublic='not set'
+  _ipPublic="$(dig +short myip.opendns.com @resolver1.opendns.com || 'unaccessible')"
   
   while true; do
     printf -- '%s\n' \
@@ -1580,24 +1579,68 @@ _fsSetupNginxOpenssl_() {
     "  1) Public IP (${_ipPublic})" \
     "  2) Local IP" >&2
     
-    if  [[ "${_ipPublic}" = 'not set' ]]; then
+    if  [[ "${_ipPublic}" = 'unaccessible' ]]; then
       _fsMsgWarning_ 'Cannot access public IP!'
       local _nr="2"
-    elif [[ "${FS_OPTS_YES}" -eq 1 ]]; then
-      read -rp "  Choose number: " _nr
     else
-      local _nr="1"
+      read -rp "  Choose number: " _nr
     fi
     
     case ${_nr} in 
       [1])
-        _fsMsg_ "Continuing with 1) ..."
-        _mode='public'
-        break
+        _url="https://${_ipPublic}"
+        
+        _fsValueUpdate_ "${FS_CONFIG}" '.ip_public' "${_ipPublic}"
+        _fsValueUpdate_ "${FS_CONFIG}" '.ip_local' ''        break
         ;;
       [2])
-        _fsMsg_ "Continuing with 2) ..."
-        _mode='local'
+          # shellcheck disable=SC2162 # ignore shellcheck
+        read -a _ipLocals <<< "$(hostname -I)"
+        
+        printf -- '%s\n' \
+        '? Which local IP do you want to use:' >&2
+        
+          # remove docker ip range
+        for _ipLocalDelete in "${_ipLocalsDelete[@]}"; do
+          for i in "${!_ipLocals[@]}"; do
+            if [[ "${_ipLocals[i]}" =~ $_ipLocalDelete ]]; then
+              unset '_ipLocals[i]'
+            fi
+          done
+        done
+        
+          # return ip list
+        for i in "${!_ipLocals[@]}"; do
+          _ipLocal="${_ipLocals[i]}"
+          echo "  $((i + 1))"') '"${_ipLocal}" >&2
+        done
+        
+        while true; do
+          read -rp "  Choose number: " _url
+          
+          if [[ -z "${_url}" ]]; then
+            _fsCaseEmpty_
+          elif [[ ! "${_url}" =~ $_regex ]]; then
+            _url=''
+            _fsCaseInvalid_
+          else
+            _url="$((_url - 1))"
+            
+            if [[ ! "${_ipLocals[$_url]+foo}" ]]; then
+              _url=''
+              _fsCaseInvalid_
+            else
+              _ipLocal="${_ipLocals[$_url]}"
+              _fsMsg_ 'Continuing with: '"${_ipLocal}"
+              _url="https://${_ipLocal}"
+              break
+            fi
+          fi
+        done
+        
+        _fsValueUpdate_ "${FS_CONFIG}" '.ip_public' ''
+        _fsValueUpdate_ "${FS_CONFIG}" '.ip_local' "${_ipLocal}"
+        
         break
         ;;
       *)
@@ -1612,73 +1655,6 @@ _fsSetupNginxOpenssl_() {
   _fsDockerRemove_ "${FS_NGINX}_domain"
   
   _fsValueUpdate_ "${FS_CONFIG}" '.domain' ''
-  
-    # public ip routine
-  if [[ "${_mode}" = 'public' ]]; then
-    _url="https://${_ipPublic}"
-    
-    _fsValueUpdate_ "${FS_CONFIG}" '.ip_public' "${_ipPublic}"
-    _fsValueUpdate_ "${FS_CONFIG}" '.ip_local' ''
-    
-    # local ip routine
-  elif [[ "${_mode}" = 'local' ]]; then
-      # shellcheck disable=SC2162 # ignore shellcheck
-    read -a _ipLocals <<< "$(hostname -I)"
-    
-    printf -- '%s\n' \
-    '? Which local IP do you want to use:' >&2
-    
-      # remove docker ip range
-    for _ipLocalDelete in "${_ipLocalsDelete[@]}"; do
-      for i in "${!_ipLocals[@]}"; do
-        if [[ ${_ipLocals[i]} =~ $_ipLocalDelete ]]; then
-          unset '_ipLocals[i]'
-        fi
-      done
-    done
-    
-      # return ip list
-    for i in "${!_ipLocals[@]}"; do
-      _ipLocal="${_ipLocals[i]}"
-      echo "  $((i + 1))"') '"${_ipLocal}" >&2
-    done
-    
-    while true; do
-      if [[ "${FS_OPTS_YES}" -eq 1 ]]; then
-        read -rp "  Choose number: " _url
-      else
-        local _url='1'
-      fi
-      
-      if [[ -z "${_url}" ]]; then
-        _fsCaseEmpty_
-        shift
-      elif [[ ! $_url =~ $_regex ]]; then
-        _url=''
-        echo 'aaa'
-        _fsCaseInvalid_
-      fi
-      
-      if [[ -n "${_url}" ]]; then
-        _url="$((_url - 1))"
-        
-        if [[ ! "${_ipLocals[$_url]+foo}" ]]; then
-          _url=''
-        echo 'bbb'
-
-          _fsCaseInvalid_
-        else
-          _ipLocal="${_ipLocals[$_url]}"
-          _fsMsg_ 'Continuing with: '"${_ipLocal}"
-          _url="https://${_ipLocal}"
-          break
-        fi
-      fi
-    done
-    
-    _fsValueUpdate_ "${FS_CONFIG}" '.ip_public' ''
-    _fsValueUpdate_ "${FS_CONFIG}" '.ip_local' "${_ipLocal}"
-  fi
   _fsValueUpdate_ "${FS_CONFIG}" '.url' "${_url}"
   
     # create nginx docker project file
@@ -1752,8 +1728,7 @@ _fsSetupNginxOpenssl_() {
   "ssl_certificate ${_sslCert};" \
   "ssl_certificate_key ${_sslKey};"
   
-    # thanks: this part was the initiator for freqstart
-    # credit: https://github.com/DutchCryptoDad/SecureFreqtradeServer
+    # thanks: this part was the initiator for freqstart; credit: https://github.com/DutchCryptoDad/SecureFreqtradeServer
   _fsFileCreate_ "${FS_DIR_SCRIPT}${_sslConfParam}" \
   "ssl_protocols TLSv1.2;" \
   "ssl_prefer_server_ciphers on;" \
@@ -2173,7 +2148,7 @@ _fsSetupFrequiCompose_() {
   
   if [[ "$(_fsDockerContainerPs_ "${FS_FREQUI}")" -eq 1 ]]; then
       # help: cannot reproduce this error but sometimes the container initially can not connect to binance
-    _fsMsgError_ "FreqUI sometimes can not connect to the exchange. Wait for some time and restart the setup!"
+    _fsMsgError_ "FreqUI sometimes cannot connect to the exchange. Wait some time and restart the setup."
   fi
 }
 
@@ -2821,15 +2796,17 @@ _fsCleanup_() {
   local _user=''
   local _userTmp=''
   
+  if [[ -d "${FS_DIR_USER_DATA}" ]]; then
+    _user="$(id -u -n)"
+      # shellcheck disable=SC2012 # ignore shellcheck
+    _userTmp="$(ls -ld "${FS_DIR_USER_DATA}" | awk 'NR==1 {print $3}')"
+    
+      # workaround for freqtrade user_data permissions
+    sudo chown -R "${_userTmp}:${_user}" "${FS_DIR_USER_DATA}"
+    sudo chmod -R g+w "${FS_DIR_USER_DATA}"
+  fi
+  
   trap - ERR EXIT SIGINT SIGTERM
-  
-  _user="$(id -u -n)"
-    # shellcheck disable=SC2012 # ignore shellcheck
-  _userTmp="$(ls -ld "${FS_DIR_USER_DATA}" | awk 'NR==1 {print $3}')"
-  
-    # workaround for freqtrade user_data permissions
-  sudo chown -R "${_userTmp}:${_user}" "${FS_DIR_USER_DATA}"
-  sudo chmod -R g+w "${FS_DIR_USER_DATA}"
   
   if [[ "${_error}" -ne 99 ]]; then
     rm -rf "${FS_TMP}"
