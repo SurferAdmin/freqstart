@@ -1,7 +1,7 @@
 <div id="top"></div>
 
 <!-- FREQSTART -->
-# FREQSTART v2.0.5 - rootless
+# FREQSTART v2.0.6 - rootless
 (Requires full setup. Do not update from versions below v2.0.0)
 
 See what has been changed: <a href="#changelog">Changelog</a>
