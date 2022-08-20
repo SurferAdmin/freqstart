@@ -963,7 +963,7 @@ _fsSetupPrerequisites_() {
     # update; note: true workaround if manually installed packages are causing errors
   sudo yum update || true
   
-  _fsPkgs_ "curl" "jq" "dnsutils" "lsof" "cron" "docker-ce" "docker-compose" "systemd-container" "uidmap" "dbus-user-session" "chrony" "ufw"
+  _fsPkgs_ "jq" "dnsutils" "lsof" "cron" "docker-ce" "docker-compose" "systemd-container" "uidmap" "dbus-user-session" "chrony" "ufw"
   
   _fsMsg_ "Update server and install unattended-upgrades. Reboot may be required!"
   
