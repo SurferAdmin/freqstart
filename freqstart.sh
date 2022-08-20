@@ -961,7 +961,7 @@ _fsSetupPrerequisites_() {
   _fsMsgTitle_ "PREREQUISITES"
   
     # update; note: true workaround if manually installed packages are causing errors
-  sudo apt update || true
+  sudo yum update || true
   
   _fsPkgs_ "curl" "jq" "dnsutils" "lsof" "cron" "docker-ce" "docker-compose" "systemd-container" "uidmap" "dbus-user-session" "chrony" "ufw"
   
@@ -970,9 +970,9 @@ _fsSetupPrerequisites_() {
   if [[ "$(_fsCaseConfirmation_ "Skip server update?")" -eq 0 ]]; then
     _fsMsg_ "Skipping..."
   else
-    sudo apt -o Dpkg::Options::="--force-confdef" dist-upgrade -y && \
-    sudo apt install -y unattended-upgrades && \
-    sudo apt autoremove -y
+    sudo yum -o Dpkg::Options::="--force-confdef" dist-upgrade -y && \
+    sudo yum install -y unattended-upgrades && \
+    sudo yum autoremove -y
     
     if sudo test -f /var/run/reboot-required; then
       _fsMsgWarning_ 'A reboot is required to finish installing updates.'
@@ -2640,10 +2640,10 @@ _fsPkgs_() {
         rm -f "${_getDocker}"
       elif [[ "${_pkg}" = 'ufw' ]]; then
           # firewall setup
-        sudo apt install -y -q ufw
+        sudo yum install -y -q ufw
         sudo ufw logging medium > /dev/null
       else
-        sudo apt install -y "${_pkg}"
+        sudo yum install -y "${_pkg}"
       fi
         # validate installation
       if [[ "$(_fsPkgsStatus_ "${_pkg}")" -eq 0 ]]; then
